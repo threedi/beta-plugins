@@ -1,32 +1,4 @@
-Plugin Builder Results
+Plugin to quickly alter 1D schematisations.
+When toggled the views are altered to make them editable. While views are normally not editable they can now be used to update and/or insert new features into the source tables. On top of that the edit forms are filled with default values and numbers are changed into text to make it more intuitive.
 
-Your plugin Edit3DiSchematisation was created in:
-    C:/Users/ivar.lokhorst/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins\edit3dischematisation
-
-Your QGIS plugin directory is located at:
-    C:/Users/ivar.lokhorst/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins
-
-What's Next:
-
-  * Copy the entire directory containing your new plugin to the QGIS plugin
-    directory
-
-  * Compile the resources file using pyrcc5
-
-  * Run the tests (``make test``)
-
-  * Test the plugin by enabling it in the QGIS plugin manager
-
-  * Customize it by editing the implementation file: ``Edit3DiSchematisation.py``
-
-  * Create your own custom icon, replacing the default icon.png
-
-  * Modify your user interface by opening Edit3DiSchematisation_dialog_base.ui in Qt Designer
-
-  * You can use the Makefile to compile your Ui and resource files when
-    you make changes. This requires GNU make (gmake)
-
-For more information, see the PyQGIS Developer Cookbook at:
-http://www.qgis.org/pyqgis-cookbook/index.html
-
-(C) 2011-2018 GeoApt LLC - geoapt.com
+The views can be used to fill the fields of the source tables. The connection nodes can no longer be specified, these are instead filled through snapping the start and endpoint of the line features to (existing) connection nodes. Weirs, culverts, pumpstations and orifices will automatically create connection nodes when inserted or updated if they are not present yet. Pipes, on the other hand, have to be drawn from manhole to manhole, as this is a requirement in 3Di as well. If pipe invert levels are left empty the bottom of the adjoining manhole is taken.
