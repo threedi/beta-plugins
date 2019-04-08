@@ -39,7 +39,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>3Di model bewerkbaarmaken?</string>
+    <string>Start editing currently loaded 3Di model?</string>
    </property>
   </widget>
  </widget>
