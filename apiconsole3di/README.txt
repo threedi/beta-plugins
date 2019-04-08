@@ -1,32 +1,5 @@
-Plugin Builder Results
+Plugin to easily start a headless 3Di calculation through the API  
 
-Your plugin ApiConsole3Di was created in:
-    C:/Users/ivar.lokhorst/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins\apiconsole3di
+To start a headless 3Di calculation one can use the 3Di API. However, as it is fairly complicated to communicate through the API we created a plugin which compiles the API call for you. The plugin provides an easy form to start your 3Di calculation.
 
-Your QGIS plugin directory is located at:
-    C:/Users/ivar.lokhorst/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins
-
-What's Next:
-
-  * Copy the entire directory containing your new plugin to the QGIS plugin
-    directory
-
-  * Compile the resources file using pyrcc5
-
-  * Run the tests (``make test``)
-
-  * Test the plugin by enabling it in the QGIS plugin manager
-
-  * Customize it by editing the implementation file: ``ApiConsole3Di.py``
-
-  * Create your own custom icon, replacing the default icon.png
-
-  * Modify your user interface by opening ApiConsole3Di_dialog_base.ui in Qt Designer
-
-  * You can use the Makefile to compile your Ui and resource files when
-    you make changes. This requires GNU make (gmake)
-
-For more information, see the PyQGIS Developer Cookbook at:
-http://www.qgis.org/pyqgis-cookbook/index.html
-
-(C) 2011-2018 GeoApt LLC - geoapt.com
+In the form you enter your model slug, scenario and required processed results. Then you simply start the simulation and receive an email once your results are there.
