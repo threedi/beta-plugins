@@ -10,3 +10,6 @@ Extract the zip file and paste the plugin folder (i.e. apiconsole3di) in:
 C:\Users\YOUR_USER_NAME\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins
 
 Afterwards you should open QGIS, go to plugin manager, installed plugins, and activate the new plugins.
+
+- apiconsole3di: starts a 3Di simulation through the API.
+- edit3dischematisation: alters 1D views to make them editable. Requires loading the model through the threediPlugin
