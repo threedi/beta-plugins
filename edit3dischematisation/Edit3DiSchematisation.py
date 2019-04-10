@@ -25,10 +25,18 @@ from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 from qgis.utils import iface
-from qgis.core import QgsProject, QgsDataSourceUri,QgsMapLayer, QgsEditorWidgetSetup,QgsDefaultValue,QgsRelation
+from qgis.core import (
+    QgsProject,
+    QgsDataSourceUri,
+    QgsMapLayer,
+    QgsEditorWidgetSetup,
+    QgsDefaultValue,
+    QgsRelation,
+)
 
 # Initialize Qt resources from file resources.py
 from .resources import *
+
 # Import the code for the dialog
 from .Edit3DiSchematisation_dialog import Edit3DiSchematisationDialog
 import os.path
@@ -51,23 +59,22 @@ class Edit3DiSchematisation:
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale = QSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
-            self.plugin_dir,
-            'i18n',
-            'Edit3DiSchematisation_{}.qm'.format(locale))
+            self.plugin_dir, "i18n", "Edit3DiSchematisation_{}.qm".format(locale)
+        )
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
 
-            if qVersion() > '4.3.3':
+            if qVersion() > "4.3.3":
                 QCoreApplication.installTranslator(self.translator)
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&Edit3DiSchematisation')
-        
+        self.menu = self.tr(u"&Edit3DiSchematisation")
+
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
@@ -85,8 +92,7 @@ class Edit3DiSchematisation:
         :rtype: QString
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('Edit3DiSchematisation', message)
-
+        return QCoreApplication.translate("Edit3DiSchematisation", message)
 
     def add_action(
         self,
@@ -98,7 +104,8 @@ class Edit3DiSchematisation:
         add_to_toolbar=True,
         status_tip=None,
         whats_this=None,
-        parent=None):
+        parent=None,
+    ):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -154,9 +161,7 @@ class Edit3DiSchematisation:
             self.iface.addToolBarIcon(action)
 
         if add_to_menu:
-            self.iface.addPluginToMenu(
-                self.menu,
-                action)
+            self.iface.addPluginToMenu(self.menu, action)
 
         self.actions.append(action)
 
@@ -165,750 +170,798 @@ class Edit3DiSchematisation:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/Edit3DiSchematisation/edit_icon.png'
+        icon_path = ":/plugins/Edit3DiSchematisation/edit_icon.png"
         self.add_action(
             icon_path,
-            text=self.tr(u'3Di model bewerkbaar maken'),
+            text=self.tr(u"3Di model bewerkbaar maken"),
             callback=self.run,
-            parent=self.iface.mainWindow())
+            parent=self.iface.mainWindow(),
+        )
         # will be set False in run()
         self.first_start = True
-
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
-            self.iface.removePluginMenu(
-                self.tr(u'&Edit3DiSchematisation'),
-                action)
+            self.iface.removePluginMenu(self.tr(u"&Edit3DiSchematisation"), action)
             self.iface.removeToolBarIcon(action)
 
     def configure_pipe_form(self):
-        v2_pipe_view = QgsProject.instance().mapLayersByName('v2_pipe_view')[0]
-        idx = v2_pipe_view.fields().indexFromName('pipe_calculation_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'isolated': u'1', 
-                                 u'connected': u'2'}
-                                 }
-                              )
-        v2_pipe_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
+        idx = v2_pipe_view.fields().indexFromName("pipe_calculation_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"isolated": u"1", u"connected": u"2"}}
+        )
+        v2_pipe_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_friction_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Chezy': u'1', 
-                                 u'Manning': u'2'}
-                                }
-                              )
-        v2_pipe_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_pipe_view.fields().indexFromName("pipe_friction_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"Chezy": u"1", u"Manning": u"2"}}
+        )
+        v2_pipe_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_material')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'concrete': u'0', 
-                                 u'Pvc': u'1',
-                                 u'gres': u'2',
-                                 u'cast iron': u'3',
-                                 u'brickwork': u'4',
-                                 u'HPE': u'5'}
-                                }
-                             )
-        v2_pipe_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_pipe_view.fields().indexFromName("pipe_material")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"concrete": u"0",
+                    u"Pvc": u"1",
+                    u"gres": u"2",
+                    u"cast iron": u"3",
+                    u"brickwork": u"4",
+                    u"HPE": u"5",
+                }
+            },
+        )
+        v2_pipe_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_sewerage_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Mixed': u'0', 
-                                 u'Storm water': u'1',
-                                 u'Dry weather flow': u'2',
-                                 u'Transport': u'3',
-                                 u'Spillway': u'4',
-                                 u'zinker': u'5'}
-                                }
-                              )
-        v2_pipe_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_pipe_view.fields().indexFromName("pipe_sewerage_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"Mixed": u"0",
+                    u"Storm water": u"1",
+                    u"Dry weather flow": u"2",
+                    u"Transport": u"3",
+                    u"Spillway": u"4",
+                    u"zinker": u"5",
+                }
+            },
+        )
+        v2_pipe_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_zoom_category')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'0': u'0', 
-                                 u'1': u'1',
-                                 u'2': u'2',
-                                 u'3': u'3',
-                                 u'4': u'4',
-                                 u'5': u'5'}
-                               }
-                            )
-        v2_pipe_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_pipe_view.fields().indexFromName("pipe_zoom_category")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"0": u"0",
+                    u"1": u"1",
+                    u"2": u"2",
+                    u"3": u"3",
+                    u"4": u"4",
+                    u"5": u"5",
+                }
+            },
+        )
+        v2_pipe_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_connection_node_start_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_pipe_view.fields().indexFromName("pipe_connection_node_start_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_pipe_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_profile_num')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_pipe_view.fields().indexFromName('pipe_connection_node_end_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_pipe_view.fields().indexFromName('def_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_pipe_view.fields().indexFromName('ROWID')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_pipe_view.fields().indexFromName("pipe_profile_num")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_pipe_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_pipe_quality')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_pipe_view.fields().indexFromName("pipe_connection_node_end_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_pipe_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_pipe_view.fields().indexFromName("def_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_pipe_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_pipe_view.fields().indexFromName("ROWID")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_pipe_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_pipe_view.fields().indexFromName("pipe_pipe_quality")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_pipe_view.setEditorWidgetSetup(idx, setup)
 
     def default_pipe_values(self):
-        v2_pipe_view = QgsProject.instance().mapLayersByName('v2_pipe_view')[0]
-        
-        idx = v2_pipe_view.fields().indexFromName('pipe_calculation_type')
+        v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
+
+        idx = v2_pipe_view.fields().indexFromName("pipe_calculation_type")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("1"))
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_friction_value')
+        idx = v2_pipe_view.fields().indexFromName("pipe_friction_value")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.0145"))
-        v2_pipe_view.fields()[idx].setComment("'If left empty assumption is made based on material'")
+        v2_pipe_view.fields()[idx].setComment(
+            "'If left empty assumption is made based on material'"
+        )
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_sewerage_type')
+        idx = v2_pipe_view.fields().indexFromName("pipe_sewerage_type")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("0"))
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_friction_type')
+        idx = v2_pipe_view.fields().indexFromName("pipe_friction_type")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("2"))
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_dist_calc_points')
+        idx = v2_pipe_view.fields().indexFromName("pipe_dist_calc_points")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("1000"))
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_material')
+        idx = v2_pipe_view.fields().indexFromName("pipe_material")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("0"))
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_zoom_category')
+        idx = v2_pipe_view.fields().indexFromName("pipe_zoom_category")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("2"))
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_display_name')
+        idx = v2_pipe_view.fields().indexFromName("pipe_display_name")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_pipe_view.fields().indexFromName('pipe_code')
+        idx = v2_pipe_view.fields().indexFromName("pipe_code")
         v2_pipe_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
     def set_pipe_xsec(self):
-        v2_pipe_view = QgsProject.instance().mapLayersByName('v2_pipe_view')[0]
+        v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
         v2_pipe_id = v2_pipe_view.id()
-        idx = v2_pipe_view.fields().indexFromName('pipe_cross_section_definition_id')
+        idx = v2_pipe_view.fields().indexFromName("pipe_cross_section_definition_id")
 
-        v2_cross_section_definition = QgsProject.instance().mapLayersByName('v2_cross_section_definition')[0]
+        v2_cross_section_definition = QgsProject.instance().mapLayersByName(
+            "v2_cross_section_definition"
+        )[0]
         v2_cross_section_definition_id = v2_cross_section_definition.id()
 
         rel = QgsRelation()
-        rel.setReferencingLayer( v2_pipe_id )
-        rel.setReferencedLayer( v2_cross_section_definition_id )
-        rel.addFieldPair( 'pipe_cross_section_definition_id', 'id' )
-        rel.setId( '1' )
-        rel.setName( 'pipe_xsec' )
+        rel.setReferencingLayer(v2_pipe_id)
+        rel.setReferencedLayer(v2_cross_section_definition_id)
+        rel.addFieldPair("pipe_cross_section_definition_id", "id")
+        rel.setId("1")
+        rel.setName("pipe_xsec")
         rel.setStrength(0)
         QgsProject.instance().relationManager().addRelation(rel)
 
         cfg = dict()
-        cfg['OrderByValue'] = True
-        cfg['AllowNULL'] = False
-        cfg['ShowOpenFormButton'] = False
-        cfg['AllowAddFeatures'] = True
-        cfg['ShowForm'] = False
-        cfg['FilterFields'] = ['shape','width','height']
-        cfg['ChainFilters'] = False
-        setup = QgsEditorWidgetSetup('RelationReference',cfg)
-        v2_pipe_view.setEditorWidgetSetup(idx,setup)
-        expression = ' id || \' code: \' || code '
+        cfg["OrderByValue"] = True
+        cfg["AllowNULL"] = False
+        cfg["ShowOpenFormButton"] = False
+        cfg["AllowAddFeatures"] = True
+        cfg["ShowForm"] = False
+        cfg["FilterFields"] = ["shape", "width", "height"]
+        cfg["ChainFilters"] = False
+        setup = QgsEditorWidgetSetup("RelationReference", cfg)
+        v2_pipe_view.setEditorWidgetSetup(idx, setup)
+        expression = " id || ' code: ' || code "
         v2_cross_section_definition.setDisplayExpression(expression)
 
     def configure_manhole_form(self):
-        v2_manhole_view = QgsProject.instance().mapLayersByName('v2_manhole_view')[0]
-        idx = v2_manhole_view.fields().indexFromName('manh_shape')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'square': u'00', 
-                                 u'round': u'01',
-                                 u'rectangle': u'02'}
-                                }
-                             )
-        v2_manhole_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        v2_manhole_view = QgsProject.instance().mapLayersByName("v2_manhole_view")[0]
+        idx = v2_manhole_view.fields().indexFromName("manh_shape")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {"map": {u"square": u"00", u"round": u"01", u"rectangle": u"02"}},
+        )
+        v2_manhole_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_manhole_view.fields().indexFromName('manh_manhole_indicator')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Inspection': u'0', 
-                                 u'Outlet': u'1',
-                                 u'Pump': u'2'}
-                                }
-                             )
-        v2_manhole_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_manhole_view.fields().indexFromName("manh_manhole_indicator")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"Inspection": u"0", u"Outlet": u"1", u"Pump": u"2"}}
+        )
+        v2_manhole_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_manhole_view.fields().indexFromName('manh_calculation_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Embedded': u'0', 
-                                 u'Isolated': u'1',
-                                 u'Connected': u'2'}
-                                }
-                             )
-        v2_manhole_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_manhole_view.fields().indexFromName("manh_calculation_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {"map": {u"Embedded": u"0", u"Isolated": u"1", u"Connected": u"2"}},
+        )
+        v2_manhole_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_manhole_view.fields().indexFromName('manh_zoom_category')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'0': u'0', 
-                                 u'1': u'1',
-                                 u'2': u'2',
-                                 u'3': u'3',
-                                 u'4': u'4',
-                                 u'5': u'5'}
-                               }
-                            )
-        v2_manhole_view.setEditorWidgetSetup( idx, editor_widget_setup )
-        
-        idx = v2_manhole_view.fields().indexFromName('ROWID')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_manhole_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_manhole_view.fields().indexFromName('node_the_geom_linestring')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_manhole_view.fields().indexFromName("manh_zoom_category")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"0": u"0",
+                    u"1": u"1",
+                    u"2": u"2",
+                    u"3": u"3",
+                    u"4": u"4",
+                    u"5": u"5",
+                }
+            },
+        )
+        v2_manhole_view.setEditorWidgetSetup(idx, editor_widget_setup)
+
+        idx = v2_manhole_view.fields().indexFromName("ROWID")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_manhole_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_manhole_view.fields().indexFromName('manh_sediment_level')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_manhole_view.fields().indexFromName("node_the_geom_linestring")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_manhole_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_manhole_view.fields().indexFromName('manh_connection_node_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_manhole_view.fields().indexFromName("manh_sediment_level")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_manhole_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_manhole_view.fields().indexFromName("manh_connection_node_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_manhole_view.setEditorWidgetSetup(idx, setup)
 
     def default_manhole_values(self):
-        v2_manhole_view = QgsProject.instance().mapLayersByName('v2_manhole_view')[0]
-        
-        idx = v2_manhole_view.fields().indexFromName('manh_display_name')
+        v2_manhole_view = QgsProject.instance().mapLayersByName("v2_manhole_view")[0]
+
+        idx = v2_manhole_view.fields().indexFromName("manh_display_name")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_manhole_view.fields().indexFromName('manh_shape')
+        idx = v2_manhole_view.fields().indexFromName("manh_shape")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("'00'"))
 
-        idx = v2_manhole_view.fields().indexFromName('manh_width')
+        idx = v2_manhole_view.fields().indexFromName("manh_width")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.8"))
 
-        idx = v2_manhole_view.fields().indexFromName('manh_length')
+        idx = v2_manhole_view.fields().indexFromName("manh_length")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.8"))
 
-        idx = v2_manhole_view.fields().indexFromName('manh_manhole_indicator')
+        idx = v2_manhole_view.fields().indexFromName("manh_manhole_indicator")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("0"))
 
-        idx = v2_manhole_view.fields().indexFromName('manh_calculation_type')
+        idx = v2_manhole_view.fields().indexFromName("manh_calculation_type")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("2"))
 
-        idx = v2_manhole_view.fields().indexFromName('manh_zoom_category')
+        idx = v2_manhole_view.fields().indexFromName("manh_zoom_category")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("2"))
 
-        idx = v2_manhole_view.fields().indexFromName('manh_code')
+        idx = v2_manhole_view.fields().indexFromName("manh_code")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_manhole_view.fields().indexFromName('node_storage_area')
+        idx = v2_manhole_view.fields().indexFromName("node_storage_area")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.64"))
 
-        idx = v2_manhole_view.fields().indexFromName('node_code')
+        idx = v2_manhole_view.fields().indexFromName("node_code")
         v2_manhole_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
-        
+
     def configure_orifice_form(self):
-        v2_orifice_view = QgsProject.instance().mapLayersByName('v2_orifice_view')[0]
-        idx = v2_orifice_view.fields().indexFromName('orf_sewerage')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'False': u'0', 
-                                 u'True': u'1'}
-                                }
-                             )
-        v2_orifice_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
+        idx = v2_orifice_view.fields().indexFromName("orf_sewerage")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"False": u"0", u"True": u"1"}}
+        )
+        v2_orifice_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_orifice_view.fields().indexFromName('orf_friction_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Chezy': u'1', 
-                                 u'Manning': u'2'}
-                                }
-                              )
-        v2_orifice_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_orifice_view.fields().indexFromName("orf_friction_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"Chezy": u"1", u"Manning": u"2"}}
+        )
+        v2_orifice_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_orifice_view.fields().indexFromName('orf_zoom_category')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'0': u'0', 
-                                 u'1': u'1',
-                                 u'2': u'2',
-                                 u'3': u'3',
-                                 u'4': u'4',
-                                 u'5': u'5'}
-                                }
-                             )
-        v2_orifice_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_orifice_view.fields().indexFromName("orf_zoom_category")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"0": u"0",
+                    u"1": u"1",
+                    u"2": u"2",
+                    u"3": u"3",
+                    u"4": u"4",
+                    u"5": u"5",
+                }
+            },
+        )
+        v2_orifice_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_orifice_view.fields().indexFromName('orf_crest_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Broad crested': u'3', 
-                                 u'Short crested': u'4'}
-                                }
-                              )
-        v2_orifice_view.setEditorWidgetSetup( idx, editor_widget_setup )
-        
-        idx = v2_orifice_view.fields().indexFromName('ROWID')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_orifice_view.fields().indexFromName('def_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_orifice_view.fields().indexFromName("orf_crest_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"Broad crested": u"3", u"Short crested": u"4"}}
+        )
+        v2_orifice_view.setEditorWidgetSetup(idx, editor_widget_setup)
+
+        idx = v2_orifice_view.fields().indexFromName("ROWID")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_orifice_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_orifice_view.fields().indexFromName('orf_connection_node_start_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_orifice_view.fields().indexFromName("def_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_orifice_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_orifice_view.fields().indexFromName('orf_connection_node_end_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_orifice_view.fields().indexFromName("orf_connection_node_start_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_orifice_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_orifice_view.fields().indexFromName('ROWID')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_orifice_view.fields().indexFromName('def_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_orifice_view.fields().indexFromName("orf_connection_node_end_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_orifice_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_orifice_view.fields().indexFromName('orf_connection_node_start_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_orifice_view.fields().indexFromName("ROWID")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_orifice_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_orifice_view.fields().indexFromName('orf_connection_node_end_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_orifice_view.fields().indexFromName("def_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_orifice_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_orifice_view.fields().indexFromName('orf_max_capacity')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_orifice_view.fields().indexFromName("orf_connection_node_start_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_orifice_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_orifice_view.fields().indexFromName("orf_connection_node_end_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_orifice_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_orifice_view.fields().indexFromName("orf_max_capacity")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_orifice_view.setEditorWidgetSetup(idx, setup)
 
     def default_orifice_values(self):
-        v2_orifice_view = QgsProject.instance().mapLayersByName('v2_orifice_view')[0]
-        
-        idx = v2_orifice_view.fields().indexFromName('orf_display_name')
+        v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
+
+        idx = v2_orifice_view.fields().indexFromName("orf_display_name")
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_orifice_view.fields().indexFromName('orf_code')
+        idx = v2_orifice_view.fields().indexFromName("orf_code")
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_orifice_view.fields().indexFromName('orf_sewerage')
+        idx = v2_orifice_view.fields().indexFromName("orf_sewerage")
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("0"))
 
-        idx = v2_orifice_view.fields().indexFromName('orf_friction_value')
+        idx = v2_orifice_view.fields().indexFromName("orf_friction_value")
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.0133"))
 
-        idx = v2_orifice_view.fields().indexFromName('orf_friction_type')
+        idx = v2_orifice_view.fields().indexFromName("orf_friction_type")
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("2"))
 
-        idx = v2_orifice_view.fields().indexFromName('orf_discharge_coefficient_positive')
+        idx = v2_orifice_view.fields().indexFromName(
+            "orf_discharge_coefficient_positive"
+        )
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.85"))
 
-        idx = v2_orifice_view.fields().indexFromName('orf_discharge_coefficient_negative')
+        idx = v2_orifice_view.fields().indexFromName(
+            "orf_discharge_coefficient_negative"
+        )
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.85"))
-        
-        idx = v2_orifice_view.fields().indexFromName('orf_zoom_category')
+
+        idx = v2_orifice_view.fields().indexFromName("orf_zoom_category")
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("3"))
 
-        idx = v2_orifice_view.fields().indexFromName('orf_crest_type')
+        idx = v2_orifice_view.fields().indexFromName("orf_crest_type")
         v2_orifice_view.setDefaultValueDefinition(idx, QgsDefaultValue("3"))
 
     def set_orf_xsec(self):
-        v2_orifice_view = QgsProject.instance().mapLayersByName('v2_orifice_view')[0]
+        v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
         v2_orifice_id = v2_orifice_view.id()
-        idx = v2_orifice_view.fields().indexFromName('orf_cross_section_definition_id')
+        idx = v2_orifice_view.fields().indexFromName("orf_cross_section_definition_id")
 
-        v2_cross_section_definition = QgsProject.instance().mapLayersByName('v2_cross_section_definition')[0]
+        v2_cross_section_definition = QgsProject.instance().mapLayersByName(
+            "v2_cross_section_definition"
+        )[0]
         v2_cross_section_definition_id = v2_cross_section_definition.id()
 
         rel = QgsRelation()
-        rel.setReferencingLayer( v2_orifice_id )
-        rel.setReferencedLayer( v2_cross_section_definition_id )
-        rel.addFieldPair( 'orf_cross_section_definition_id', 'id' )
-        rel.setId( '3' )
-        rel.setName( 'orf_xsec' )
+        rel.setReferencingLayer(v2_orifice_id)
+        rel.setReferencedLayer(v2_cross_section_definition_id)
+        rel.addFieldPair("orf_cross_section_definition_id", "id")
+        rel.setId("3")
+        rel.setName("orf_xsec")
         rel.setStrength(0)
         QgsProject.instance().relationManager().addRelation(rel)
 
         cfg = dict()
-        cfg['OrderByValue'] = True
-        cfg['AllowNULL'] = False
-        cfg['ShowOpenFormButton'] = False
-        cfg['AllowAddFeatures'] = True
-        cfg['ShowForm'] = False
-        cfg['FilterFields'] = ['shape','width','height']
-        cfg['ChainFilters'] = False
-        setup = QgsEditorWidgetSetup('RelationReference',cfg)
-        v2_orifice_view.setEditorWidgetSetup(idx,setup)
-        expression = ' id || \' code: \' || code '
+        cfg["OrderByValue"] = True
+        cfg["AllowNULL"] = False
+        cfg["ShowOpenFormButton"] = False
+        cfg["AllowAddFeatures"] = True
+        cfg["ShowForm"] = False
+        cfg["FilterFields"] = ["shape", "width", "height"]
+        cfg["ChainFilters"] = False
+        setup = QgsEditorWidgetSetup("RelationReference", cfg)
+        v2_orifice_view.setEditorWidgetSetup(idx, setup)
+        expression = " id || ' code: ' || code "
         v2_cross_section_definition.setDisplayExpression(expression)
 
     def configure_weir_form(self):
-        v2_weir_view = QgsProject.instance().mapLayersByName('v2_weir_view')[0]
-        idx = v2_weir_view.fields().indexFromName('weir_crest_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Broad crested': u'3', 
-                                 u'Short crested': u'4'}
-                                }
-                             )
-        v2_weir_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
+        idx = v2_weir_view.fields().indexFromName("weir_crest_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"Broad crested": u"3", u"Short crested": u"4"}}
+        )
+        v2_weir_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_weir_view.fields().indexFromName('weir_sewerage')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'False': u'0', 
-                                 u'True': u'1'}
-                                }
-                             )
-        v2_weir_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_weir_view.fields().indexFromName("weir_sewerage")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"False": u"0", u"True": u"1"}}
+        )
+        v2_weir_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_weir_view.fields().indexFromName('weir_friction_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Chezy': u'1', 
-                                 u'Manning': u'2'}
-                                }
-                              )
-        v2_weir_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_weir_view.fields().indexFromName("weir_friction_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"Chezy": u"1", u"Manning": u"2"}}
+        )
+        v2_weir_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_weir_view.fields().indexFromName('weir_zoom_category')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'0': u'0', 
-                                 u'1': u'1',
-                                 u'2': u'2',
-                                 u'3': u'3',
-                                 u'4': u'4',
-                                 u'5': u'5'}
-                                }
-                             )
-        v2_weir_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_weir_view.fields().indexFromName("weir_zoom_category")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"0": u"0",
+                    u"1": u"1",
+                    u"2": u"2",
+                    u"3": u"3",
+                    u"4": u"4",
+                    u"5": u"5",
+                }
+            },
+        )
+        v2_weir_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_weir_view.fields().indexFromName('ROWID')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_weir_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_weir_view.fields().indexFromName('def_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_weir_view.fields().indexFromName("ROWID")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_weir_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_weir_view.fields().indexFromName('weir_connection_node_start_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_weir_view.fields().indexFromName("def_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_weir_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_weir_view.fields().indexFromName('weir_connection_node_end_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_weir_view.fields().indexFromName("weir_connection_node_start_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_weir_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_weir_view.fields().indexFromName('weir_external')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_weir_view.fields().indexFromName("weir_connection_node_end_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_weir_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_weir_view.fields().indexFromName("weir_external")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_weir_view.setEditorWidgetSetup(idx, setup)
 
     def default_weir_values(self):
-        v2_weir_view = QgsProject.instance().mapLayersByName('v2_weir_view')[0]
-        
-        idx = v2_weir_view.fields().indexFromName('weir_display_name')
+        v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
+
+        idx = v2_weir_view.fields().indexFromName("weir_display_name")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_weir_view.fields().indexFromName('weir_code')
+        idx = v2_weir_view.fields().indexFromName("weir_code")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_weir_view.fields().indexFromName('weir_crest_type')
+        idx = v2_weir_view.fields().indexFromName("weir_crest_type")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("3"))
 
-        idx = v2_weir_view.fields().indexFromName('weir_sewerage')
+        idx = v2_weir_view.fields().indexFromName("weir_sewerage")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("0"))
 
-        idx = v2_weir_view.fields().indexFromName('weir_discharge_coefficient_positive')
+        idx = v2_weir_view.fields().indexFromName("weir_discharge_coefficient_positive")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.85"))
 
-        idx = v2_weir_view.fields().indexFromName('weir_discharge_coefficient_negative')
+        idx = v2_weir_view.fields().indexFromName("weir_discharge_coefficient_negative")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.85"))
 
-        idx = v2_weir_view.fields().indexFromName('weir_zoom_category')
+        idx = v2_weir_view.fields().indexFromName("weir_zoom_category")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("3"))
 
-        idx = v2_weir_view.fields().indexFromName('weir_friction_value')
+        idx = v2_weir_view.fields().indexFromName("weir_friction_value")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.02"))
 
-        idx = v2_weir_view.fields().indexFromName('weir_friction_type')
+        idx = v2_weir_view.fields().indexFromName("weir_friction_type")
         v2_weir_view.setDefaultValueDefinition(idx, QgsDefaultValue("2"))
 
     def set_weir_xsec(self):
-        v2_weir_view = QgsProject.instance().mapLayersByName('v2_weir_view')[0]
+        v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
         v2_weir_id = v2_weir_view.id()
-        idx = v2_weir_view.fields().indexFromName('weir_cross_section_definition_id')
+        idx = v2_weir_view.fields().indexFromName("weir_cross_section_definition_id")
 
-        v2_cross_section_definition = QgsProject.instance().mapLayersByName('v2_cross_section_definition')[0]
+        v2_cross_section_definition = QgsProject.instance().mapLayersByName(
+            "v2_cross_section_definition"
+        )[0]
         v2_cross_section_definition_id = v2_cross_section_definition.id()
 
         rel = QgsRelation()
-        rel.setReferencingLayer( v2_weir_id )
-        rel.setReferencedLayer( v2_cross_section_definition_id )
-        rel.addFieldPair( 'weir_cross_section_definition_id', 'id' )
-        rel.setId( '2' )
-        rel.setName( 'weir_xsec' )
+        rel.setReferencingLayer(v2_weir_id)
+        rel.setReferencedLayer(v2_cross_section_definition_id)
+        rel.addFieldPair("weir_cross_section_definition_id", "id")
+        rel.setId("2")
+        rel.setName("weir_xsec")
         rel.setStrength(0)
         QgsProject.instance().relationManager().addRelation(rel)
 
         cfg = dict()
-        cfg['OrderByValue'] = True
-        cfg['AllowNULL'] = False
-        cfg['ShowOpenFormButton'] = False
-        cfg['AllowAddFeatures'] = True
-        cfg['ShowForm'] = False
-        cfg['FilterFields'] = ['shape','width','height']
-        cfg['ChainFilters'] = False
-        setup = QgsEditorWidgetSetup('RelationReference',cfg)
-        v2_weir_view.setEditorWidgetSetup(idx,setup)
-        expression = ' id || \' code: \' || code '
+        cfg["OrderByValue"] = True
+        cfg["AllowNULL"] = False
+        cfg["ShowOpenFormButton"] = False
+        cfg["AllowAddFeatures"] = True
+        cfg["ShowForm"] = False
+        cfg["FilterFields"] = ["shape", "width", "height"]
+        cfg["ChainFilters"] = False
+        setup = QgsEditorWidgetSetup("RelationReference", cfg)
+        v2_weir_view.setEditorWidgetSetup(idx, setup)
+        expression = " id || ' code: ' || code "
         v2_cross_section_definition.setDisplayExpression(expression)
 
     def configure_pumpstation_form(self):
-        v2_pumpstation_view = QgsProject.instance().mapLayersByName('v2_pumpstation_view')[0]
-        idx = v2_pumpstation_view.fields().indexFromName('pump_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Responds on suction side': u'1', 
-                                 u'Responds on delivery side': u'2'}
-                                }
-                              )
-        v2_pumpstation_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        v2_pumpstation_view = QgsProject.instance().mapLayersByName(
+            "v2_pumpstation_view"
+        )[0]
+        idx = v2_pumpstation_view.fields().indexFromName("pump_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"Responds on suction side": u"1",
+                    u"Responds on delivery side": u"2",
+                }
+            },
+        )
+        v2_pumpstation_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_sewerage')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'False': u'0', 
-                                 u'True': u'1'}
-                                }
-                              )
-        v2_pumpstation_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_pumpstation_view.fields().indexFromName("pump_sewerage")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"False": u"0", u"True": u"1"}}
+        )
+        v2_pumpstation_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_pumpstation_view.fields().indexFromName('ROWID')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_pumpstation_view.fields().indexFromName('def_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pumpstation_view.fields().indexFromName('pump_connection_node_start_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_pumpstation_view.fields().indexFromName("ROWID")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_connection_node_end_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_pumpstation_view.fields().indexFromName("def_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_classification')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_pumpstation_view.fields().indexFromName(
+            "pump_connection_node_start_id"
+        )
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_pumpstation_view.fields().indexFromName("pump_connection_node_end_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_pumpstation_view.fields().indexFromName("pump_classification")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
 
     def default_pumpstation_values(self):
-        v2_pumpstation_view = QgsProject.instance().mapLayersByName('v2_pumpstation_view')[0]
+        v2_pumpstation_view = QgsProject.instance().mapLayersByName(
+            "v2_pumpstation_view"
+        )[0]
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_display_name')
+        idx = v2_pumpstation_view.fields().indexFromName("pump_display_name")
         v2_pumpstation_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_code')
+        idx = v2_pumpstation_view.fields().indexFromName("pump_code")
         v2_pumpstation_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_type')
+        idx = v2_pumpstation_view.fields().indexFromName("pump_type")
         v2_pumpstation_view.setDefaultValueDefinition(idx, QgsDefaultValue("1"))
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_type')
+        idx = v2_pumpstation_view.fields().indexFromName("pump_type")
         v2_pumpstation_view.setDefaultValueDefinition(idx, QgsDefaultValue("1"))
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_sewerage')
+        idx = v2_pumpstation_view.fields().indexFromName("pump_sewerage")
         v2_pumpstation_view.setDefaultValueDefinition(idx, QgsDefaultValue("1"))
 
-        idx = v2_pumpstation_view.fields().indexFromName('pump_zoom_category')
+        idx = v2_pumpstation_view.fields().indexFromName("pump_zoom_category")
         v2_pumpstation_view.setDefaultValueDefinition(idx, QgsDefaultValue("2"))
 
     def configure_culvert_form(self):
-        v2_culvert_view = QgsProject.instance().mapLayersByName('v2_culvert_view')[0]
-        idx = v2_culvert_view.fields().indexFromName('cul_calculation_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Embedded': u'100', 
-                                 u'Isolated': u'101',
-                                 u'Connected': u'102',
-                                 u'Double connected': u'105',}
-                                }
-                              )
-        v2_culvert_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        v2_culvert_view = QgsProject.instance().mapLayersByName("v2_culvert_view")[0]
+        idx = v2_culvert_view.fields().indexFromName("cul_calculation_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"Embedded": u"100",
+                    u"Isolated": u"101",
+                    u"Connected": u"102",
+                    u"Double connected": u"105",
+                }
+            },
+        )
+        v2_culvert_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_culvert_view.fields().indexFromName('cul_friction_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Chezy': u'1', 
-                                 u'Manning': u'2'}
-                                }
-                              )
-        v2_culvert_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_culvert_view.fields().indexFromName("cul_friction_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap", {"map": {u"Chezy": u"1", u"Manning": u"2"}}
+        )
+        v2_culvert_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_culvert_view.fields().indexFromName('cul_zoom_category')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'0': u'0', 
-                                 u'1': u'1',
-                                 u'2': u'2',
-                                 u'3': u'3',
-                                 u'4': u'4',
-                                 u'5': u'5'}
-                                }
-                              )
-        v2_culvert_view.setEditorWidgetSetup( idx, editor_widget_setup )
+        idx = v2_culvert_view.fields().indexFromName("cul_zoom_category")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"0": u"0",
+                    u"1": u"1",
+                    u"2": u"2",
+                    u"3": u"3",
+                    u"4": u"4",
+                    u"5": u"5",
+                }
+            },
+        )
+        v2_culvert_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_culvert_view.fields().indexFromName('ROWID')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_culvert_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_culvert_view.fields().indexFromName('def_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
-        v2_culvert_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_culvert_view.fields().indexFromName('cul_connection_node_start_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_culvert_view.fields().indexFromName("ROWID")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_culvert_view.setEditorWidgetSetup(idx, setup)
 
-        idx = v2_culvert_view.fields().indexFromName('cul_connection_node_end_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        idx = v2_culvert_view.fields().indexFromName("def_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_culvert_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_culvert_view.fields().indexFromName("cul_connection_node_start_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        v2_culvert_view.setEditorWidgetSetup(idx, setup)
+
+        idx = v2_culvert_view.fields().indexFromName("cul_connection_node_end_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_culvert_view.setEditorWidgetSetup(idx, setup)
 
     def default_culvert_values(self):
-        v2_culvert_view = QgsProject.instance().mapLayersByName('v2_culvert_view')[0]
+        v2_culvert_view = QgsProject.instance().mapLayersByName("v2_culvert_view")[0]
 
-        idx = v2_culvert_view.fields().indexFromName('cul_display_name')
+        idx = v2_culvert_view.fields().indexFromName("cul_display_name")
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_culvert_view.fields().indexFromName('cul_code')
+        idx = v2_culvert_view.fields().indexFromName("cul_code")
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
-        idx = v2_culvert_view.fields().indexFromName('cul_calculation_type')
+        idx = v2_culvert_view.fields().indexFromName("cul_calculation_type")
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("101"))
 
-        idx = v2_culvert_view.fields().indexFromName('cul_friction_type')
+        idx = v2_culvert_view.fields().indexFromName("cul_friction_type")
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("2"))
 
-        idx = v2_culvert_view.fields().indexFromName('cul_friction_value')
+        idx = v2_culvert_view.fields().indexFromName("cul_friction_value")
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.02"))
 
-        idx = v2_culvert_view.fields().indexFromName('cul_dist_calc_points')
+        idx = v2_culvert_view.fields().indexFromName("cul_dist_calc_points")
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("50"))
 
-        idx = v2_culvert_view.fields().indexFromName('cul_zoom_category')
+        idx = v2_culvert_view.fields().indexFromName("cul_zoom_category")
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("4"))
 
-        idx = v2_culvert_view.fields().indexFromName('cul_discharge_coefficient_positive')
+        idx = v2_culvert_view.fields().indexFromName(
+            "cul_discharge_coefficient_positive"
+        )
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.8"))
 
-        idx = v2_culvert_view.fields().indexFromName('cul_discharge_coefficient_negative')
+        idx = v2_culvert_view.fields().indexFromName(
+            "cul_discharge_coefficient_negative"
+        )
         v2_culvert_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.8"))
 
     def set_cul_xsec(self):
-        v2_culvert_view = QgsProject.instance().mapLayersByName('v2_culvert_view')[0]
+        v2_culvert_view = QgsProject.instance().mapLayersByName("v2_culvert_view")[0]
         v2_culvert_id = v2_culvert_view.id()
-        idx = v2_culvert_view.fields().indexFromName('cul_cross_section_definition_id')
+        idx = v2_culvert_view.fields().indexFromName("cul_cross_section_definition_id")
 
-        v2_cross_section_definition = QgsProject.instance().mapLayersByName('v2_cross_section_definition')[0]
+        v2_cross_section_definition = QgsProject.instance().mapLayersByName(
+            "v2_cross_section_definition"
+        )[0]
         v2_cross_section_definition_id = v2_cross_section_definition.id()
 
         rel = QgsRelation()
-        rel.setReferencingLayer( v2_culvert_id )
-        rel.setReferencedLayer( v2_cross_section_definition_id )
-        rel.addFieldPair( 'cul_cross_section_definition_id', 'id' )
-        rel.setId( '4' )
-        rel.setName( 'cul_xsec' )
+        rel.setReferencingLayer(v2_culvert_id)
+        rel.setReferencedLayer(v2_cross_section_definition_id)
+        rel.addFieldPair("cul_cross_section_definition_id", "id")
+        rel.setId("4")
+        rel.setName("cul_xsec")
         rel.setStrength(0)
         QgsProject.instance().relationManager().addRelation(rel)
 
         cfg = dict()
-        cfg['OrderByValue'] = True
-        cfg['AllowNULL'] = False
-        cfg['ShowOpenFormButton'] = False
-        cfg['AllowAddFeatures'] = True
-        cfg['ShowForm'] = False
-        cfg['FilterFields'] = ['shape','width','height']
-        cfg['ChainFilters'] = False
-        setup = QgsEditorWidgetSetup('RelationReference',cfg)
-        v2_culvert_view.setEditorWidgetSetup(idx,setup)
-        expression = ' id || \' code: \' || code '
+        cfg["OrderByValue"] = True
+        cfg["AllowNULL"] = False
+        cfg["ShowOpenFormButton"] = False
+        cfg["AllowAddFeatures"] = True
+        cfg["ShowForm"] = False
+        cfg["FilterFields"] = ["shape", "width", "height"]
+        cfg["ChainFilters"] = False
+        setup = QgsEditorWidgetSetup("RelationReference", cfg)
+        v2_culvert_view.setEditorWidgetSetup(idx, setup)
+        expression = " id || ' code: ' || code "
         v2_cross_section_definition.setDisplayExpression(expression)
 
     def configure_channel_form(self):
-        v2_channel = QgsProject.instance().mapLayersByName('v2_channel')[0]
-        idx = v2_channel.fields().indexFromName('calculation_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Embedded': u'100', 
-                                 u'Isolated': u'101',
-                                 u'Connected': u'102',
-                                 u'Double connected': u'105',}
-                                }
-                              )        
-        v2_channel.setEditorWidgetSetup( idx, editor_widget_setup )
+        v2_channel = QgsProject.instance().mapLayersByName("v2_channel")[0]
+        idx = v2_channel.fields().indexFromName("calculation_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"Embedded": u"100",
+                    u"Isolated": u"101",
+                    u"Connected": u"102",
+                    u"Double connected": u"105",
+                }
+            },
+        )
+        v2_channel.setEditorWidgetSetup(idx, editor_widget_setup)
 
     def default_channel_values(self):
-        v2_channel = QgsProject.instance().mapLayersByName('v2_channel')[0]
+        v2_channel = QgsProject.instance().mapLayersByName("v2_channel")[0]
 
-        idx = v2_channel.fields().indexFromName('display_name')
+        idx = v2_channel.fields().indexFromName("display_name")
         v2_channel.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
-        
-        idx = v2_channel.fields().indexFromName('code')
+
+        idx = v2_channel.fields().indexFromName("code")
         v2_channel.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
-        
-        idx = v2_channel.fields().indexFromName('dist_calc_points')
+
+        idx = v2_channel.fields().indexFromName("dist_calc_points")
         v2_channel.setDefaultValueDefinition(idx, QgsDefaultValue("50"))
-        
-        idx = v2_channel.fields().indexFromName('zoom_category')
+
+        idx = v2_channel.fields().indexFromName("zoom_category")
         v2_channel.setDefaultValueDefinition(idx, QgsDefaultValue("5"))
 
-        idx = v2_channel.fields().indexFromName('calculation_type')
+        idx = v2_channel.fields().indexFromName("calculation_type")
         v2_channel.setDefaultValueDefinition(idx, QgsDefaultValue("102"))
 
     def configure_1d_bound_form(self):
-        v2_1d_boundary_view = QgsProject.instance().mapLayersByName('v2_1d_boundary_view')[0]
-        idx = v2_1d_boundary_view.fields().indexFromName('bound_boundary_type')
-        editor_widget_setup = QgsEditorWidgetSetup( 'ValueMap', {
-                         'map': {u'Waterlevel': u'1', 
-                                 u'Velocity': u'2',
-                                 u'Discharge': u'3',
-                                 u'Sommerfeld': u'5',}
-                                }
-                              )
-        v2_1d_boundary_view.setEditorWidgetSetup( idx, editor_widget_setup )
-        
-        idx = v2_1d_boundary_view.fields().indexFromName('ROWID')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+        v2_1d_boundary_view = QgsProject.instance().mapLayersByName(
+            "v2_1d_boundary_view"
+        )[0]
+        idx = v2_1d_boundary_view.fields().indexFromName("bound_boundary_type")
+        editor_widget_setup = QgsEditorWidgetSetup(
+            "ValueMap",
+            {
+                "map": {
+                    u"Waterlevel": u"1",
+                    u"Velocity": u"2",
+                    u"Discharge": u"3",
+                    u"Sommerfeld": u"5",
+                }
+            },
+        )
+        v2_1d_boundary_view.setEditorWidgetSetup(idx, editor_widget_setup)
+
+        idx = v2_1d_boundary_view.fields().indexFromName("ROWID")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_1d_boundary_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_1d_boundary_view.fields().indexFromName('bound_connection_node_id')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+
+        idx = v2_1d_boundary_view.fields().indexFromName("bound_connection_node_id")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_1d_boundary_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_1d_boundary_view.fields().indexFromName('node_the_geom_linestring')
-        setup = QgsEditorWidgetSetup('Hidden', {})
+
+        idx = v2_1d_boundary_view.fields().indexFromName("node_the_geom_linestring")
+        setup = QgsEditorWidgetSetup("Hidden", {})
         v2_1d_boundary_view.setEditorWidgetSetup(idx, setup)
-        
-        idx = v2_1d_boundary_view.fields().indexFromName('bound_timeseries')
-        setup = QgsEditorWidgetSetup('TextEdit', {'IsMultiline': 'True'})
+
+        idx = v2_1d_boundary_view.fields().indexFromName("bound_timeseries")
+        setup = QgsEditorWidgetSetup("TextEdit", {"IsMultiline": "True"})
         v2_1d_boundary_view.setEditorWidgetSetup(idx, setup)
 
     def default_1d_bound_values(self):
-        v2_1d_boundary_view = QgsProject.instance().mapLayersByName('v2_1d_boundary_view')[0]
-        
-        idx = v2_1d_boundary_view.fields().indexFromName('bound_boundary_type')
+        v2_1d_boundary_view = QgsProject.instance().mapLayersByName(
+            "v2_1d_boundary_view"
+        )[0]
+
+        idx = v2_1d_boundary_view.fields().indexFromName("bound_boundary_type")
         v2_1d_boundary_view.setDefaultValueDefinition(idx, QgsDefaultValue("1"))
 
-        idx = v2_1d_boundary_view.fields().indexFromName('node_storage_area')
+        idx = v2_1d_boundary_view.fields().indexFromName("node_storage_area")
         v2_1d_boundary_view.setDefaultValueDefinition(idx, QgsDefaultValue("0.1"))
-        
-        idx = v2_1d_boundary_view.fields().indexFromName('node_code')
+
+        idx = v2_1d_boundary_view.fields().indexFromName("node_code")
         v2_1d_boundary_view.setDefaultValueDefinition(idx, QgsDefaultValue("'New'"))
 
     def manhole_xsec_commit(self):
-        v2_manhole_view = QgsProject.instance().mapLayersByName('v2_manhole_view')[0]
+        v2_manhole_view = QgsProject.instance().mapLayersByName("v2_manhole_view")[0]
         if v2_manhole_view.isEditable() and v2_manhole_view.isModified():
             v2_manhole_view.commitChanges()
             v2_manhole_view.startEditing()
 
-        v2_cross_section_definition = QgsProject.instance().mapLayersByName('v2_cross_section_definition')[0]
-        if v2_cross_section_definition.isEditable() and v2_cross_section_definition.isModified():
+        v2_cross_section_definition = QgsProject.instance().mapLayersByName(
+            "v2_cross_section_definition"
+        )[0]
+        if (
+            v2_cross_section_definition.isEditable()
+            and v2_cross_section_definition.isModified()
+        ):
             v2_cross_section_definition.commitChanges()
             v2_cross_section_definition.startEditing()
 
@@ -923,9 +976,9 @@ class Edit3DiSchematisation:
         if self.first_start == True:
             self.first_start = False
             self.dlg = Edit3DiSchematisationDialog()
-            
+
         dirname = os.path.dirname(os.path.abspath(__file__))
-        sqlfile = os.path.join(dirname, r'efficient_1d_bewerken_sqlite.sql')
+        sqlfile = os.path.join(dirname, r"efficient_1d_bewerken_sqlite.sql")
         uri = QgsDataSourceUri()
         # show the dialog
         self.dlg.show()
@@ -934,40 +987,51 @@ class Edit3DiSchematisation:
 
         # See if OK was pressed
         if result:
-            #run sql file to add triggers to views
+            # run sql file to add triggers to views
             try:
-                v2_global_settings = QgsProject.instance().mapLayersByName('v2_global_settings')[0]
+                v2_global_settings = QgsProject.instance().mapLayersByName(
+                    "v2_global_settings"
+                )[0]
             except:
-                print('geen model ingeladen')
+                print("geen model ingeladen")
             else:
-                sqlite_dir = v2_global_settings.dataProvider().dataSourceUri().split(' ')[0].replace('dbname=','').replace("'","")
-                qry = open(sqlfile, 'r').read()
+                sqlite_dir = (
+                    v2_global_settings.dataProvider()
+                    .dataSourceUri()
+                    .split(" ")[0]
+                    .replace("dbname=", "")
+                    .replace("'", "")
+                )
+                qry = open(sqlfile, "r").read()
                 conn = sqlite3.connect(sqlite_dir)
                 c = conn.cursor()
                 c.executescript(qry)
                 conn.commit()
                 c.close()
                 conn.close()
-                #check if the v2_manhole table is present (not on first load)
-                present_layers=[]
+                # check if the v2_manhole table is present (not on first load)
+                present_layers = []
                 for layer in iface.mapCanvas().layers():
                     present_layers.append(layer.name())
                 if not any("v2_manhole_view" in s for s in present_layers):
-                    uri.setDataSource('','v2_manhole_view','the_geom')
-                    vlayer = iface.addVectorLayer(uri.uri(), 'v2_manhole_view', 
-                                              'spatialite')
+                    uri.setDataSource("", "v2_manhole_view", "the_geom")
+                    vlayer = iface.addVectorLayer(
+                        uri.uri(), "v2_manhole_view", "spatialite"
+                    )
                     vlayer.startEditing()
-                #load v2_1d_boundary_view (which doesnt load by default)
+                # load v2_1d_boundary_view (which doesnt load by default)
                 if not any("v2_1d_boundary_view" in s for s in present_layers):
                     uri.setDatabase(sqlite_dir)
-                    uri.setDataSource('','v2_1d_boundary_view','the_geom')
-                    vlayer = iface.addVectorLayer(uri.uri(), 'v2_1d_boundary_view', 
-                                          'spatialite')
+                    uri.setDataSource("", "v2_1d_boundary_view", "the_geom")
+                    vlayer = iface.addVectorLayer(
+                        uri.uri(), "v2_1d_boundary_view", "spatialite"
+                    )
                     vlayer.startEditing()
                 for layer in iface.mapCanvas().layers():
-                    if layer.type()== QgsMapLayer.VectorLayer: 
-                        layer.setDataSource( layer.source(), layer.name(),
-                                         layer.providerType())
+                    if layer.type() == QgsMapLayer.VectorLayer:
+                        layer.setDataSource(
+                            layer.source(), layer.name(), layer.providerType()
+                        )
                         layer.startEditing()
                 iface.mapCanvas().snappingUtils().toggleEnabled()
                 self.configure_pipe_form()
@@ -991,36 +1055,52 @@ class Edit3DiSchematisation:
                 self.set_orf_xsec()
                 self.set_cul_xsec()
 
-                v2_pipe_view = QgsProject.instance().mapLayersByName('v2_pipe_view')[0]
+                v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
                 v2_pipe_view.beforeCommitChanges.connect(self.manhole_xsec_commit)
                 v2_pipe_view.featureAdded.connect(self.reactivate_snapping)
 
-                v2_orifice_view = QgsProject.instance().mapLayersByName('v2_orifice_view')[0]
+                v2_orifice_view = QgsProject.instance().mapLayersByName(
+                    "v2_orifice_view"
+                )[0]
                 v2_orifice_view.beforeCommitChanges.connect(self.manhole_xsec_commit)
                 v2_orifice_view.featureAdded.connect(self.reactivate_snapping)
 
-                v2_culvert_view = QgsProject.instance().mapLayersByName('v2_culvert_view')[0]
+                v2_culvert_view = QgsProject.instance().mapLayersByName(
+                    "v2_culvert_view"
+                )[0]
                 v2_culvert_view.beforeCommitChanges.connect(self.manhole_xsec_commit)
                 v2_culvert_view.featureAdded.connect(self.reactivate_snapping)
 
-                v2_weir_view = QgsProject.instance().mapLayersByName('v2_weir_view')[0]
+                v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
                 v2_weir_view.beforeCommitChanges.connect(self.manhole_xsec_commit)
                 v2_weir_view.featureAdded.connect(self.reactivate_snapping)
 
-                v2_pumpstation_view = QgsProject.instance().mapLayersByName('v2_pumpstation_view')[0]
-                v2_pumpstation_view.beforeCommitChanges.connect(self.manhole_xsec_commit)
+                v2_pumpstation_view = QgsProject.instance().mapLayersByName(
+                    "v2_pumpstation_view"
+                )[0]
+                v2_pumpstation_view.beforeCommitChanges.connect(
+                    self.manhole_xsec_commit
+                )
                 v2_pumpstation_view.featureAdded.connect(self.reactivate_snapping)
 
-                v2_1d_boundary_view = QgsProject.instance().mapLayersByName('v2_1d_boundary_view')[0]
-                v2_1d_boundary_view.beforeCommitChanges.connect(self.manhole_xsec_commit)
+                v2_1d_boundary_view = QgsProject.instance().mapLayersByName(
+                    "v2_1d_boundary_view"
+                )[0]
+                v2_1d_boundary_view.beforeCommitChanges.connect(
+                    self.manhole_xsec_commit
+                )
                 v2_1d_boundary_view.featureAdded.connect(self.reactivate_snapping)
 
-                v2_channel = QgsProject.instance().mapLayersByName('v2_channel')[0]
+                v2_channel = QgsProject.instance().mapLayersByName("v2_channel")[0]
                 v2_channel.beforeCommitChanges.connect(self.manhole_xsec_commit)
                 v2_channel.featureAdded.connect(self.reactivate_snapping)
 
-                v2_manhole_view = QgsProject.instance().mapLayersByName('v2_manhole_view')[0]
+                v2_manhole_view = QgsProject.instance().mapLayersByName(
+                    "v2_manhole_view"
+                )[0]
                 v2_manhole_view.featureAdded.connect(self.reactivate_snapping)
 
-                v2_xsec_def = QgsProject.instance().mapLayersByName('v2_cross_section_definition')[0]
+                v2_xsec_def = QgsProject.instance().mapLayersByName(
+                    "v2_cross_section_definition"
+                )[0]
                 v2_xsec_def.startEditing()

@@ -8,9 +8,9 @@
 
 """
 
-__author__ = 'ivar.lokhorst@nelen-schuurmans.nl'
-__date__ = '2019-03-11'
-__copyright__ = 'Copyright 2019, Nelen en Schuurmans'
+__author__ = "ivar.lokhorst@nelen-schuurmans.nl"
+__date__ = "2019-03-11"
+__copyright__ = "Copyright 2019, Nelen en Schuurmans"
 
 import unittest
 
@@ -19,6 +19,7 @@ from PyQt5.QtGui import QDialogButtonBox, QDialog
 from Edit3DiSchematisation_dialog import Edit3DiSchematisationDialog
 
 from utilities import get_qgis_app
+
 QGIS_APP = get_qgis_app()
 
 
@@ -48,8 +49,8 @@ class Edit3DiSchematisationDialogTest(unittest.TestCase):
         result = self.dialog.result()
         self.assertEqual(result, QDialog.Rejected)
 
+
 if __name__ == "__main__":
     suite = unittest.makeSuite(Edit3DiSchematisationDialogTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-

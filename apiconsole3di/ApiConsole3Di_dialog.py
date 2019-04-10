@@ -28,8 +28,9 @@ from PyQt5 import uic
 from PyQt5 import QtWidgets
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
-FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'ApiConsole3Di_dialog_base.ui'))
+FORM_CLASS, _ = uic.loadUiType(
+    os.path.join(os.path.dirname(__file__), "ApiConsole3Di_dialog_base.ui")
+)
 
 
 class ApiConsole3DiDialog(QtWidgets.QDialog, FORM_CLASS):

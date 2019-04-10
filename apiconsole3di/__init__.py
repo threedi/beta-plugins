@@ -33,4 +33,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
     """
     #
     from .ApiConsole3Di import ApiConsole3Di
+
     return ApiConsole3Di(iface)

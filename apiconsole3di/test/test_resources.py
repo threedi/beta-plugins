@@ -8,14 +8,13 @@
 
 """
 
-__author__ = 'ivar.lokhorst@nelen-schuurmans.nl'
-__date__ = '2019-03-08'
-__copyright__ = 'Copyright 2019, Nelen & Schuurmans'
+__author__ = "ivar.lokhorst@nelen-schuurmans.nl"
+__date__ = "2019-03-08"
+__copyright__ = "Copyright 2019, Nelen & Schuurmans"
 
 import unittest
 
 from PyQt5.QtGui import QIcon
-
 
 
 class ApiConsole3DiDialogTest(unittest.TestCase):
@@ -31,14 +30,12 @@ class ApiConsole3DiDialogTest(unittest.TestCase):
 
     def test_icon_png(self):
         """Test we can click OK."""
-        path = ':/plugins/ApiConsole3Di/icon.png'
+        path = ":/plugins/ApiConsole3Di/icon.png"
         icon = QIcon(path)
         self.assertFalse(icon.isNull())
+
 
 if __name__ == "__main__":
     suite = unittest.makeSuite(ApiConsole3DiResourcesTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-
-
-

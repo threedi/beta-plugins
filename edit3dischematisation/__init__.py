@@ -33,4 +33,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
     """
     #
     from .Edit3DiSchematisation import Edit3DiSchematisation
+
     return Edit3DiSchematisation(iface)

@@ -8,9 +8,9 @@
 
 """
 
-__author__ = 'ivar.lokhorst@nelen-schuurmans.nl'
-__date__ = '2019-03-08'
-__copyright__ = 'Copyright 2019, Nelen & Schuurmans'
+__author__ = "ivar.lokhorst@nelen-schuurmans.nl"
+__date__ = "2019-03-08"
+__copyright__ = "Copyright 2019, Nelen & Schuurmans"
 
 import unittest
 
@@ -19,6 +19,7 @@ from PyQt5.QtGui import QDialogButtonBox, QDialog
 from ApiConsole3Di_dialog import ApiConsole3DiDialog
 
 from utilities import get_qgis_app
+
 QGIS_APP = get_qgis_app()
 
 
@@ -48,8 +49,8 @@ class ApiConsole3DiDialogTest(unittest.TestCase):
         result = self.dialog.result()
         self.assertEqual(result, QDialog.Rejected)
 
+
 if __name__ == "__main__":
     suite = unittest.makeSuite(ApiConsole3DiDialogTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-

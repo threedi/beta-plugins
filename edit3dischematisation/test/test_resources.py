@@ -8,14 +8,13 @@
 
 """
 
-__author__ = 'ivar.lokhorst@nelen-schuurmans.nl'
-__date__ = '2019-03-11'
-__copyright__ = 'Copyright 2019, Nelen en Schuurmans'
+__author__ = "ivar.lokhorst@nelen-schuurmans.nl"
+__date__ = "2019-03-11"
+__copyright__ = "Copyright 2019, Nelen en Schuurmans"
 
 import unittest
 
 from PyQt5.QtGui import QIcon
-
 
 
 class Edit3DiSchematisationDialogTest(unittest.TestCase):
@@ -31,14 +30,12 @@ class Edit3DiSchematisationDialogTest(unittest.TestCase):
 
     def test_icon_png(self):
         """Test we can click OK."""
-        path = ':/plugins/Edit3DiSchematisation/icon.png'
+        path = ":/plugins/Edit3DiSchematisation/icon.png"
         icon = QIcon(path)
         self.assertFalse(icon.isNull())
+
 
 if __name__ == "__main__":
     suite = unittest.makeSuite(Edit3DiSchematisationResourcesTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-
-
-
