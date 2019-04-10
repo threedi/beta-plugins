@@ -285,6 +285,12 @@ class ApiConsole3Di:
 
     def on_damagebox_changed(self, value):
         # Enable fields for damage estimation when applied
+
+        # TODO
+        # for field_name in ["inundationPeriod", "...."]:
+        #     field = getattr(self.dlg, field_name)
+        #     field.setEnabled(1)
+
         if value == "true":
             self.dlg.inundationPeriod.setEnabled(1)
             self.dlg.repairTimeBuildings.setEnabled(1)
@@ -349,8 +355,8 @@ class ApiConsole3Di:
         # specification of results processing options
         proces_basic_results_options = ["true", "false"]
         proces_damage_options = ["false", "true"]
-        cost_type = ["minimum", "average", "maximum"]
-        month = [
+        cost_types = ["minimum", "average", "maximum"]
+        months = [
             "January",
             "February",
             "March",
@@ -378,8 +384,8 @@ class ApiConsole3Di:
             self.dlg.rainEvent.addItems(design_rain)
             self.dlg.processResults.addItems(proces_basic_results_options)
             self.dlg.damageEstimation.addItems(proces_damage_options)
-            self.dlg.costType.addItems(cost_type)
-            self.dlg.floodMonth.addItems(month)
+            self.dlg.costType.addItems(cost_types)
+            self.dlg.floodMonth.addItems(months)
             self.dlg.password.setEchoMode(QtGui.QLineEdit.Password)
             self.dlg.rainType.addItems(rain_options)
             self.dlg.inundationPeriod.setDisabled(1)
@@ -402,115 +408,115 @@ class ApiConsole3Di:
         self.dlg.show()
         # Run the dialog event loop
         result = self.dlg.exec_()
-        # See if OK was pressed
-        if result:
-            # load standard variables:
-            organisationID = self.dlg.organisationID.text()
-            ModelSlug = self.dlg.modelSlug.text()
-            ScenarioName = self.dlg.scenarioName.text()
+        if not result:
+            # Cancel was pressed
+            return
 
-            # load rain variables:
-            selectedLayerIndex = self.dlg.rainType.currentIndex()
-            rain_type = rain_options[selectedLayerIndex]
-            if rain_type == "constant":
-                rainIntensity = float(self.dlg.rainIntensity.text())
-            if rain_type == "design":
-                rainevent = self.dlg.rainEvent.currentIndex()
-            if rain_type == "radar":
-                radarMultiplier = int(self.dlg.radarMultiplier.text())
-                radarStartTime = self.dlg.radarStartTime.dateTime().toString(
-                    "yyyy-MM-ddThh:mm"
-                )
+        # load standard variables:
+        organisationID = self.dlg.organisationID.text()
+        ModelSlug = self.dlg.modelSlug.text()
+        ScenarioName = self.dlg.scenarioName.text()
 
-            # load rain and simulation start/end time
-            simStartTime_string = self.dlg.simStartTime.dateTime().toString(
-                "yyyy-MM-ddThh:mm"
-            )
-            simEndTime_string = self.dlg.simEndTime.dateTime().toString(
-                "yyyy-MM-ddThh:mm"
-            )
-            rainStartTime_string = self.dlg.rainStartTime.dateTime().toString(
-                "yyyy-MM-ddThh:mm"
-            )
-            rainEndTime_string = self.dlg.rainEndTime.dateTime().toString(
+        # load rain variables:
+        selectedLayerIndex = self.dlg.rainType.currentIndex()
+        rain_type = rain_options[selectedLayerIndex]
+        if rain_type == "constant":
+            rainIntensity = float(self.dlg.rainIntensity.text())
+        if rain_type == "design":
+            rainevent = self.dlg.rainEvent.currentIndex()
+        if rain_type == "radar":
+            radarMultiplier = int(self.dlg.radarMultiplier.text())
+            radarStartTime = self.dlg.radarStartTime.dateTime().toString(
                 "yyyy-MM-ddThh:mm"
             )
 
-            # determine whether to process basic results
-            selectedLayerIndex = self.dlg.processResults.currentIndex()
-            proces_basic_results = proces_basic_results_options[selectedLayerIndex]
+        # load rain and simulation start/end time
+        simStartTime_string = self.dlg.simStartTime.dateTime().toString(
+            "yyyy-MM-ddThh:mm"
+        )
+        simEndTime_string = self.dlg.simEndTime.dateTime().toString("yyyy-MM-ddThh:mm")
+        rainStartTime_string = self.dlg.rainStartTime.dateTime().toString(
+            "yyyy-MM-ddThh:mm"
+        )
+        rainEndTime_string = self.dlg.rainEndTime.dateTime().toString(
+            "yyyy-MM-ddThh:mm"
+        )
 
-            # characterize damage estimation (if toggled)
-            selectedLayerIndex = self.dlg.damageEstimation.currentIndex()
-            proces_damage = proces_damage_options[selectedLayerIndex]
-            if proces_damage == "true":
-                Cost_type = self.dlg.costType.currentIndex()
-                flood_month = self.dlg.floodMonth.currentIndex()
-                inundation_time = int(self.dlg.inundationPeriod.text())
-                repair_time_infra = int(self.dlg.repairTimeInfra.text())
-                repair_time_buildings = int(self.dlg.repairTimeBuildings.text())
+        # determine whether to process basic results
+        selectedLayerIndex = self.dlg.processResults.currentIndex()
+        proces_basic_results = proces_basic_results_options[selectedLayerIndex]
 
-            # get authorization credentials
-            eMail = self.dlg.eMail.text()
-            username = self.dlg.userName.text()
-            password = self.dlg.password.text()
+        # characterize damage estimation (if toggled)
+        selectedLayerIndex = self.dlg.damageEstimation.currentIndex()
+        proces_damage = proces_damage_options[selectedLayerIndex]
+        if proces_damage == "true":
+            Cost_type = self.dlg.costType.currentIndex()
+            flood_month = self.dlg.floodMonth.currentIndex()
+            inundation_time = int(self.dlg.inundationPeriod.text())
+            repair_time_infra = int(self.dlg.repairTimeInfra.text())
+            repair_time_buildings = int(self.dlg.repairTimeBuildings.text())
 
-            # store variables in Qsettings object
-            settings.setValue("uuid", organisationID)
-            settings.setValue("slug", ModelSlug)
-            settings.setValue("email", eMail)
-            settings.setValue("username", username)
+        # get authorization credentials
+        eMail = self.dlg.eMail.text()
+        username = self.dlg.userName.text()
+        password = self.dlg.password.text()
 
-            # Create api-calls:
-            basic_info_call = self.uuid_information(
-                organisationID,
-                ModelSlug,
-                simStartTime_string,
-                simEndTime_string,
-                ScenarioName,
-                eMail,
+        # store variables in Qsettings object
+        settings.setValue("uuid", organisationID)
+        settings.setValue("slug", ModelSlug)
+        settings.setValue("email", eMail)
+        settings.setValue("username", username)
+
+        # Create api-calls:
+        basic_info_call = self.uuid_information(
+            organisationID,
+            ModelSlug,
+            simStartTime_string,
+            simEndTime_string,
+            ScenarioName,
+            eMail,
+        )
+
+        if rain_type == "constant":
+            rain_call = self.constant_rain_information(
+                rainIntensity, rainStartTime_string, rainEndTime_string
+            )
+        elif rain_type == "design":
+            rain_call = self.design_rain_information(
+                rainevent, rainStartTime_string, rainEndTime_string
+            )
+        elif rain_type == "radar":
+            rain_call = self.radar_rain_information(
+                radarMultiplier,
+                rainStartTime_string,
+                rainEndTime_string,
+                radarStartTime,
             )
 
-            if rain_type == "constant":
-                rain_call = self.constant_rain_information(
-                    rainIntensity, rainStartTime_string, rainEndTime_string
-                )
-            elif rain_type == "design":
-                rain_call = self.design_rain_information(
-                    rainevent, rainStartTime_string, rainEndTime_string
-                )
-            elif rain_type == "radar":
-                rain_call = self.radar_rain_information(
-                    radarMultiplier,
-                    rainStartTime_string,
-                    rainEndTime_string,
-                    radarStartTime,
-                )
-
-            if proces_basic_results == "false":
-                processing_call = {}
-            elif proces_basic_results == "true" and proces_damage == "false":
-                processing_call = self.store_basic_results(proces_basic_results)
-            elif proces_basic_results == "true" and proces_damage == "true":
-                processing_call = self.store_damage(
-                    proces_basic_results,
-                    Cost_type,
-                    flood_month,
-                    inundation_time,
-                    repair_time_infra,
-                    repair_time_buildings,
-                )
-
-            task = json.dumps({**basic_info_call, **rain_call, **processing_call})
-            task = task.replace('"true"', "true")
-
-            # perform api call:
-            resp = requests.post(url, task, auth=(username, password), headers=headers)
-            QMessageBox.information(
-                None,
-                "status of api-call:",
-                "received response: "
-                + str(resp.json())
-                + "\n\nperformed api-call: "
-                + str(task),
+        if proces_basic_results == "false":
+            processing_call = {}
+        elif proces_basic_results == "true" and proces_damage == "false":
+            processing_call = self.store_basic_results(proces_basic_results)
+        elif proces_basic_results == "true" and proces_damage == "true":
+            processing_call = self.store_damage(
+                proces_basic_results,
+                Cost_type,
+                flood_month,
+                inundation_time,
+                repair_time_infra,
+                repair_time_buildings,
             )
+
+        task = json.dumps({**basic_info_call, **rain_call, **processing_call})
+        task = task.replace('"true"', "true")
+
+        # perform api call:
+        resp = requests.post(url, task, auth=(username, password), headers=headers)
+        QMessageBox.information(
+            None,
+            "status of api-call:",
+            "received response: "
+            + str(resp.json())
+            + "\n\nperformed api-call: "
+            + str(task),
+        )
