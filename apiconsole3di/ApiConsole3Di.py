@@ -264,25 +264,18 @@ class ApiConsole3Di:
     def on_damagebox_changed(self, value):
         # Enable fields for damage estimation when applied
 
-        # TODO
-        # for field_name in ["inundationPeriod", "...."]:
-        #     field = getattr(self.dlg, field_name)
-        #     field.setEnabled(1)
+        if value == True:
+            for field_name in ["inundationPeriod", "repairTimeBuildings", 
+                               "repairTimeInfra", "costType", "floodMonth"]:
+                field = getattr(self.dlg, field_name)
+                field.setEnabled(1)
 
-        if value == "true":
-            self.dlg.inundationPeriod.setEnabled(1)
-            self.dlg.repairTimeBuildings.setEnabled(1)
-            self.dlg.repairTimeInfra.setEnabled(1)
-            self.dlg.costType.setEnabled(1)
-            self.dlg.floodMonth.setEnabled(1)
-
-        # Enable fields for damage estimation when applied
-        if value == "false":
-            self.dlg.inundationPeriod.setDisabled(1)
-            self.dlg.repairTimeBuildings.setDisabled(1)
-            self.dlg.repairTimeInfra.setDisabled(1)
-            self.dlg.costType.setDisabled(1)
-            self.dlg.floodMonth.setDisabled(1)
+        # Disable fields for damage estimation when applied
+        if value == False:
+            for field_name in ["inundationPeriod", "repairTimeBuildings", 
+                               "repairTimeInfra", "costType", "floodMonth"]:
+                field = getattr(self.dlg, field_name)
+                field.setDisabled(1)
 
     def on_raintype_changed(self, value):
         # disable radar and design rain fields when constant rain
