@@ -173,7 +173,7 @@ class ApiConsole3Di:
         ScenarioName,
         eMail,
     ):
-        basic_info_call = {
+        basic_info_parameters = {
             "organisation_uuid": organisationID,
             "model_slug": ModelSlug,
             "start": simStartTime_string,
@@ -181,13 +181,13 @@ class ApiConsole3Di:
             "scenario_name": ScenarioName,
             "email": eMail,
         }
-        return basic_info_call
+        return basic_info_parameters
 
     @staticmethod
     def constant_rain_information(
         rainIntensity, rainStartTime_string, rainEndTime_string
     ):
-        constant_rain_call = {
+        constant_rain_parameters = {
             "rain_events": [
                 {
                     "type": "constant",
@@ -197,11 +197,11 @@ class ApiConsole3Di:
                 }
             ]
         }
-        return constant_rain_call
+        return constant_rain_parameters
 
     @staticmethod
     def design_rain_information(rainevent, rainStartTime_string, rainEndTime_string):
-        design_rain_call = {
+        design_rain_parameters = {
             "rain_events": [
                 {
                     "type": "design",
@@ -211,13 +211,13 @@ class ApiConsole3Di:
                 }
             ]
         }
-        return design_rain_call
+        return design_rain_parameters
 
     @staticmethod
     def radar_rain_information(
         radarMultiplier, rainStartTime_string, rainEndTime_string, radarStartTime
     ):
-        radar_rain_call = {
+        radar_rain_parameters = {
             "rain_events": [
                 {
                     "type": "radar",
@@ -229,14 +229,14 @@ class ApiConsole3Di:
                 }
             ]
         }
-        return radar_rain_call
+        return radar_rain_parameters
 
     @staticmethod
     def store_basic_results(proces_basic_results):
-        basic_results_call = {
+        basic_results_parameters = {
             "store_results": {"process_basic_results": proces_basic_results}
         }
-        return basic_results_call
+        return basic_results_parameters
 
     @staticmethod
     def store_damage(
@@ -247,7 +247,7 @@ class ApiConsole3Di:
         repair_time_infra,
         repair_time_buildings,
     ):
-        damage_results_call = {
+        damage_results_parameters = {
             "store_results": {
                 "process_basic_results": proces_basic_results,
                 "damage_estimation": {
@@ -259,7 +259,7 @@ class ApiConsole3Di:
                 },
             }
         }
-        return damage_results_call
+        return damage_results_parameters
 
     def on_damagebox_changed(self, value):
         # Enable fields for damage estimation when applied
@@ -331,8 +331,8 @@ class ApiConsole3Di:
         rain_options = ["constant", "design", "radar"]
 
         # specification of results processing options
-        proces_basic_results_options = ["true", "false"]
-        proces_damage_options = ["false", "true"]  # TODO: True/False
+        proces_basic_results_options = [True, False]
+        proces_damage_options = [False, True]  # TODO: True/False
         cost_types = ["minimum", "average", "maximum"]
         months = [
             "January",
@@ -427,7 +427,7 @@ class ApiConsole3Di:
         # characterize damage estimation (if toggled)
         selectedLayerIndex = self.dlg.damageEstimation.currentIndex()
         proces_damage = proces_damage_options[selectedLayerIndex]
-        if proces_damage == "true":
+        if proces_damage == True:
             Cost_type = self.dlg.costType.currentIndex()
             flood_month = self.dlg.floodMonth.currentIndex()
             inundation_time = int(self.dlg.inundationPeriod.text())
@@ -446,7 +446,7 @@ class ApiConsole3Di:
         settings.setValue("username", username)
 
         # Create api-calls:
-        basic_info_call = self.uuid_information(
+        basic_info_parameters = self.uuid_information(
             organisationID,
             ModelSlug,
             simStartTime_string,
@@ -456,27 +456,27 @@ class ApiConsole3Di:
         )
 
         if rain_type == "constant":
-            rain_call = self.constant_rain_information(
+            rain_parameters = self.constant_rain_information(
                 rainIntensity, rainStartTime_string, rainEndTime_string
             )
         elif rain_type == "design":
-            rain_call = self.design_rain_information(
+            rain_parameters = self.design_rain_information(
                 rainevent, rainStartTime_string, rainEndTime_string
             )
         elif rain_type == "radar":
-            rain_call = self.radar_rain_information(
+            rain_parameters = self.radar_rain_information(
                 radarMultiplier,
                 rainStartTime_string,
                 rainEndTime_string,
                 radarStartTime,
             )
 
-        if proces_basic_results == "false":
-            processing_call = {}
-        elif proces_basic_results == "true" and proces_damage == "false":
-            processing_call = self.store_basic_results(proces_basic_results)
-        elif proces_basic_results == "true" and proces_damage == "true":
-            processing_call = self.store_damage(
+        if proces_basic_results == False:
+            processing_parameters = {}
+        elif proces_basic_results == True and proces_damage == False:
+            processing_parameters = self.store_basic_results(proces_basic_results)
+        elif proces_basic_results == True and proces_damage == True:
+            processing_parameters = self.store_damage(
                 proces_basic_results,
                 Cost_type,
                 flood_month,
@@ -485,16 +485,16 @@ class ApiConsole3Di:
                 repair_time_buildings,
             )
 
-        task = json.dumps({**basic_info_call, **rain_call, **processing_call})
-        task = task.replace('"true"', "true")
+        api_parameters = json.dumps({**basic_info_parameters, **rain_parameters, **processing_parameters})
+        api_parameters = api_parameters.replace('"true"', "true")
 
         # Perform api call:
-        response = requests.post(url, task, auth=(username, password), headers=headers)
+        response = requests.post(url, api_parameters, auth=(username, password), headers=headers)
         QMessageBox.information(
             None,
             "status of api-call:",
             "received response: "
             + str(response.json())
             + "\n\nperformed api-call: "
-            + str(task),
+            + str(api_parameters),
         )
