@@ -264,14 +264,14 @@ class ApiConsole3Di:
     def on_damagebox_changed(self, value):
         # Enable fields for damage estimation when applied
 
-        if value == True:
+        if value == "True":
             for field_name in ["inundationPeriod", "repairTimeBuildings", 
                                "repairTimeInfra", "costType", "floodMonth"]:
                 field = getattr(self.dlg, field_name)
                 field.setEnabled(1)
 
         # Disable fields for damage estimation when applied
-        if value == False:
+        if value == "False":
             for field_name in ["inundationPeriod", "repairTimeBuildings", 
                                "repairTimeInfra", "costType", "floodMonth"]:
                 field = getattr(self.dlg, field_name)
@@ -324,8 +324,8 @@ class ApiConsole3Di:
         rain_options = ["constant", "design", "radar"]
 
         # specification of results processing options
-        proces_basic_results_options = [True, False]
-        proces_damage_options = [False, True]  # TODO: True/False
+        proces_basic_results_options = ["True", "False"]
+        proces_damage_options = ["False", "True"] 
         cost_types = ["minimum", "average", "maximum"]
         months = [
             "January",
@@ -420,7 +420,7 @@ class ApiConsole3Di:
         # characterize damage estimation (if toggled)
         selectedLayerIndex = self.dlg.damageEstimation.currentIndex()
         proces_damage = proces_damage_options[selectedLayerIndex]
-        if proces_damage == True:
+        if proces_damage == "True":
             Cost_type = self.dlg.costType.currentIndex()
             flood_month = self.dlg.floodMonth.currentIndex()
             inundation_time = int(self.dlg.inundationPeriod.text())
@@ -464,11 +464,11 @@ class ApiConsole3Di:
                 radarStartTime,
             )
 
-        if proces_basic_results == False:
+        if proces_basic_results == "False":
             processing_parameters = {}
-        elif proces_basic_results == True and proces_damage == False:
+        elif proces_basic_results == "True" and proces_damage == "False":
             processing_parameters = self.store_basic_results(proces_basic_results)
-        elif proces_basic_results == True and proces_damage == True:
+        elif proces_basic_results == "True" and proces_damage == "True":
             processing_parameters = self.store_damage(
                 proces_basic_results,
                 Cost_type,
