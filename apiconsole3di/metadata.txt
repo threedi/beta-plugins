@@ -14,7 +14,7 @@ version=0.1
 author=Nelen & Schuurmans
 email=ivar.lokhorst@nelen-schuurmans.nl
 
-about=Plugin to easily start a 3Di simulation through the API.
+about=Plugin to easily start a 3Di simulation through the API. The API is called based on filled parameters after which your 3Di simulation runs.
 
 tracker=http://bugs
 repository=http://repo
