@@ -151,7 +151,7 @@ class Edit3DiSchematisation:
         icon_path = ":/plugins/Edit3DiSchematisation/edit_icon.png"
         self.add_action(
             icon_path,
-            text=self.tr(u"3Di model bewerkbaar maken"),
+            text=self.tr(u"Edit 3Di schematisation"),
             callback=self.run,
             parent=self.iface.mainWindow(),
         )
