@@ -226,30 +226,6 @@ class Edit3DiSchematisation:
         )
         v2_pipe_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_pipe_view.fields().indexFromName("pipe_connection_node_start_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pipe_view.fields().indexFromName("pipe_profile_num")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pipe_view.fields().indexFromName("pipe_connection_node_end_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pipe_view.fields().indexFromName("def_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pipe_view.fields().indexFromName("ROWID")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pipe_view.fields().indexFromName("pipe_pipe_quality")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pipe_view.setEditorWidgetSetup(idx, setup)
-
     def configure_manhole_form(self):
         v2_manhole_view = QgsProject.instance().mapLayersByName("v2_manhole_view")[0]
         idx = v2_manhole_view.fields().indexFromName("manh_shape")
@@ -288,22 +264,6 @@ class Edit3DiSchematisation:
         )
         v2_manhole_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_manhole_view.fields().indexFromName("ROWID")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_manhole_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_manhole_view.fields().indexFromName("node_the_geom_linestring")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_manhole_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_manhole_view.fields().indexFromName("manh_sediment_level")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_manhole_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_manhole_view.fields().indexFromName("manh_connection_node_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_manhole_view.setEditorWidgetSetup(idx, setup)
-
     def configure_orifice_form(self):
         v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
         idx = v2_orifice_view.fields().indexFromName("orf_sewerage")
@@ -339,42 +299,6 @@ class Edit3DiSchematisation:
             "ValueMap", {"map": {u"Broad crested": u"3", u"Short crested": u"4"}}
         )
         v2_orifice_view.setEditorWidgetSetup(idx, editor_widget_setup)
-
-        idx = v2_orifice_view.fields().indexFromName("ROWID")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_orifice_view.fields().indexFromName("def_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_orifice_view.fields().indexFromName("orf_connection_node_start_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_orifice_view.fields().indexFromName("orf_connection_node_end_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_orifice_view.fields().indexFromName("ROWID")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_orifice_view.fields().indexFromName("def_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_orifice_view.fields().indexFromName("orf_connection_node_start_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_orifice_view.fields().indexFromName("orf_connection_node_end_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_orifice_view.fields().indexFromName("orf_max_capacity")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_orifice_view.setEditorWidgetSetup(idx, setup)
 
     def configure_weir_form(self):
         v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
@@ -412,26 +336,6 @@ class Edit3DiSchematisation:
         )
         v2_weir_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_weir_view.fields().indexFromName("ROWID")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_weir_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_weir_view.fields().indexFromName("def_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_weir_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_weir_view.fields().indexFromName("weir_connection_node_start_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_weir_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_weir_view.fields().indexFromName("weir_connection_node_end_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_weir_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_weir_view.fields().indexFromName("weir_external")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_weir_view.setEditorWidgetSetup(idx, setup)
-
     def configure_pumpstation_form(self):
         v2_pumpstation_view = QgsProject.instance().mapLayersByName(
             "v2_pumpstation_view"
@@ -453,28 +357,6 @@ class Edit3DiSchematisation:
             "ValueMap", {"map": {u"False": u"0", u"True": u"1"}}
         )
         v2_pumpstation_view.setEditorWidgetSetup(idx, editor_widget_setup)
-
-        idx = v2_pumpstation_view.fields().indexFromName("ROWID")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pumpstation_view.fields().indexFromName("def_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pumpstation_view.fields().indexFromName(
-            "pump_connection_node_start_id"
-        )
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pumpstation_view.fields().indexFromName("pump_connection_node_end_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_pumpstation_view.fields().indexFromName("pump_classification")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_pumpstation_view.setEditorWidgetSetup(idx, setup)
 
     def configure_culvert_form(self):
         v2_culvert_view = QgsProject.instance().mapLayersByName("v2_culvert_view")[0]
@@ -514,22 +396,6 @@ class Edit3DiSchematisation:
         )
         v2_culvert_view.setEditorWidgetSetup(idx, editor_widget_setup)
 
-        idx = v2_culvert_view.fields().indexFromName("ROWID")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_culvert_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_culvert_view.fields().indexFromName("def_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_culvert_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_culvert_view.fields().indexFromName("cul_connection_node_start_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_culvert_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_culvert_view.fields().indexFromName("cul_connection_node_end_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_culvert_view.setEditorWidgetSetup(idx, setup)
-
     def configure_channel_form(self):
         v2_channel = QgsProject.instance().mapLayersByName("v2_channel")[0]
         idx = v2_channel.fields().indexFromName("calculation_type")
@@ -563,18 +429,6 @@ class Edit3DiSchematisation:
             },
         )
         v2_1d_boundary_view.setEditorWidgetSetup(idx, editor_widget_setup)
-
-        idx = v2_1d_boundary_view.fields().indexFromName("ROWID")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_1d_boundary_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_1d_boundary_view.fields().indexFromName("bound_connection_node_id")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_1d_boundary_view.setEditorWidgetSetup(idx, setup)
-
-        idx = v2_1d_boundary_view.fields().indexFromName("node_the_geom_linestring")
-        setup = QgsEditorWidgetSetup("Hidden", {})
-        v2_1d_boundary_view.setEditorWidgetSetup(idx, setup)
 
         idx = v2_1d_boundary_view.fields().indexFromName("bound_timeseries")
         setup = QgsEditorWidgetSetup("TextEdit", {"IsMultiline": "True"})
@@ -657,6 +511,58 @@ class Edit3DiSchematisation:
         for view, name, default in default_settings:
             idx = view.fields().indexFromName(name)
             view.setDefaultValueDefinition(idx, QgsDefaultValue(default))
+
+    def hide_fields(self):
+        v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
+        v2_manhole_view = QgsProject.instance().mapLayersByName("v2_manhole_view")[0]
+        v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
+        v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
+        v2_pumpstation_view = QgsProject.instance().mapLayersByName(
+            "v2_pumpstation_view"
+        )[0]
+        v2_culvert_view = QgsProject.instance().mapLayersByName("v2_culvert_view")[0]
+        v2_1d_boundary_view = QgsProject.instance().mapLayersByName(
+            "v2_1d_boundary_view"
+        )[0]
+
+        fields_list = [[v2_pipe_view,"pipe_connection_node_start_id"],
+                       [v2_pipe_view,"pipe_connection_node_end_id"],
+                       [v2_pipe_view,"pipe_profile_num"],
+                       [v2_pipe_view,"def_id"],
+                       [v2_pipe_view,"ROWID"],
+                       [v2_pipe_view,"pipe_pipe_quality"],
+                       [v2_manhole_view,"ROWID"],
+                       [v2_manhole_view,"node_the_geom_linestring"],
+                       [v2_manhole_view,"manh_sediment_level"],
+                       [v2_manhole_view,"manh_connection_node_id"],
+                       [v2_orifice_view,"ROWID"],
+                       [v2_orifice_view,"def_id"],
+                       [v2_orifice_view,"orf_connection_node_start_id"],
+                       [v2_orifice_view,"orf_connection_node_end_id"],
+                       [v2_orifice_view,"orf_max_capacity"],
+                       [v2_weir_view,"ROWID"],
+                       [v2_weir_view,"def_id"],
+                       [v2_weir_view,"weir_connection_node_start_id"],
+                       [v2_weir_view,"weir_connection_node_end_id"],
+                       [v2_weir_view,"weir_external"],
+                       [v2_pumpstation_view,"ROWID"],
+                       [v2_pumpstation_view,"def_id"],
+                       [v2_pumpstation_view,"pump_connection_node_start_id"],
+                       [v2_pumpstation_view,"pump_connection_node_end_id"],
+                       [v2_pumpstation_view,"pump_classification"],
+                       [v2_culvert_view,"ROWID"],
+                       [v2_culvert_view,"def_id"],
+                       [v2_culvert_view,"cul_connection_node_start_id"],
+                       [v2_culvert_view,"cul_connection_node_end_id"],
+                       [v2_1d_boundary_view,"ROWID"],
+                       [v2_1d_boundary_view,"bound_connection_node_id"],
+                       [v2_1d_boundary_view,"node_the_geom_linestring"]]
+                       
+
+        setup = QgsEditorWidgetSetup("Hidden", {})
+        for view,field in fields_list:
+            idx = view.fields().indexFromName(field)
+            view.setEditorWidgetSetup(idx, setup)
 
     def set_xsec_relations(self):
         v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
@@ -812,8 +718,10 @@ class Edit3DiSchematisation:
         self.configure_culvert_form()
         self.configure_1d_bound_form()
         self.configure_channel_form()
+
         self.set_default_values()
         self.set_xsec_relations()
+        self.hide_fields()
 
         v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
         v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
