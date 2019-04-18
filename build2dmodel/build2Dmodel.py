@@ -174,7 +174,7 @@ class backgroundprocessing(QgsTask):
         friction_gfile = driver.Create(fileUrl, landuse_gfile.RasterXSize, 
                                        landuse_gfile.RasterYSize, 1, 
                                        gdal.GDT_Float32,
-                                      options = [ 'COMPRESS=LERC_DEFLATE' ])
+                                      options = [ 'COMPRESS=DEFLATE' ])
         friction_gfile.GetRasterBand(1).WriteArray(friction_list)
         friction_gfile.GetRasterBand(1).SetNoDataValue(-9999.0)
         friction_gfile.SetProjection(proj)
@@ -205,7 +205,7 @@ class backgroundprocessing(QgsTask):
         infiltration_gfile = driver.Create(fileUrl, landuse_gfile.RasterXSize,
                                            landuse_gfile.RasterYSize, 1,
                                            gdal.GDT_Float32,
-                                          options = [ 'COMPRESS=LERC_DEFLATE' ])
+                                          options = [ 'COMPRESS=DEFLATE' ])
         infiltration_gfile.GetRasterBand(1).WriteArray(infiltration_list)
         infiltration_gfile.GetRasterBand(1).SetNoDataValue(-9999.0)
         infiltration_gfile.SetProjection(proj)
