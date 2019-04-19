@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtGui
@@ -18,6 +19,7 @@ import logging
 import numpy as np
 from osgeo import gdal
 import csv
+import sqlite3
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 MESSAGE_CATEGORY = 'backgroundprocessing'
@@ -25,9 +27,9 @@ MESSAGE_CATEGORY = 'backgroundprocessing'
 class backgroundprocessing(QgsTask):
     def __init__(self, description,included_rasters,pixelSize,target_extent,
                  sourceSrs,targetSrs,rasterDirectory,headers,soil_raster,
-                 landuse_raster,soil_conversion_table,landuse_conversion_table,
-                 elevation,friction,infiltration):
-        super().__init__(description)
+                 landuse_raster,elevation_raster,soil_conversion_table,
+                 landuse_conversion_table,elevation,friction,infiltration):
+        super().__init__(description,QgsTask.CanCancel)
         self.included_rasters = included_rasters
         self.pixelSize = pixelSize
         self.target_extent = target_extent
@@ -37,6 +39,7 @@ class backgroundprocessing(QgsTask):
         self.headers = headers
         self.soil_raster = soil_raster
         self.landuse_raster = landuse_raster
+        self.elevation_raster = elevation_raster
         self.soil_conversion_table = soil_conversion_table
         self.landuse_conversion_table = landuse_conversion_table
         self.elevation = elevation
@@ -66,7 +69,7 @@ class backgroundprocessing(QgsTask):
                     dl += len(data)
                     f.write(data)
         return
-        
+
     @staticmethod
     def download_rasters(raster,pixelSize,target_extent,
                          sourceSrs,targetSrs,headers):
@@ -105,6 +108,39 @@ class backgroundprocessing(QgsTask):
         soil_list = soil_band.ReadAsArray()
         soil_arr = np.asarray(soil_list)
         return soil_gfile, soil_band, soil_list, soil_arr
+
+    @staticmethod
+    def change_elevation_nodata_value(elevation_raster,rasterDirectory):
+        gdal.UseExceptions()
+        driver = gdal.GetDriverByName('GTiff')
+
+        # load soil raster file
+        elevation_gfile = gdal.Open(elevation_raster)
+        elevation_band = elevation_gfile.GetRasterBand(1)
+        elevation_list = elevation_band.ReadAsArray()
+        elevation_arr = np.asarray(elevation_list)
+        
+        nodata = elevation_band.GetNoDataValue()
+        nodatamask = elevation_list == nodata
+        
+        elevation_list[nodatamask] = -9999
+
+        proj = elevation_gfile.GetProjection()
+        georef = elevation_gfile.GetGeoTransform()
+
+        fileUrl = os.path.join(rasterDirectory,r'dem.tif')
+        elevation_gfile = driver.Create(fileUrl, elevation_gfile.RasterXSize, 
+                                       elevation_gfile.RasterYSize, 1, 
+                                       gdal.GDT_Float32,
+                                       options = [ 'COMPRESS=DEFLATE' ])
+        elevation_gfile.GetRasterBand(1).WriteArray(elevation_list)
+        elevation_gfile.GetRasterBand(1).SetNoDataValue(-9999.0)
+        elevation_gfile.SetProjection(proj)
+        elevation_gfile.SetGeoTransform(georef)
+        elevation_gfile.FlushCache()
+        elevation_gfile = None
+
+        return True
 
     @staticmethod
     def load_landuse_raster(landuse_raster):
@@ -174,14 +210,14 @@ class backgroundprocessing(QgsTask):
         friction_gfile = driver.Create(fileUrl, landuse_gfile.RasterXSize, 
                                        landuse_gfile.RasterYSize, 1, 
                                        gdal.GDT_Float32,
-                                      options = [ 'COMPRESS=DEFLATE' ])
+                                       options = [ 'COMPRESS=DEFLATE' ])
         friction_gfile.GetRasterBand(1).WriteArray(friction_list)
         friction_gfile.GetRasterBand(1).SetNoDataValue(-9999.0)
         friction_gfile.SetProjection(proj)
         friction_gfile.SetGeoTransform(georef)
         friction_gfile.FlushCache()
         friction_gfile = None
-        return
+        return True
 
     @staticmethod
     def create_infiltration_raster(landuse_list,landuse_arr,landuse_rel,
@@ -205,49 +241,54 @@ class backgroundprocessing(QgsTask):
         infiltration_gfile = driver.Create(fileUrl, landuse_gfile.RasterXSize,
                                            landuse_gfile.RasterYSize, 1,
                                            gdal.GDT_Float32,
-                                          options = [ 'COMPRESS=DEFLATE' ])
+                                           options = [ 'COMPRESS=DEFLATE' ] )
         infiltration_gfile.GetRasterBand(1).WriteArray(infiltration_list)
         infiltration_gfile.GetRasterBand(1).SetNoDataValue(-9999.0)
         infiltration_gfile.SetProjection(proj)
         infiltration_gfile.SetGeoTransform(georef)
         infiltration_gfile.FlushCache()
         infiltration_gfile = None
-        return
+        return True
 
     def run(self):
         QgsMessageLog.logMessage('Started task "{}"'.format(self.description()), 
                                   MESSAGE_CATEGORY, Qgis.Info)
+
         for raster in self.included_rasters:
             tiff_download_url = self.download_rasters(raster,self.pixelSize,
                               self.target_extent,self.sourceSrs,self.targetSrs,self.headers)
             self.download_file(tiff_download_url,self.rasterDirectory,self.headers)
+            if self.isCanceled():
+                return False
+
+        if self.elevation == True:
+            result = self.change_elevation_nodata_value(self.elevation_raster,self.rasterDirectory)
 
         if self.infiltration == True:
             soil_gfile, soil_band, soil_list, soil_arr = self.load_soil_raster(self.soil_raster)
             landuse_gfile,landuse_band,landuse_list,landuse_arr,proj,georef,nodatamask = self.load_landuse_raster(self.landuse_raster)
             landuse_rel = self.load_landuse_table(self.landuse_conversion_table)
             infiltration_rel = self.load_soil_table(self.soil_conversion_table)
-            self.create_infiltration_raster(landuse_list,landuse_arr,landuse_rel,
+            result = self.create_infiltration_raster(landuse_list,landuse_arr,landuse_rel,
                                             soil_list,soil_arr,infiltration_rel,
                                             landuse_gfile,proj,georef,self.rasterDirectory,
                                             nodatamask)
 
         if self.friction == True and self.infiltration == True:
-            self.create_friction_raster(landuse_list,landuse_arr,landuse_rel,
+            result = self.create_friction_raster(landuse_list,landuse_arr,landuse_rel,
                                         landuse_gfile,proj,georef,self.rasterDirectory,
                                         nodatamask)
 
         if self.friction == True and self.infiltration == False:
             landuse_gfile, landuse_band, landuse_list, landuse_arr, proj, georef,nodatamask = self.load_landuse_raster(self.landuse_raster)
             landuse_rel = self.load_landuse_table(self.landuse_conversion_table)
-            self.create_friction_raster(landuse_list,landuse_arr,landuse_rel,
+            result = self.create_friction_raster(landuse_list,landuse_arr,landuse_rel,
                                         landuse_gfile,proj,georef,self.rasterDirectory,
                                         nodatamask)
         return True
 
     def finished(self, result):
-        print('hallo')
-        if result is True:
+        if result:
             QgsMessageLog.logMessage('Task "{name}" comleted'.format(name=self.description()))
             if self.elevation == True:
                 iface.addRasterLayer(os.path.join(self.rasterDirectory,r'hoogte.tif'),"Elevation")
@@ -255,8 +296,29 @@ class backgroundprocessing(QgsTask):
                 iface.addRasterLayer(os.path.join(self.rasterDirectory,r'infiltration.tif'),"Infiltration")
             if self.friction == True:
                 iface.addRasterLayer(os.path.join(self.rasterDirectory,r'friction.tif'),"Friction")
-        
-        
+        else:
+            if self.exception is None:
+                QgsMessageLog.logMessage(
+                    'Task "{name}" not successful but without '\
+                    'exception (probably the task was manually '\
+                    'canceled by the user)'.format(
+                        name=self.description()),
+                    MESSAGE_CATEGORY, Qgis.Warning)
+            else:
+                QgsMessageLog.logMessage(
+                    'Task "{name}" Exception: {exception}'.format(
+                        name=self.description(),
+                        exception=self.exception),
+                    MESSAGE_CATEGORY, Qgis.Critical)
+                raise self.exception
+
+    def cancel(self):
+        QgsMessageLog.logMessage(
+            'Task "{name}" was canceled'.format(
+                name=self.description()),
+            MESSAGE_CATEGORY, Qgis.Info)
+        super().cancel()
+
 class build2Dmodel:
     """QGIS Plugin Implementation."""
 
@@ -406,10 +468,10 @@ class build2Dmodel:
                 action)
             self.iface.removeToolBarIcon(action)
 
-    def getDirFromUserSelection(self):
-        """Gets a directory through the QFileDialog and inserts it. """
-        dir_name = QFileDialog.getExistingDirectory(None, "select directory")
-        self.dlg.rasterDirectory.setText(dir_name)
+    def getSpatialiteFromUserSelection(self):
+        """Gets a spatliate through the QFileDialog and inserts it. """
+        file_name = QFileDialog.getOpenFileName(None, "select spatialite")[0]
+        self.dlg.spatialiteFile.setText(str(file_name))
         return None
         
     def run(self):
@@ -420,6 +482,8 @@ class build2Dmodel:
         landuse = 'e037e7a'
         included_rasters = []
         supported_projections = ['EPSG:28992','EPSG:27700']
+        dirname = os.path.dirname(os.path.abspath(__file__))
+        sqlfile2D = os.path.join(dirname, r'fill_2d_settings.sql')
 
         # Create the dialog with elements and keep reference
         # Only create GUI ONCE in callback
@@ -433,9 +497,9 @@ class build2Dmodel:
         landuse_conversion_table = os.path.join(dirname, r'landuse_conversion_table.csv')
         soil_conversion_table = os.path.join(dirname, 
                                                  r'soil_conversion_table.csv')
-        
-        self.dlg.directoryButton.clicked.connect(self.getDirFromUserSelection)
-        
+
+        self.dlg.spatialiteButton.clicked.connect(self.getSpatialiteFromUserSelection)
+
         layers = [layer for layer in QgsProject.instance().mapLayers().values()]
         layer_list = []
         for layer in layers:
@@ -444,7 +508,7 @@ class build2Dmodel:
                     layer_list.append(layer.name())
         self.dlg.modelExtent.clear()
         self.dlg.modelExtent.addItems(layer_list)
-        
+
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
@@ -458,9 +522,9 @@ class build2Dmodel:
             "password": '{}'.format(passWord),
             "Content-Type": "application/json"
             }        
-            
+
             pixelSize = float(self.dlg.pixelSize.text())
-            rasterDirectory = self.dlg.rasterDirectory.text()
+            spatialiteFile = self.dlg.spatialiteFile.text()
             selectedLayerIndex = self.dlg.targetSrs.currentIndex()
             targetSrs = supported_projections[selectedLayerIndex]
             if self.dlg.demCheckbox.checkState() == 2:
@@ -474,15 +538,22 @@ class build2Dmodel:
                 infiltration = True
             else:
                 infiltration = False
-            if self.dlg.frictionCheckbox.checkState() == 2 and 'e037e7a' not in included_rasters:
-                included_rasters.append(landuse)
+            if self.dlg.frictionCheckbox.checkState() == 2:
                 friction = True
             else:
-                friction = True
+                friction = False
+            if friction == True and 'e037e7a' not in included_rasters:
+                included_rasters.append(landuse)
+
+            spatialiteDirectory = os.path.dirname(spatialiteFile)
+            if not os.path.exists(os.path.join(spatialiteDirectory,r'rasters')):
+                os.makedirs(os.path.join(spatialiteDirectory,r'rasters'))
+            rasterDirectory = os.path.join(spatialiteDirectory,r'rasters')
 
             soil_raster = os.path.join(rasterDirectory,r'bodem-3di.tif')
             landuse_raster = os.path.join(rasterDirectory,r'fysiek-voorkomen.tif')
-            
+            elevation_raster = os.path.join(rasterDirectory,r'hoogte.tif')
+
             selectedLayerIndex = self.dlg.modelExtent.currentIndex()
             extent_layer_name = layer_list[selectedLayerIndex]
             extent_layers = QgsProject.instance().mapLayersByName(extent_layer_name)[0]
@@ -498,8 +569,16 @@ class build2Dmodel:
             getRasters = backgroundprocessing('download 3Di rasters',included_rasters,
                                             pixelSize,target_extent,sourceSrs,
                                             targetSrs,rasterDirectory,headers,
-                                            soil_raster,landuse_raster,soil_conversion_table,
+                                            soil_raster,landuse_raster,elevation_raster,
+                                            soil_conversion_table,
                                             landuse_conversion_table, elevation,
                                             friction, infiltration)
             QgsApplication.taskManager().addTask(getRasters)
-            
+
+            query = open(sqlfile2D, 'r').read()
+            conn = sqlite3.connect(spatialiteFile)
+            c = conn.cursor()
+            c.executescript(query)
+            conn.commit()
+            c.close()
+            conn.close()
