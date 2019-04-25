@@ -565,6 +565,30 @@ class Edit3DiSchematisation:
             idx = view.fields().indexFromName(field)
             view.setEditorWidgetSetup(idx, setup)
 
+    def remove_field_config(self):
+        v2_manhole_view = QgsProject.instance().mapLayersByName("v2_manhole_view")[0]
+        v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
+        v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
+        v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
+        v2_culvert_view = QgsProject.instance().mapLayersByName("v2_culvert_view")[0]
+        v2_pumpstation_view = QgsProject.instance().mapLayersByName(
+            "v2_pumpstation_view"
+        )[0]
+        v2_1d_boundary_view = QgsProject.instance().mapLayersByName(
+            "v2_1d_boundary_view"
+        )[0]
+        v2_channel = QgsProject.instance().mapLayersByName("v2_channel")[0]
+
+        view_list = [v2_manhole_view,v2_weir_view,v2_pipe_view,v2_orifice_view,
+                     v2_culvert_view,v2_pumpstation_view,v2_1d_boundary_view,
+                     v2_channel]
+                     
+        setup = QgsEditorWidgetSetup("TextEdit", {"IsMultiline": "False"})
+
+        for view in view_list:
+            for idx,val in enumerate(view.fields()):
+                view.setEditorWidgetSetup(idx, setup)
+
     def set_xsec_relations(self):
         v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
         v2_pipe_id = v2_pipe_view.id()
@@ -655,9 +679,9 @@ class Edit3DiSchematisation:
         sqlfile = os.path.join(dirname, r"efficient_1d_bewerken_sqlite.sql")
         uri = QgsDataSourceUri()
         # show the dialog
-        self.dlg.show()
+        #self.dlg.show()
         # Run the dialog event loop
-        result = self.dlg.exec_()
+        #result = self.dlg.exec_()
 
         if checked:
         # run sql file to add triggers to views
@@ -748,4 +772,16 @@ class Edit3DiSchematisation:
             )[0]
             v2_xsec_def.startEditing()
         else:
-            return
+            self.remove_field_config()
+            for layer in iface.mapCanvas().layers():
+                if layer.isEditable():
+                    if layer.isModified():
+                        layer.commitChanges()
+                        iface.vectorLayerTools().stopEditing(layer,False)
+                    else: 
+                        iface.vectorLayerTools().stopEditing(layer,False)
+            v2_xsec_def = QgsProject.instance().mapLayersByName(
+                "v2_cross_section_definition"
+            )[0]
+            iface.vectorLayerTools().stopEditing(v2_xsec_def,False)
+            self.checked = False
