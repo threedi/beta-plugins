@@ -682,9 +682,9 @@ class Edit3DiSchematisation:
         #self.dlg.show()
         # Run the dialog event loop
         #result = self.dlg.exec_()
-
         if checked:
         # run sql file to add triggers to views
+            print('komt hij hier?')
             try:
                 v2_global_settings = QgsProject.instance().mapLayersByName(
                     "v2_global_settings"
@@ -712,21 +712,21 @@ class Edit3DiSchematisation:
             c.close()
             conn.close()
         # check if the v2_manhole table is present (not on first load)
-        present_layers = []
-        for layer in iface.mapCanvas().layers():
-            present_layers.append(layer.name())
-        if not any("v2_manhole_view" in s for s in present_layers):
-            uri.setDataSource("", "v2_manhole_view", "the_geom")
-            vlayer = iface.addVectorLayer(uri.uri(), "v2_manhole_view", "spatialite")
-            vlayer.startEditing()
-        # load v2_1d_boundary_view (which doesnt load by default)
-        if not any("v2_1d_boundary_view" in s for s in present_layers):
-            uri.setDatabase(sqlite_dir)
-            uri.setDataSource("", "v2_1d_boundary_view", "the_geom")
-            vlayer = iface.addVectorLayer(
-                uri.uri(), "v2_1d_boundary_view", "spatialite"
-            )
-            vlayer.startEditing()
+            present_layers = []
+            for layer in iface.mapCanvas().layers():
+                present_layers.append(layer.name())
+            if not any("v2_manhole_view" in s for s in present_layers):
+                uri.setDataSource("", "v2_manhole_view", "the_geom")
+                vlayer = iface.addVectorLayer(uri.uri(), "v2_manhole_view", "spatialite")
+                vlayer.startEditing()
+            # load v2_1d_boundary_view (which doesnt load by default)
+            if not any("v2_1d_boundary_view" in s for s in present_layers):
+                uri.setDatabase(sqlite_dir)
+                uri.setDataSource("", "v2_1d_boundary_view", "the_geom")
+                vlayer = iface.addVectorLayer(
+                    uri.uri(), "v2_1d_boundary_view", "spatialite"
+                )
+                vlayer.startEditing()
             for layer in iface.mapCanvas().layers():
                 if layer.type() == QgsMapLayer.VectorLayer:
                     layer.setDataSource(layer.source(), layer.name(), layer.providerType())
@@ -784,4 +784,3 @@ class Edit3DiSchematisation:
                 "v2_cross_section_definition"
             )[0]
             iface.vectorLayerTools().stopEditing(v2_xsec_def,False)
-            self.checked = False
