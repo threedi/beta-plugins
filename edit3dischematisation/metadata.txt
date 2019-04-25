@@ -10,7 +10,7 @@
 name=Edit3DiSchematisation
 qgisMinimumVersion=3.0
 description=Edit3DiSchematisation
-version=0.1
+version=0.2
 author=Nelen en Schuurmans
 email=ivar.lokhorst@nelen-schuurmans.nl
 
