@@ -125,7 +125,8 @@ class Edit3DiSchematisation:
 
         icon = QIcon(icon_path)
         action = QAction(icon, text, parent)
-        action.triggered.connect(callback)
+        action.toggled.connect(callback)
+        action.setCheckable(True)
         action.setEnabled(enabled_flag)
 
         if status_tip is not None:
@@ -641,7 +642,7 @@ class Edit3DiSchematisation:
     def reactivate_snapping(self):
         connodes_point_locator = iface.mapCanvas().snappingUtils().clearAllLocators()
 
-    def run(self):
+    def run(self,checked):
         """Run method that performs all the real work"""
 
         # Create the dialog with elements (after translation) and keep reference
@@ -658,37 +659,34 @@ class Edit3DiSchematisation:
         # Run the dialog event loop
         result = self.dlg.exec_()
 
-        if not result:
-            # Cancel was pressed
-            return
-
+        if checked:
         # run sql file to add triggers to views
-        try:
-            v2_global_settings = QgsProject.instance().mapLayersByName(
-                "v2_global_settings"
-            )[0]
-        except:
-            QMessageBox.information(
-            None,
-            "Warning",
-            "No model found"
-            )
-            return
+            try:
+                v2_global_settings = QgsProject.instance().mapLayersByName(
+                    "v2_global_settings"
+                )[0]
+            except:
+                QMessageBox.information(
+                None,
+                "Warning",
+                "No model found"
+                )
+                return
 
-        sqlite_dir = (
+            sqlite_dir = (
             v2_global_settings.dataProvider()
             .dataSourceUri()
             .split(" ")[0]
             .replace("dbname=", "")
             .replace("'", "")
-        )
-        query = open(sqlfile, "r").read()
-        conn = sqlite3.connect(sqlite_dir)
-        c = conn.cursor()
-        c.executescript(query)
-        conn.commit()
-        c.close()
-        conn.close()
+            )
+            query = open(sqlfile, "r").read()
+            conn = sqlite3.connect(sqlite_dir)
+            c = conn.cursor()
+            c.executescript(query)
+            conn.commit()
+            c.close()
+            conn.close()
         # check if the v2_manhole table is present (not on first load)
         present_layers = []
         for layer in iface.mapCanvas().layers():
@@ -705,47 +703,49 @@ class Edit3DiSchematisation:
                 uri.uri(), "v2_1d_boundary_view", "spatialite"
             )
             vlayer.startEditing()
-        for layer in iface.mapCanvas().layers():
-            if layer.type() == QgsMapLayer.VectorLayer:
-                layer.setDataSource(layer.source(), layer.name(), layer.providerType())
-                layer.startEditing()
-        iface.mapCanvas().snappingUtils().toggleEnabled()
-        self.configure_pipe_form()
-        self.configure_manhole_form()
-        self.configure_weir_form()
-        self.configure_orifice_form()
-        self.configure_pumpstation_form()
-        self.configure_culvert_form()
-        self.configure_1d_bound_form()
-        self.configure_channel_form()
-
-        self.set_default_values()
-        self.set_xsec_relations()
-        self.hide_fields()
-
-        v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
-        v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
-        v2_culvert_view = QgsProject.instance().mapLayersByName("v2_culvert_view")[0]
-        v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
-        v2_pumpstation_view = QgsProject.instance().mapLayersByName(
-            "v2_pumpstation_view"
-        )[0]
-        v2_1d_boundary_view = QgsProject.instance().mapLayersByName(
-            "v2_1d_boundary_view"
-        )[0]
-        v2_channel = QgsProject.instance().mapLayersByName("v2_channel")[0]
-
-        table_list = [v2_pipe_view,v2_orifice_view,v2_culvert_view,v2_weir_view,
-                      v2_pumpstation_view,v2_1d_boundary_view,v2_channel]
-
-        for table in table_list:
-            table.beforeCommitChanges.connect(self.manhole_xsec_commit)
-            table.featureAdded.connect(self.reactivate_snapping)
-
-        v2_manhole_view = QgsProject.instance().mapLayersByName("v2_manhole_view")[0]
-        v2_manhole_view.featureAdded.connect(self.reactivate_snapping)
-
-        v2_xsec_def = QgsProject.instance().mapLayersByName(
-            "v2_cross_section_definition"
-        )[0]
-        v2_xsec_def.startEditing()
+            for layer in iface.mapCanvas().layers():
+                if layer.type() == QgsMapLayer.VectorLayer:
+                    layer.setDataSource(layer.source(), layer.name(), layer.providerType())
+                    layer.startEditing()
+            iface.mapCanvas().snappingUtils().toggleEnabled()
+            self.configure_pipe_form()
+            self.configure_manhole_form()
+            self.configure_weir_form()
+            self.configure_orifice_form()
+            self.configure_pumpstation_form()
+            self.configure_culvert_form()
+            self.configure_1d_bound_form()
+            self.configure_channel_form()
+    
+            self.set_default_values()
+            self.set_xsec_relations()
+            self.hide_fields()
+    
+            v2_pipe_view = QgsProject.instance().mapLayersByName("v2_pipe_view")[0]
+            v2_orifice_view = QgsProject.instance().mapLayersByName("v2_orifice_view")[0]
+            v2_culvert_view = QgsProject.instance().mapLayersByName("v2_culvert_view")[0]
+            v2_weir_view = QgsProject.instance().mapLayersByName("v2_weir_view")[0]
+            v2_pumpstation_view = QgsProject.instance().mapLayersByName(
+                "v2_pumpstation_view"
+            )[0]
+            v2_1d_boundary_view = QgsProject.instance().mapLayersByName(
+                "v2_1d_boundary_view"
+            )[0]
+            v2_channel = QgsProject.instance().mapLayersByName("v2_channel")[0]
+    
+            table_list = [v2_pipe_view,v2_orifice_view,v2_culvert_view,v2_weir_view,
+                          v2_pumpstation_view,v2_1d_boundary_view,v2_channel]
+    
+            for table in table_list:
+                table.beforeCommitChanges.connect(self.manhole_xsec_commit)
+                table.featureAdded.connect(self.reactivate_snapping)
+    
+            v2_manhole_view = QgsProject.instance().mapLayersByName("v2_manhole_view")[0]
+            v2_manhole_view.featureAdded.connect(self.reactivate_snapping)
+    
+            v2_xsec_def = QgsProject.instance().mapLayersByName(
+                "v2_cross_section_definition"
+            )[0]
+            v2_xsec_def.startEditing()
+        else:
+            return
