@@ -14,3 +14,4 @@ Afterwards you should open QGIS, go to plugin manager, installed plugins, and ac
 - apiconsole3di: starts a 3Di simulation through the API.
 - edit3dischematisation: alters 1D views to make them editable. Requires loading the model through the threediPlugin
 - build2dmodel: Extracts elevation, landuse and soil rasters from lizard and converts them to proper 3Di rasters
+- resultsdownloader: Searches for 3Di simulation results and facilitates downloading/visualising these
