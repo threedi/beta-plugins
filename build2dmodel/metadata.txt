@@ -10,7 +10,7 @@
 name=build2Dmodel
 qgisMinimumVersion=3.0
 description=build2Dmodel
-version=0.1
+version=1.0
 author=Nelen & Schuurmans
 email=ivar.lokhorst@nelen-schuurmans.nl
 
