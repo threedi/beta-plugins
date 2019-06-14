@@ -700,7 +700,7 @@ class Edit3DiSchematisation:
             sqlite_dir = (
             v2_global_settings.dataProvider()
             .dataSourceUri()
-            .split(" ")[0]
+            .split(" table")[0]
             .replace("dbname=", "")
             .replace("'", "")
             )
