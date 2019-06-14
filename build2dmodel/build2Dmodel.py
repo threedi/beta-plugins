@@ -46,7 +46,7 @@ class backgroundprocessing(QgsTask):
         self.friction = friction
         self.infiltration = infiltration
         self.exception = None
-        
+
     @staticmethod
     def download_file(url,folder,headers):
         """Downloads rasters from Lizard based on task URL and target folder
@@ -579,6 +579,10 @@ class build2Dmodel:
             conn = sqlite3.connect(spatialiteFile)
             c = conn.cursor()
             c.executescript(query)
+            if infiltration == False:
+                c.execute("update v2_simple_infiltration set infiltration_rate_file = NULL")
+            if friction == False:
+                c.execute("update v2_global_settings set frict_coef_file = NULL")
             conn.commit()
             c.close()
             conn.close()
