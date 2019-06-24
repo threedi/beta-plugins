@@ -332,6 +332,7 @@ class build2Dmodel:
         """
         # Save reference to the QGIS interface
         self.iface = iface
+        self.tm = QgsApplication.taskManager()
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
@@ -573,7 +574,7 @@ class build2Dmodel:
                                             soil_conversion_table,
                                             landuse_conversion_table, elevation,
                                             friction, infiltration)
-            QgsApplication.taskManager().addTask(getRasters)
+            self.tm.addTask(getRasters)
 
             query = open(sqlfile2D, 'r').read()
             conn = sqlite3.connect(spatialiteFile)
