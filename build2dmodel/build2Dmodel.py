@@ -3,7 +3,7 @@
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtGui
-from PyQt5.QtWidgets import QAction,QFileDialog
+from PyQt5.QtWidgets import QAction,QFileDialog,QMessageBox
 from qgis.utils import iface
 from qgis.core import *
 
@@ -291,11 +291,16 @@ class backgroundprocessing(QgsTask):
         if result:
             QgsMessageLog.logMessage('Task "{name}" comleted'.format(name=self.description()))
             if self.elevation == True:
-                iface.addRasterLayer(os.path.join(self.rasterDirectory,r'hoogte.tif'),"Elevation")
+                iface.addRasterLayer(os.path.join(self.rasterDirectory,r'dem.tif'),"Dem")
             if self.infiltration == True:
                 iface.addRasterLayer(os.path.join(self.rasterDirectory,r'infiltration.tif'),"Infiltration")
             if self.friction == True:
                 iface.addRasterLayer(os.path.join(self.rasterDirectory,r'friction.tif'),"Friction")
+            QMessageBox.information(
+            None,
+            "Build 2D model",
+            "2D model successfuly generated. You can delete the hoogte,bodem-3di and fysiek-voorkomen rasters. Please carefully check the settings before using the model."
+            )
         else:
             if self.exception is None:
                 QgsMessageLog.logMessage(
