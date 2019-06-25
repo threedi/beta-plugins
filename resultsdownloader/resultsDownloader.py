@@ -3,7 +3,8 @@
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtGui
-from PyQt5.QtWidgets import QAction,QFileDialog
+from PyQt5.QtWidgets import QAction,QFileDialog,QMessageBox
+from qgis.core import *
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -11,7 +12,182 @@ from .resources import *
 from .resultsDownloader_dialog import resultsDownloaderDialog
 from .downloader import *
 import os.path
+from datetime import datetime
+from urllib.parse import urlparse
+from time import sleep
+import logging
+import os
+import requests
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+MESSAGE_CATEGORY = 'downloadtask'
 
+LIZARD_URL = "https://demo.lizard.net/api/v3/"
+RESULT_LIMIT = 10
+
+log = logging.getLogger()
+
+SCENARIO_FILTERS = {
+    "name": "name__icontains",
+    "uuid": "uuid",
+    "id": "id",
+    "model_revision": "model_revision",
+    "model_name": "model_name__icontains",
+    "organisation": "organisation__icontains",
+    "username": "username__icontains",
+}
+
+class downloadtask(QgsTask):
+    def __init__(self,description,scenarioUUID,rasters,downloadProjection,cellSize,rasterDirectory,REQUESTS_HEADERS):
+        super().__init__(description,QgsTask.CanCancel)
+        self.scenarioUUID = scenarioUUID
+        self.rasters = rasters
+        self.downloadProjection = downloadProjection
+        self.cellSize = cellSize
+        self.rasterDirectory = rasterDirectory
+        self.REQUESTS_HEADERS = REQUESTS_HEADERS
+        self.exception = None
+
+    @staticmethod
+    def get_raster(scenario_uuid, raster_code,REQUESTS_HEADERS):
+        """return json of raster based on scenario uuid and raster type"""
+        r = requests.get(
+            url="{}scenarios/{}".format(LIZARD_URL, scenario_uuid), headers=REQUESTS_HEADERS
+        )
+        r.raise_for_status()
+        for result in r.json()["result_set"]:
+            if result["result_type"]["code"] == raster_code:
+                return result["raster"]
+
+    @staticmethod
+    def create_raster_task(raster, target_srs, resolution, REQUESTS_HEADERS, bounds=None, time=None):
+        """create Lizard raster task"""
+
+        if bounds == None:
+            bounds = raster["spatial_bounds"]
+
+        e = bounds["east"]
+        w = bounds["west"]
+        n = bounds["north"]
+        s = bounds["south"]
+
+        source_srs = "EPSG:4326"
+
+        bbox = "POLYGON(({} {},{} {},{} {},{} {},{} {}))".format(
+            w, n, e, n, e, s, w, s, w, n
+        )
+
+        url = "{}rasters/{}/data/".format(LIZARD_URL, raster["uuid"])
+        if time is None:
+            # non temporal raster
+            payload = {
+                "cellsize": resolution,
+                "geom": bbox,
+                "srs": source_srs,
+                "target_srs": target_srs,
+                "format": "geotiff",
+                "async": "true",
+            }
+        else:
+            # temporal rasters
+            payload = {
+                "cellsize": resolution,
+                "geom": bbox,
+                "srs": source_srs,
+                "target_srs": target_srs,
+                "time": time,
+                "format": "geotiff",
+                "async": "true",
+            }
+        r = requests.get(url=url, headers=REQUESTS_HEADERS, params=payload)
+        r.raise_for_status()
+        return r.json()
+
+    @staticmethod
+    def get_task_status(task_uuid,REQUESTS_HEADERS):
+        """return status of task"""
+        url = "{}tasks/{}/".format(LIZARD_URL, task_uuid)
+        r = requests.get(url=url, headers=REQUESTS_HEADERS)
+        r.raise_for_status()
+        return r.json()["task_status"]
+
+    @staticmethod
+    def get_task_download_url(task_uuid,REQUESTS_HEADERS):
+        """return url of successful task"""
+        url = "{}tasks/{}/".format(LIZARD_URL, task_uuid)
+        r = requests.get(url=url, headers=REQUESTS_HEADERS)
+        r.raise_for_status()
+        return r.json()["result_url"]
+
+    @staticmethod
+    def download_file(url, path,REQUESTS_HEADERS):
+        """download url to specified path"""
+        print(path)
+        logging.debug("Start downloading file: {}".format(url))
+        r = requests.get(url, auth=(REQUESTS_HEADERS["username"], REQUESTS_HEADERS["password"]))
+        r.raise_for_status()
+        with open(path, "wb") as file:
+            for chunk in r.iter_content(100000):
+                file.write(chunk)
+
+    def run(self):
+        QgsMessageLog.logMessage('Started task "{}"'.format(self.description()), 
+                                  MESSAGE_CATEGORY, Qgis.Info)
+        for raster_code in self.rasters:
+            raster = self.get_raster(self.scenarioUUID, raster_code,self.REQUESTS_HEADERS)
+            task = self.create_raster_task(raster, self.downloadProjection, self.cellSize, self.REQUESTS_HEADERS, None, None)
+            task_uuid = task["task_id"]
+            log.debug("Start waiting for task {} to finish".format(task_uuid))
+            while self.get_task_status(task_uuid,REQUESTS_HEADERS) == "PENDING":
+                sleep(5)
+                log.debug("Still waiting for task {}".format(task_uuid))
+
+            if self.get_task_status(task_uuid,REQUESTS_HEADERS) == "SUCCESS":
+                # task is a succes, return download url
+                log.debug(
+                    "Task succeeded, start downloading url: {}".format(
+                        self.get_task_download_url(task_uuid,REQUESTS_HEADERS)
+                    )
+                )
+                download_url = self.get_task_download_url(task_uuid,REQUESTS_HEADERS)
+                print(download_url)
+                self.download_file(download_url, os.path.join(self.rasterDirectory,raster_code+'.tif'),self.REQUESTS_HEADERS)
+            else:
+                log.debug("Task failed")
+            if self.isCanceled():
+                    return False
+        return True
+
+    def finished(self, result):
+        if result:
+            QgsMessageLog.logMessage('Task "{name}" completed'.format(name=self.description()))
+            QMessageBox.information(
+            None,
+            "Results downloader",
+            "Results successfully downloaded."
+            )
+        else:
+            if self.exception is None:
+                QgsMessageLog.logMessage(
+                    'Task "{name}" not successful but without '\
+                    'exception (probably the task was manually '\
+                    'canceled by the user)'.format(
+                        name=self.description()),
+                    MESSAGE_CATEGORY, Qgis.Warning)
+            else:
+                QgsMessageLog.logMessage(
+                    'Task "{name}" Exception: {exception}'.format(
+                        name=self.description(),
+                        exception=self.exception),
+                    MESSAGE_CATEGORY, Qgis.Critical)
+                raise self.exception
+
+    def cancel(self):
+        QgsMessageLog.logMessage(
+            'Task "{name}" was canceled'.format(
+                name=self.description()),
+            MESSAGE_CATEGORY, Qgis.Info)
+        super().cancel()
 
 class resultsDownloader:
     """QGIS Plugin Implementation."""
@@ -26,6 +202,7 @@ class resultsDownloader:
         """
         # Save reference to the QGIS interface
         self.iface = iface
+        self.tm = QgsApplication.taskManager()
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
@@ -187,7 +364,6 @@ class resultsDownloader:
             key = static_rasters[i]["name_3di"]
             value = static_rasters[i]["code_3di"]
             self.raster_dict[key]=value
-        print(self.raster_dict)
         raster_names = []
         for key in self.raster_dict:
             raster_names.append(key)
@@ -245,6 +421,7 @@ class resultsDownloader:
 
         userName = self.dlg.userName.text()
         passWord = self.dlg.passWord.text()
+        set_headers(userName,passWord)
 
         # show the dialog
         self.dlg.show()
@@ -264,6 +441,5 @@ class resultsDownloader:
                 projectionIndex = self.dlg.projection.currentIndex()
                 downloadProjection = supported_projections[projectionIndex]
                 cellSize = self.dlg.cellSize.text()
-                for raster in raster_code_list:
-                    filename = raster + '.tif'
-                    download_raster(self.scenarioUUID,raster,downloadProjection,cellSize,pathname=os.path.join(downloadDirectory,filename))
+                rasterTask = downloadtask('Download results',self.scenarioUUID,raster_code_list,downloadProjection,cellSize,downloadDirectory,REQUESTS_HEADERS)
+                self.tm.addTask(rasterTask)
