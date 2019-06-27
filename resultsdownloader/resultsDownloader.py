@@ -18,6 +18,7 @@ from time import sleep
 import logging
 import os
 import requests
+import qgis
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 MESSAGE_CATEGORY = 'downloadtask'
@@ -357,15 +358,17 @@ class resultsDownloader:
         url="{}scenarios/{}".format(LIZARD_URL, self.scenarioUUID), headers=get_headers())
         scenarioJson = r.json()
         static_rasters, temporal_rasters = rasters_in_scenario(scenarioJson)
-        self.raster_dict = {}
+        self.raster_code_dict = {}
+        self.raster_wms_dict = {}
         self.dlg.rasterList.clear()
 
         for i in range(len(static_rasters)):
             key = static_rasters[i]["name_3di"]
             value = static_rasters[i]["code_3di"]
-            self.raster_dict[key]=value
+            self.raster_code_dict[key]=value
+            self.raster_wms_dict[key]=static_rasters[i]["code_wms"]
         raster_names = []
-        for key in self.raster_dict:
+        for key in self.raster_code_dict:
             raster_names.append(key)
         self.dlg.rasterList.addItems(raster_names)
         return 
@@ -434,8 +437,10 @@ class resultsDownloader:
             for i in range(len(items)):
                 selectedRasters.append(str(self.dlg.rasterList.selectedItems()[i].text()))
             raster_code_list=[]
+            raster_wms_list=[]
             for raster in selectedRasters:
-                raster_code_list.append(self.raster_dict.get(raster))
+                raster_code_list.append(self.raster_code_dict.get(raster))
+                raster_wms_list.append(self.raster_wms_dict.get(raster))
             if self.dlg.downloadBox.checkState() == 2:
                 downloadDirectory = self.dlg.downloadDirectory.text()
                 projectionIndex = self.dlg.projection.currentIndex()
@@ -443,3 +448,9 @@ class resultsDownloader:
                 cellSize = self.dlg.cellSize.text()
                 rasterTask = downloadtask('Download results',self.scenarioUUID,raster_code_list,downloadProjection,cellSize,downloadDirectory,REQUESTS_HEADERS)
                 self.tm.addTask(rasterTask)
+            if self.dlg.wmsBox.checkState() == 2:
+                for raster in raster_wms_list:
+                    qgis.utils.iface.addRasterLayer("crs=EPSG:28992&dpiMode=10&format=image/png&layers={}&password={}&styles=&url=https://demo.lizard.net/wms/scenario_{}/?request%3Dgetcapabilities&username={}".format(raster,passWord,self.scenarioUUID,userName), # uri
+                raster, # name for layer (as seen in QGIS)
+                "wms" # dataprovider key
+                )
