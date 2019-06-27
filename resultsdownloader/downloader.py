@@ -385,8 +385,11 @@ def rasters_in_scenario(scenario_json):
             raster = result["raster"]
             name_3di = result_type["name"]
             code_3di = result_type["code"]
+            wmsinfo = raster["wms_info"]
+            wmscode = wmsinfo["layer"]
             raster["name_3di"] = name_3di
             raster["code_3di"] = code_3di
+            raster["code_wms"] = wmscode
             if raster["temporal"]:
                 temporal_rasters.append(raster)
             else:
