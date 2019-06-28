@@ -1,3 +1,5 @@
 # Resultsdownloader
 
-This plugin helps you to search for scenario's and quickly download or visualise (as WMS) these.
+Plugin which searches the 3Di results database based on scenario name. Once a scenario is selected all available rasters are returned. These can either be visualized directly in the QGIS interface (as WMS) or downloaded as a TIF file. 
+
+Please note: the search for scenarios starts once typing in the filter window is finished. Therefore it might look like the search does not start, while it does.
