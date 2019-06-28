@@ -142,6 +142,9 @@ class downloadtask(QgsTask):
             while self.get_task_status(task_uuid,REQUESTS_HEADERS) == "PENDING":
                 sleep(5)
                 log.debug("Still waiting for task {}".format(task_uuid))
+                if self.isCanceled():
+                    return False
+
 
             if self.get_task_status(task_uuid,REQUESTS_HEADERS) == "SUCCESS":
                 # task is a succes, return download url
@@ -151,7 +154,6 @@ class downloadtask(QgsTask):
                     )
                 )
                 download_url = self.get_task_download_url(task_uuid,REQUESTS_HEADERS)
-                print(download_url)
                 self.download_file(download_url, os.path.join(self.rasterDirectory,raster_code+'.tif'),self.REQUESTS_HEADERS)
             else:
                 log.debug("Task failed")
@@ -405,6 +407,7 @@ class resultsDownloader:
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         supported_projections = ['EPSG:28992','EPSG:4326','EPSG:3857']
+        settings = QSettings("3di", "results")
         if self.first_start == True:
             self.first_start = False
             self.dlg = resultsDownloaderDialog()
@@ -414,6 +417,8 @@ class resultsDownloader:
             self.dlg.projection.setDisabled(1)
             self.dlg.cellSize.setDisabled(1)
             self.dlg.downloadDirectory.setDisabled(1)
+            self.dlg.userName.setText(settings.value("username"))
+
 
         self.dlg.downloadBox.clicked.connect(self.on_download_toggled)
         self.dlg.scenarioName.editingFinished.connect(self.on_scenarioName_changed)
@@ -425,7 +430,7 @@ class resultsDownloader:
         userName = self.dlg.userName.text()
         passWord = self.dlg.passWord.text()
         set_headers(userName,passWord)
-
+        settings.setValue("username", userName)
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
