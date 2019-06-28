@@ -10,7 +10,7 @@
 name=resultsManager
 qgisMinimumVersion=3.0
 description=Download and visualize threedi results
-version=0.1
+version=1.0
 author=Nelen & Schuurmans
 email=ivar.lokhorst@nelen-schuurmans.nl
 
