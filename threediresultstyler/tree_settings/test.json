@@ -1,0 +1,206 @@
+{
+  "group": {
+    "settings": {
+      "visible": true,
+      "expanded": false
+    },
+    "boundary conditions": {
+      "visible": true,
+      "expanded": true
+    },
+    "laterals": {
+      "visible": false,
+      "expanded": false
+    },
+    "1d": {
+      "visible": true,
+      "expanded": false
+    },
+    "additional tables for editing 1d": {
+      "visible": false,
+      "expanded": true
+    },
+    "obstacles": {
+      "visible": false,
+      "expanded": true
+    },
+    "grid refinements": {
+      "visible": true,
+      "expanded": false
+    },
+    "advanced numerics": {
+      "visible": true,
+      "expanded": false
+    },
+    "inflow": {
+      "visible": true,
+      "expanded": true
+    },
+    "impervious_surface": {
+      "visible": true,
+      "expanded": true
+    },
+    "surface": {
+      "visible": true,
+      "expanded": true
+    }
+  },
+  "layer": {
+    "v2_global_settings": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_aggregation_settings": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_interflow": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_groundwater": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_1d_boundary_conditions": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_1d_boundary_conditions_view": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_2d_boundary_conditions": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_1d_lateral": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_1d_lateral_view": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_2d_lateral": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_connection_nodes": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_manhole_view": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_cross_section_location": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_pumpstation_view": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_pumpstation_point_view": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_weir_view": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_culvert_view": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_orifice_view": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_pipe_view": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_culvert": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_channel": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_pipe": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_weir": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_orifice": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_manhole": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_pumpstation": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_windshielding": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_cross_section_definition": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_obstacle": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_levee": {
+      "visible": false,
+      "expanded": true
+    },
+    "v2_grid_refinement": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_grid_refinement_area": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_numerical_settings": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_dem_average_area": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_impervious_surface_map": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_impervious_surface": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_surface_parameters": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_surface_map": {
+      "visible": true,
+      "expanded": true
+    },
+    "v2_surface": {
+      "visible": true,
+      "expanded": true
+    }
+  }
+}
