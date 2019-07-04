@@ -8,14 +8,13 @@
 
 """
 
-__author__ = 'emiel.verstegen@nelen-schuurmans.nl'
-__date__ = '2019-06-06'
-__copyright__ = 'Copyright 2019, Emiel Verstegen, Nelen & Schuurmans'
+__author__ = "emiel.verstegen@nelen-schuurmans.nl"
+__date__ = "2019-06-06"
+__copyright__ = "Copyright 2019, Emiel Verstegen, Nelen & Schuurmans"
 
 import unittest
 
 from PyQt5.QtGui import QIcon
-
 
 
 class threediresultstylerDialogTest(unittest.TestCase):
@@ -31,14 +30,12 @@ class threediresultstylerDialogTest(unittest.TestCase):
 
     def test_icon_png(self):
         """Test we can click OK."""
-        path = ':/plugins/threediresultstyler/icon.png'
+        path = ":/plugins/threediresultstyler/icon.png"
         icon = QIcon(path)
         self.assertFalse(icon.isNull())
+
 
 if __name__ == "__main__":
     suite = unittest.makeSuite(threediresultstylerResourcesTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-
-
-

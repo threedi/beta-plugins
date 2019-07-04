@@ -27,13 +27,21 @@ import json
 
 from PyQt5 import QtGui, QtWidgets, uic
 from PyQt5.QtCore import pyqtSignal, QFileInfo, QSettings, Qt, QEvent
-from qgis.core import Qgis, QgsProject, QgsRasterLayer, QgsLayerTreeLayer, QgsCoordinateReferenceSystem, QgsDistanceArea
+from qgis.core import (
+    Qgis,
+    QgsProject,
+    QgsRasterLayer,
+    QgsLayerTreeLayer,
+    QgsCoordinateReferenceSystem,
+    QgsDistanceArea,
+)
 from qgis.gui import QgsRasterTransparencyWidget, QgsHighlight
 from pathlib import Path
 from datetime import datetime
 
-FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'threediresultstyler_dockwidget_base.ui'))
+FORM_CLASS, _ = uic.loadUiType(
+    os.path.join(os.path.dirname(__file__), "threediresultstyler_dockwidget_base.ui")
+)
 
 
 class threediresultstylerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
@@ -50,14 +58,14 @@ class threediresultstylerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
         self.iface = iface
-        
+
         self.scenarios = {}
         self.selected_scenario_index = 0
-        #self.fill_scenario_selector()
-        
+        # self.fill_scenario_selector()
+
         self.highlights = []
-        
-        #signals
+
+        # signals
         self.loadDEMButton.clicked.connect(self.load_dem)
         self.setProjectionButton.clicked.connect(self.set_project_crs)
         self.saveLayerTreeButton.clicked.connect(self.save_tree_settings)
@@ -66,194 +74,272 @@ class threediresultstylerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.addPDOKButton.clicked.connect(self.load_pdok)
         self.highlightCourantButton.clicked.connect(self.highlight_courant)
         self.removeHighlightButton.clicked.connect(self.remove_highlights)
-        
+
         self.scenarioBox.installEventFilter(self)
         self.scenarioBox.currentIndexChanged.connect(self.select_scenario)
-        
-        #self.courantThreshold
 
-    def eventFilter(self,target,event):
+        # self.courantThreshold
+
+    def eventFilter(self, target, event):
+        """call fill_scenario_selector when scenario dropdown menu is clicked"""
         if target == self.scenarioBox and event.type() == QEvent.MouseButtonPress:
             self.fill_scenario_selector()
 
         return False
 
     def closeEvent(self, event):
+        """close plugin"""
         self.closingPlugin.emit()
         event.accept()
 
     def select_scenario(self):
+        """set index of selected scenario"""
         self.selected_scenario_index = self.scenarioBox.currentIndex()
-        #self.iface.messageBar().pushMessage("Warning", "Selected scenario index {}".format(self.selected_scenario_index), level=Qgis.Warning)
-        
 
     def fill_scenario_selector(self):
-        global_settings_layer = QgsProject.instance().mapLayersByName("v2_global_settings")
+        """fill scenario dropdown menu with scenario names in v2_global settings table"""
+        global_settings_layer = QgsProject.instance().mapLayersByName(
+            "v2_global_settings"
+        )
 
         try:
             for feature in global_settings_layer[0].getFeatures():
                 self.scenarios[feature["name"]] = feature["id"]
             self.scenarioBox.addItems(list(self.scenarios.keys()))
         except:
-            self.iface.messageBar().pushMessage("Warning", "Load 3Di model first", level=Qgis.Warning)
+            self.iface.messageBar().pushMessage(
+                "Warning", "Load 3Di model first", level=Qgis.Warning
+            )
 
     def set_project_crs(self, event):
-        global_settings_layer = QgsProject.instance().mapLayersByName("v2_global_settings")[0]
-        feature = list(global_settings_layer.getFeatures())[self.selected_scenario_index]
-        QgsProject.instance().setCrs(QgsCoordinateReferenceSystem(int(feature["epsg_code"])))
+        """lookup and set QGIS project CRS to EPSG code mentioned in v2_global_settings"""
+        global_settings_layer = QgsProject.instance().mapLayersByName(
+            "v2_global_settings"
+        )[0]
+        feature = list(global_settings_layer.getFeatures())[
+            self.selected_scenario_index
+        ]
+        QgsProject.instance().setCrs(
+            QgsCoordinateReferenceSystem(int(feature["epsg_code"]))
+        )
 
     def load_dem(self, event):
-        global_settings_layer = QgsProject.instance().mapLayersByName("v2_global_settings")[0]
-        source = Path(global_settings_layer.dataProvider().dataSourceUri().split(' ')[0].split('=')[1][1:-1])
+        """lookup DEM raster reference of scenario, load raster and give styling"""
+        global_settings_layer = QgsProject.instance().mapLayersByName(
+            "v2_global_settings"
+        )[0]
+        source = Path(
+            global_settings_layer.dataProvider()
+            .dataSourceUri()
+            .split(" ")[0]
+            .split("=")[1][1:-1]
+        )
         model_directory = source.parents[0]
 
         root = QgsProject.instance().layerTreeRoot()
-        if not root.findGroup('background'):
-            grp_background = root.insertGroup(-1, "background")    
+        if not root.findGroup("background"):
+            grp_background = root.insertGroup(-1, "background")
         else:
-            grp_background = root.findGroup('background')
-            
-        feature = list(global_settings_layer.getFeatures())[self.selected_scenario_index]
+            grp_background = root.findGroup("background")
+
+        feature = list(global_settings_layer.getFeatures())[
+            self.selected_scenario_index
+        ]
 
         dem_file = model_directory / Path(feature["dem_file"])
 
         fileInfo = QFileInfo(str(dem_file))
         path = fileInfo.filePath()
         baseName = fileInfo.baseName()
-        
-        dem_layer = QgsRasterLayer(str(dem_file),'Digital Elevation Model')
+
+        dem_layer = QgsRasterLayer(str(dem_file), "Digital Elevation Model")
         QgsProject.instance().addMapLayer(dem_layer, False)
-        grp_background.insertChildNode(0,QgsLayerTreeLayer(dem_layer))
-        dem_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), 'styles\DEM.qml'))
+        grp_background.insertChildNode(0, QgsLayerTreeLayer(dem_layer))
+        dem_layer.loadNamedStyle(
+            os.path.join(os.path.dirname(__file__), "styles\DEM.qml")
+        )
         dem_layer.renderer().setOpacity(0.5)
         dem_layer.setCustomProperty("embeddedWidgets/count", 1)
         dem_layer.setCustomProperty("embeddedWidgets/0/id", "transparency")
         self.iface.layerTreeView().refreshLayerSymbology(dem_layer.id())
-        
-        
+
     def load_pdok(self):
-        pdok_layer = QgsRasterLayer("tileMatrixSet=EPSG:28992&crs=EPSG:28992&layers=Actueel_ortho25&styles=&format=image/png&url=https://geodata.nationaalgeoregister.nl/luchtfoto/rgb/wmts", "PDOK Luchtfoto actueel", "wms")
-    
+        """load most recent aerial photos of PDOK (Netherlands only) and style with transparency slider"""
+        pdok_layer = QgsRasterLayer(
+            "tileMatrixSet=EPSG:28992&crs=EPSG:28992&layers=Actueel_ortho25&styles=&format=image/png&url=https://geodata.nationaalgeoregister.nl/luchtfoto/rgb/wmts",
+            "PDOK Luchtfoto actueel",
+            "wms",
+        )
+
         root = QgsProject.instance().layerTreeRoot()
-        if not root.findGroup('background'):
-            grp_background = root.insertGroup(-1, "background")    
+        if not root.findGroup("background"):
+            grp_background = root.insertGroup(-1, "background")
         else:
-            grp_background = root.findGroup('background')
-            
-    
+            grp_background = root.findGroup("background")
+
         QgsProject.instance().addMapLayer(pdok_layer, False)
-        grp_background.insertChildNode(len(grp_background.children()),QgsLayerTreeLayer(pdok_layer))
+        grp_background.insertChildNode(
+            len(grp_background.children()), QgsLayerTreeLayer(pdok_layer)
+        )
         pdok_layer.renderer().setOpacity(0.5)
         pdok_layer.setCustomProperty("embeddedWidgets/count", 1)
         pdok_layer.setCustomProperty("embeddedWidgets/0/id", "transparency")
         self.iface.layerTreeView().refreshLayerSymbology(pdok_layer.id())
-        
+
     def save_tree_settings(self):
+        """iterate through the Layer tree and save visibility, expansion and filter of groups and layers as json setting file"""
         root = QgsProject.instance().layerTreeRoot()
-        schematisation_group = root.findGroup('schematisation')
-        groups = ['settings','boundary conditions','laterals','1d','additional tables for editing 1d','obstacles','grid refinements','advanced numerics','inflow','impervious_surface','surface']
- 
+        schematisation_group = root.findGroup("schematisation")
+        groups = [
+            "settings",
+            "boundary conditions",
+            "laterals",
+            "1d",
+            "additional tables for editing 1d",
+            "obstacles",
+            "grid refinements",
+            "advanced numerics",
+            "inflow",
+            "impervious_surface",
+            "surface",
+        ]
+
         settings = {}
-        settings['group'] = {}
-        settings['layer'] = {}
+        settings["group"] = {}
+        settings["layer"] = {}
 
         for group_name in groups:
             group = schematisation_group.findGroup(group_name)
 
-            settings['group'][group_name] = {}
-            settings['group'][group_name]['visible'] = group.isVisible()
-            settings['group'][group_name]['expanded'] = group.isExpanded()
+            settings["group"][group_name] = {}
+            settings["group"][group_name]["visible"] = group.isVisible()
+            settings["group"][group_name]["expanded"] = group.isExpanded()
 
         for layer in schematisation_group.findLayers():
-            settings['layer'][layer.name()] = {}
-            settings['layer'][layer.name()]['visible'] = layer.isVisible()
-            settings['layer'][layer.name()]['expanded'] = layer.isExpanded()
-            settings['layer'][layer.name()]['subset'] = layer.layer().subsetString()
+            settings["layer"][layer.name()] = {}
+            settings["layer"][layer.name()]["visible"] = layer.isVisible()
+            settings["layer"][layer.name()]["expanded"] = layer.isExpanded()
+            settings["layer"][layer.name()]["subset"] = layer.layer().subsetString()
 
-        settings_dir = os.path.join(os.path.dirname(__file__), 'tree_settings')
-        filename = QtGui.QFileDialog.getSaveFileName(self, 'Open file', settings_dir,"JSON files (*.json)")[0]
+        settings_dir = os.path.join(os.path.dirname(__file__), "tree_settings")
+        filename = QtGui.QFileDialog.getSaveFileName(
+            self, "Open file", settings_dir, "JSON files (*.json)"
+        )[0]
 
-
-        with open(str(filename), 'w', encoding='utf-8') as outfile:
+        with open(str(filename), "w", encoding="utf-8") as outfile:
             json.dump(settings, outfile, ensure_ascii=False, indent=2)
-            
+
     def load_tree_settings(self):
-        settings_dir = os.path.join(os.path.dirname(__file__), 'tree_settings')
-        filename = QtGui.QFileDialog.getOpenFileName(self, 'Open file', settings_dir,"JSON files (*.json)")[0]
-        
+        """load .json file and set visibility, expansion and filter of groups and layers in the Layer tree"""
+        settings_dir = os.path.join(os.path.dirname(__file__), "tree_settings")
+        filename = QtGui.QFileDialog.getOpenFileName(
+            self, "Open file", settings_dir, "JSON files (*.json)"
+        )[0]
+
         root = QgsProject.instance().layerTreeRoot()
-        schematisation_group = root.findGroup('schematisation')
-        
-        with open(filename) as json_file:  
+        schematisation_group = root.findGroup("schematisation")
+
+        with open(filename) as json_file:
             settings = json.load(json_file)
 
         groups = schematisation_group.findGroups()
         layers = schematisation_group.findLayers()
-        
+
         for group in groups:
             try:
-                group.setItemVisibilityChecked(settings['group'][group.name()]['visible'])
-                group.setExpanded(settings['group'][group.name()]['expanded'])
+                group.setItemVisibilityChecked(
+                    settings["group"][group.name()]["visible"]
+                )
+                group.setExpanded(settings["group"][group.name()]["expanded"])
             except:
-                self.iface.messageBar().pushMessage("Warning", "Couldn't find settings for group {}".format(group.name()), level=Qgis.Warning)
-            
+                self.iface.messageBar().pushMessage(
+                    "Warning",
+                    "Couldn't find settings for group {}".format(group.name()),
+                    level=Qgis.Warning,
+                )
+
         for layer in layers:
             try:
-                layer.setItemVisibilityChecked(settings['layer'][layer.name()]['visible'])
-                layer.setExpanded(settings['layer'][layer.name()]['expanded'])
-                layer.layer().setSubsetString(settings['layer'][layer.name()]['subset'])
+                layer.setItemVisibilityChecked(
+                    settings["layer"][layer.name()]["visible"]
+                )
+                layer.setExpanded(settings["layer"][layer.name()]["expanded"])
+                layer.layer().setSubsetString(settings["layer"][layer.name()]["subset"])
             except:
-                self.iface.messageBar().pushMessage("Warning", "Couldn't find settings for layer {}".format(layer.name()), level=Qgis.Warning)
-            
+                self.iface.messageBar().pushMessage(
+                    "Warning",
+                    "Couldn't find settings for layer {}".format(layer.name()),
+                    level=Qgis.Warning,
+                )
+
     def add_sqlite_connection(self):
+        """add a QGIS-connection to the SpatiaLite loaded by the 3Di plugin"""
         layer = QgsProject.instance().mapLayersByName("v2_global_settings")[0]
-        source =Path(layer.dataProvider().dataSourceUri().split(' ')[0].split('=')[1][1:-1])
+        source = Path(
+            layer.dataProvider().dataSourceUri().split(" ")[0].split("=")[1][1:-1]
+        )
         settings = QSettings()
-        #remove old connection
+        # remove old connection
         for key in settings.allKeys():
             if "SpatiaLite/connections/3Di plugin" in key:
                 settings.remove(key)
 
-        settings.setValue("SpatiaLite/connections/%s/sqlitepath" %("3Di plugin: {}, {}".format(source.name, datetime.now().strftime("%Y-%m-%d %H:%M"))), str(source))
+        settings.setValue(
+            "SpatiaLite/connections/%s/sqlitepath"
+            % (
+                "3Di plugin: {}, {}".format(
+                    source.name, datetime.now().strftime("%Y-%m-%d %H:%M")
+                )
+            ),
+            str(source),
+        )
         self.iface.reloadConnections()
-        
+
     def highlight_courant(self):
+        """highlight animated flowline layer where Courant number is higher than a given value (use velocity variable as flowline-results)"""
         line_results = QgsProject.instance().mapLayersByName("line_results")[0]
         if line_results is not None:
-            #layer found
+            # layer found
             canvas = self.iface.mapCanvas()
 
             line_results = QgsProject.instance().mapLayersByName("line_results")[0]
-            global_settings_layer = QgsProject.instance().mapLayersByName("v2_global_settings")[0]
-            timestep = list(global_settings_layer.getFeatures())[0]["sim_time_step"]#[0] -> [self.selected_scenario_index]
+            global_settings_layer = QgsProject.instance().mapLayersByName(
+                "v2_global_settings"
+            )[0]
+            timestep = list(global_settings_layer.getFeatures())[0][
+                "sim_time_step"
+            ]  # [0] -> [self.selected_scenario_index]
             d = QgsDistanceArea()
-            d.setEllipsoid('WGS84')
-
+            d.setEllipsoid("WGS84")
 
             features = line_results.getFeatures()
             for feature in features:
                 kcu = feature["kcu"]
-                if kcu in [0,1,2,3,5,100,101]:
+                if kcu in [0, 1, 2, 3, 5, 100, 101]:
                     geometry = feature.geometry()
                     length = d.measureLength(geometry)
-                
+
                     velocity = abs(feature["result"])
-                    
+
                     courant = velocity * timestep / length
-                    
-                    
+
                     if courant > self.courantThreshold.value():
                         color = QtGui.QColor(Qt.red)
                         highlight = QgsHighlight(canvas, feature, line_results)
                         highlight.setColor(color)
-                        highlight.setMinWidth(courant/2)
-                        #highlight.setBuffer()
+                        highlight.setMinWidth(courant / 2)
+                        # highlight.setBuffer()
                         color.setAlpha(50)
                         highlight.setFillColor(color)
                         highlight.show()
                         self.highlights.append(highlight)
         else:
-            self.iface.messageBar().pushMessage("Warning", "Couldn't find line_results layer, click \"Animation on\" button", level=Qgis.Warning)
-            
+            self.iface.messageBar().pushMessage(
+                "Warning",
+                'Couldn\'t find line_results layer, click "Animation on" button',
+                level=Qgis.Warning,
+            )
+
     def remove_highlights(self):
+        """remove highlights of flowline layer"""
         self.highlights = []

@@ -8,9 +8,9 @@
 
 """
 
-__author__ = 'emiel.verstegen@nelen-schuurmans.nl'
-__date__ = '2019-06-06'
-__copyright__ = 'Copyright 2019, Emiel Verstegen, Nelen & Schuurmans'
+__author__ = "emiel.verstegen@nelen-schuurmans.nl"
+__date__ = "2019-06-06"
+__copyright__ = "Copyright 2019, Emiel Verstegen, Nelen & Schuurmans"
 
 import unittest
 
@@ -38,8 +38,8 @@ class threediresultstylerDockWidgetTest(unittest.TestCase):
         """Test we can click OK."""
         pass
 
+
 if __name__ == "__main__":
     suite = unittest.makeSuite(threediresultstylerDialogTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-

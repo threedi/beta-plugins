@@ -24,9 +24,11 @@
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt, QObject
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction, QPushButton
+
 # Initialize Qt resources from file resources.py
 from .resources import *
-#from qgis.core import Qgis
+
+# from qgis.core import Qgis
 
 # Import the code for the DockWidget
 from .threediresultstyler_dockwidget import threediresultstylerDockWidget
@@ -51,31 +53,29 @@ class threediresultstyler:
         self.plugin_dir = os.path.dirname(__file__)
 
         # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale = QSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
-            self.plugin_dir,
-            'i18n',
-            'threediresultstyler_{}.qm'.format(locale))
+            self.plugin_dir, "i18n", "threediresultstyler_{}.qm".format(locale)
+        )
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
 
-            if qVersion() > '4.3.3':
+            if qVersion() > "4.3.3":
                 QCoreApplication.installTranslator(self.translator)
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&3Di result styler')
+        self.menu = self.tr(u"&3Di result styler")
         # TODO: We are going to let the user set this up in a future iteration
-        self.toolbar = self.iface.addToolBar(u'threediresultstyler')
-        self.toolbar.setObjectName(u'threediresultstyler')
+        self.toolbar = self.iface.addToolBar(u"threediresultstyler")
+        self.toolbar.setObjectName(u"threediresultstyler")
 
-        #print "** INITIALIZING threediresultstyler"
+        # print "** INITIALIZING threediresultstyler"
 
         self.pluginIsActive = False
         self.dockwidget = None
-
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -90,8 +90,7 @@ class threediresultstyler:
         :rtype: QString
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('threediresultstyler', message)
-
+        return QCoreApplication.translate("threediresultstyler", message)
 
     def add_action(
         self,
@@ -103,7 +102,8 @@ class threediresultstyler:
         add_to_toolbar=True,
         status_tip=None,
         whats_this=None,
-        parent=None):
+        parent=None,
+    ):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -158,32 +158,29 @@ class threediresultstyler:
             self.toolbar.addAction(action)
 
         if add_to_menu:
-            self.iface.addPluginToMenu(
-                self.menu,
-                action)
+            self.iface.addPluginToMenu(self.menu, action)
 
         self.actions.append(action)
 
         return action
 
-
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/threediresultstyler/icon.png'
+        icon_path = ":/plugins/threediresultstyler/icon.png"
         self.add_action(
             icon_path,
-            text=self.tr(u'3Di result styler'),
+            text=self.tr(u"3Di result styler"),
             callback=self.run,
-            parent=self.iface.mainWindow())
-			
+            parent=self.iface.mainWindow(),
+        )
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     def onClosePlugin(self):
         """Cleanup necessary items here when plugin dockwidget is closed"""
 
-        #print "** CLOSING threediresultstyler"
+        # print "** CLOSING threediresultstyler"
 
         # disconnects
         self.dockwidget.closingPlugin.disconnect(self.onClosePlugin)
@@ -196,22 +193,18 @@ class threediresultstyler:
 
         self.pluginIsActive = False
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
 
-        #print "** UNLOAD threediresultstyler"
+        # print "** UNLOAD threediresultstyler"
 
         for action in self.actions:
-            self.iface.removePluginMenu(
-                self.tr(u'&3Di result styler'),
-                action)
+            self.iface.removePluginMenu(self.tr(u"&3Di result styler"), action)
             self.iface.removeToolBarIcon(action)
         # remove the toolbar
         del self.toolbar
 
-    #--------------------------------------------------------------------------
-
+    # --------------------------------------------------------------------------
 
     def run(self):
         """Run method that loads and starts the plugin"""
@@ -219,7 +212,7 @@ class threediresultstyler:
         if not self.pluginIsActive:
             self.pluginIsActive = True
 
-            #print "** STARTING threediresultstyler"
+            # print "** STARTING threediresultstyler"
 
             # dockwidget may not exist if:
             #    first run of plugin

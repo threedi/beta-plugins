@@ -16,8 +16,8 @@ email=emiel.verstegen@nelen-schuurmans.nl
 
 about=Using this plugin you can easily style your canvas for different analytics purposes. Examples of functionality: -Add opaque background layers such as satellite views or the styled DEM -Turn on/of layers concerning 1D or 2D flow -Restyle animated layers for different variables
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/threedi/beta-plugins/threediresultstyler
+repository=https://github.com/threedi/beta-plugins/threediresultstyler
 # End of mandatory metadata
 
 # Recommended items:
@@ -28,7 +28,7 @@ repository=http://repo
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=http://homepage
+homepage=https://github.com/threedi/beta-plugins/threediresultstyler
 category=Plugins
 icon=icon.png
 # experimental flag
