@@ -106,7 +106,7 @@ class threediresultstylerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             for feature in global_settings_layer[0].getFeatures():
                 self.scenarios[feature["name"]] = feature["id"]
             self.scenarioBox.addItems(list(self.scenarios.keys()))
-        except:
+        except IndexError as e:
             self.iface.messageBar().pushMessage(
                 "Warning", "Load 3Di model first", level=Qgis.Warning
             )
@@ -297,48 +297,49 @@ class threediresultstylerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
     def highlight_courant(self):
         """highlight animated flowline layer where Courant number is higher than a given value (use velocity variable as flowline-results)"""
-        line_results = QgsProject.instance().mapLayersByName("line_results")[0]
-        if line_results is not None:
-            # layer found
-            canvas = self.iface.mapCanvas()
 
-            line_results = QgsProject.instance().mapLayersByName("line_results")[0]
-            global_settings_layer = QgsProject.instance().mapLayersByName(
-                "v2_global_settings"
-            )[0]
-            timestep = list(global_settings_layer.getFeatures())[0][
-                "sim_time_step"
-            ]  # [0] -> [self.selected_scenario_index]
-            d = QgsDistanceArea()
-            d.setEllipsoid("WGS84")
-
-            features = line_results.getFeatures()
-            for feature in features:
-                kcu = feature["kcu"]
-                if kcu in [0, 1, 2, 3, 5, 100, 101]:
-                    geometry = feature.geometry()
-                    length = d.measureLength(geometry)
-
-                    velocity = abs(feature["result"])
-
-                    courant = velocity * timestep / length
-
-                    if courant > self.courantThreshold.value():
-                        color = QtGui.QColor(Qt.red)
-                        highlight = QgsHighlight(canvas, feature, line_results)
-                        highlight.setColor(color)
-                        highlight.setMinWidth(courant / 2)
-                        # highlight.setBuffer()
-                        color.setAlpha(50)
-                        highlight.setFillColor(color)
-                        highlight.show()
-                        self.highlights.append(highlight)
-        else:
+        if len(QgsProject.instance().mapLayersByName("line_results")) == 0:
             self.iface.messageBar().pushMessage(
                 "Warning",
                 'Couldn\'t find line_results layer, click "Animation on" button',
                 level=Qgis.Warning,
             )
+            return
+
+        # layer found
+        canvas = self.iface.mapCanvas()
+
+        line_results = QgsProject.instance().mapLayersByName("line_results")[0]
+        global_settings_layer = QgsProject.instance().mapLayersByName(
+            "v2_global_settings"
+        )[0]
+        timestep = list(global_settings_layer.getFeatures())[0][
+            "sim_time_step"
+        ]  # [0] -> [self.selected_scenario_index]
+        d = QgsDistanceArea()
+        d.setEllipsoid("WGS84")
+
+        features = line_results.getFeatures()
+        for feature in features:
+            kcu = feature["kcu"]
+            if kcu in [0, 1, 2, 3, 5, 100, 101]:
+                geometry = feature.geometry()
+                length = d.measureLength(geometry)
+
+                velocity = abs(feature["result"])
+
+                courant = velocity * timestep / length
+
+                if courant > self.courantThreshold.value():
+                    color = QtGui.QColor(Qt.red)
+                    highlight = QgsHighlight(canvas, feature, line_results)
+                    highlight.setColor(color)
+                    highlight.setMinWidth(courant / 2)
+                    # highlight.setBuffer()
+                    color.setAlpha(50)
+                    highlight.setFillColor(color)
+                    highlight.show()
+                    self.highlights.append(highlight)
 
     def remove_highlights(self):
         """remove highlights of flowline layer"""
