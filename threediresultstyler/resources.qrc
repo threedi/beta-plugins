@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/threediresultstyler" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>

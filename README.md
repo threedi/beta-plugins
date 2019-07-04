@@ -15,3 +15,4 @@ Afterwards you should open QGIS, go to plugin manager, installed plugins, and ac
 - edit3dischematisation: alters 1D views to make them editable. Requires loading the model through the threediPlugin
 - build2dmodel: Extracts elevation, landuse and soil rasters from lizard and converts them to proper 3Di rasters
 - resultsdownloader: Searches for 3Di simulation results and facilitates downloading/visualising these
+- threediresultstyler: Adds functionality like adding a styled DEM, areal photo's, saving/loading settings in the Layer menu (visibility, expanded groups and filters) and showing Courant numbers of the calculated results.

@@ -1,0 +1,39 @@
+# This file contains metadata for your plugin. Since 
+# version 2.0 of QGIS this is the proper way to supply 
+# information about a plugin. The old method of 
+# embedding metadata in __init__.py will 
+# is no longer supported since version 2.0.
+
+# This file should be included when you package your plugin.# Mandatory items:
+
+[general]
+name=3Di result styler
+qgisMinimumVersion=3.0
+description=This plugin helps you style your 3Di results for better analytics
+version=0.1
+author=Emiel Verstegen, Nelen & Schuurmans
+email=emiel.verstegen@nelen-schuurmans.nl
+
+about=Using this plugin you can easily style your canvas for different analytics purposes. Examples of functionality: -Add opaque background layers such as satellite views or the styled DEM -Turn on/of layers concerning 1D or 2D flow -Restyle animated layers for different variables
+
+tracker=https://github.com/threedi/beta-plugins/threediresultstyler
+repository=https://github.com/threedi/beta-plugins/threediresultstyler
+# End of mandatory metadata
+
+# Recommended items:
+
+# Uncomment the following line and add your changelog:
+# changelog=
+
+# Tags are comma separated with spaces allowed
+tags=python
+
+homepage=https://github.com/threedi/beta-plugins/threediresultstyler
+category=Plugins
+icon=icon.png
+# experimental flag
+experimental=False
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+

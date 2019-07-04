@@ -1,0 +1,245 @@
+{
+  "group": {
+    "settings": {
+      "visible": true,
+      "expanded": false
+    },
+    "boundary conditions": {
+      "visible": true,
+      "expanded": true
+    },
+    "laterals": {
+      "visible": true,
+      "expanded": true
+    },
+    "1d": {
+      "visible": true,
+      "expanded": true
+    },
+    "additional tables for editing 1d": {
+      "visible": true,
+      "expanded": false
+    },
+    "obstacles": {
+      "visible": true,
+      "expanded": true
+    },
+    "grid refinements": {
+      "visible": true,
+      "expanded": true
+    },
+    "advanced numerics": {
+      "visible": true,
+      "expanded": false
+    },
+    "inflow": {
+      "visible": true,
+      "expanded": false
+    },
+    "impervious_surface": {
+      "visible": true,
+      "expanded": true
+    },
+    "surface": {
+      "visible": true,
+      "expanded": true
+    }
+  },
+  "layer": {
+    "v2_global_settings": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_aggregation_settings": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_interflow": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_groundwater": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_1d_boundary_conditions": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_1d_boundary_conditions_view": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_2d_boundary_conditions": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_1d_lateral": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_1d_lateral_view": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_2d_lateral": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_connection_nodes": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_manhole_view": {
+      "visible": false,
+      "expanded": false,
+      "subset": ""
+    },
+    "v2_cross_section_location": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_pumpstation_view": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_pumpstation_point_view": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_weir_view": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_culvert_view": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_orifice_view": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_pipe_view": {
+      "visible": false,
+      "expanded": false,
+      "subset": ""
+    },
+    "v2_culvert": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_channel": {
+      "visible": true,
+      "expanded": true,
+      "subset": "\"calculation_type\"=101"
+    },
+    "v2_pipe": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_weir": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_orifice": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_manhole": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_pumpstation": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_windshielding": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_cross_section_definition": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_obstacle": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_levee": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_grid_refinement": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_grid_refinement_area": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_numerical_settings": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_dem_average_area": {
+      "visible": true,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_impervious_surface_map": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_impervious_surface": {
+      "visible": false,
+      "expanded": false,
+      "subset": ""
+    },
+    "v2_surface_parameters": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_surface_map": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    },
+    "v2_surface": {
+      "visible": false,
+      "expanded": true,
+      "subset": ""
+    }
+  }
+}
