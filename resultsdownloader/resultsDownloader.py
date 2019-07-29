@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
+from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, QObject
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QAction,QFileDialog,QMessageBox
 from qgis.core import *
+from PyQt5.QtXml import *
+from qgis.utils import iface
+import re 
 
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .resultsDownloader_dialog import resultsDownloaderDialog
+from .resultsDownloader_dialog_scale import resultsDownloaderScale
 from .downloader import *
 import os.path
 from datetime import datetime
@@ -123,7 +127,6 @@ class downloadtask(QgsTask):
     @staticmethod
     def download_file(url, path,REQUESTS_HEADERS):
         """download url to specified path"""
-        print(path)
         logging.debug("Start downloading file: {}".format(url))
         r = requests.get(url, auth=(REQUESTS_HEADERS["username"], REQUESTS_HEADERS["password"]))
         r.raise_for_status()
@@ -225,7 +228,6 @@ class resultsDownloader:
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&resultsDownloader')
-
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
@@ -329,10 +331,14 @@ class resultsDownloader:
             text=self.tr(u'Download threedi results'),
             callback=self.run,
             parent=self.iface.mainWindow())
+        self.changeDSActionRaster = QAction(QIcon(os.path.join(self.plugin_dir,"icon.png")), u"Change value range", self.iface)
+        self.changeDSActionRaster.triggered.connect(self.run2)
+        self.iface.addCustomActionForLayerType(self.changeDSActionRaster,"", QgsMapLayer.RasterLayer,True)
 
         # will be set False in run()
         self.first_start = True
-
+    
+    #def connectSignals(self):
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -400,7 +406,83 @@ class resultsDownloader:
         directory_name = QFileDialog.getExistingDirectory(None, "select directory")
         self.dlg.downloadDirectory.setText(str(directory_name))
         return None
+    
+    def applyDataSource(self,applyLayer,minimumValue,maximumValue):
+        '''
+        method to verify applying datasource/provider before definitive change to avoid qgis crashes
+        '''
+        #self.hide()
+        newProvider = 'wms'
+        oldDatasource = applyLayer.source()
+        if "depth" in applyLayer.name():
+            newStyle = 'styles=Blues:{}:{}&'.format(minimumValue,maximumValue) 
+        elif "ucr" in applyLayer.name():
+            newStyle = 'styles=3di-ucr-max:{}:{}&'.format(minimumValue,maximumValue)
+        elif "s1" in applyLayer.name():
+            newStyle = 'styles=Spectral:{}:{}&'.format(minimumValue,maximumValue)
+        elif "total-damage" in applyLayer.name():
+            newStyle = 'styles=3di-damage:{}:{}&'.format(minimumValue,maximumValue)
+        else:
+            pass  
+            
+        newDatasource = re.sub(r'styles=.*?&', newStyle, oldDatasource)
 
+        # new layer import
+        # fix_print_with_import
+        print("applyDataSource", applyLayer.type())
+        if applyLayer.type() == QgsMapLayer.VectorLayer:
+            # fix_print_with_import
+            print("vector")
+            probeLayer = QgsVectorLayer(newDatasource,"probe", newProvider)
+            extent = None
+        else:
+            # fix_print_with_import
+            print("raster")
+            probeLayer = QgsRasterLayer(newDatasource,"probe", newProvider)
+            extent = probeLayer.extent()
+        if not probeLayer.isValid():
+            self.iface.messageBar().pushMessage("Error", "New data source is not valid: "+newProvider+"|"+newDatasource, level=Qgis.Critical, duration=4)
+            return None
+        #print "geometryTypes",probeLayer.geometryType(), applyLayer.geometryType()
+
+        if applyLayer.type() == QgsMapLayer.VectorLayer and probeLayer.geometryType() != applyLayer.geometryType():
+            self.iface.messageBar().pushMessage("Error", "Geometry type mismatch", level=Qgis.Critical, duration=4)
+            return None
+
+        newDatasource = probeLayer.source()
+        print(newDatasource)
+        self.setDataSource(applyLayer, newProvider, newDatasource, extent)
+        return True
+
+    
+    def setDataSource(self, layer, newProvider, newDatasource, extent=None):
+        '''
+        Method to write the new datasource to a raster Layer
+        '''
+        #newDatasource = oldDatasource
+        XMLDocument = QDomDocument("style")
+        XMLMapLayers = XMLDocument.createElement("maplayers")
+        XMLMapLayer = XMLDocument.createElement("maplayer")
+        context = QgsReadWriteContext()
+        layer.writeLayerXml(XMLMapLayer,XMLDocument, context)
+        # apply layer definition
+        XMLMapLayer.firstChildElement("datasource").firstChild().setNodeValue(newDatasource)
+        XMLMapLayer.firstChildElement("provider").firstChild().setNodeValue(newProvider)
+        if extent: #if a new extent (for raster) is provided it is applied to the layer
+            XMLMapLayerExtent = XMLMapLayer.firstChildElement("extent")
+            XMLMapLayerExtent.firstChildElement("xmin").firstChild().setNodeValue(str(extent.xMinimum()))
+            XMLMapLayerExtent.firstChildElement("xmax").firstChild().setNodeValue(str(extent.xMaximum()))
+            XMLMapLayerExtent.firstChildElement("ymin").firstChild().setNodeValue(str(extent.yMinimum()))
+            XMLMapLayerExtent.firstChildElement("ymax").firstChild().setNodeValue(str(extent.yMaximum()))
+        XMLMapLayers.appendChild(XMLMapLayer)
+        XMLDocument.appendChild(XMLMapLayers)
+        layer.readLayerXml(XMLMapLayer, context) #er moet voor deze regel een print statement
+        layer.reload()
+
+        self.iface.actionDraw().trigger()
+        self.iface.mapCanvas().refresh()
+        self.iface.layerTreeView().refreshLayerSymbology(layer.id())
+       
     def run(self):
         """Run method that performs all the real work"""
 
@@ -459,3 +541,12 @@ class resultsDownloader:
                 raster, # name for layer (as seen in QGIS)
                 "wms" # dataprovider key
                 )
+                
+    def run2(self):
+        self.dlg2 = resultsDownloaderScale()
+        self.dlg2.show()
+        result = self.dlg2.exec_()
+        if result:
+            minimumValue = self.dlg2.minimumValue.text()
+            maximumValue = self.dlg2.maximumValue.text()
+            self.applyDataSource(iface.activeLayer(),minimumValue,maximumValue)    
