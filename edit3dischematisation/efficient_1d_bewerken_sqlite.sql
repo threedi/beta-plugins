@@ -599,11 +599,12 @@ create trigger v2_orifice_delete
     end;
 
 ----------------------------------------------------------------------------------------
---------------------------------- V2 Culvert edits -------------------------------------
+------------------------------- V2 Culvert View edits -----------------------------------
 ----------------------------------------------------------------------------------------
+drop trigger if exists v2_culvert_view_insert;
 drop trigger if exists v2_culvert_insert;
 
-create trigger v2_culvert_insert 
+create trigger v2_culvert_view_insert 
     instead of insert 
     on v2_culvert_view 
     BEGIN 
@@ -671,9 +672,10 @@ create trigger v2_culvert_insert
     ; 
     END;
 
+drop trigger if exists v2_culvert_view_update;
 drop trigger if exists v2_culvert_update;
 
-create trigger v2_culvert_update
+create trigger v2_culvert_view_update
 	instead of update 
 	on v2_culvert_view
 	BEGIN
@@ -727,9 +729,10 @@ create trigger v2_culvert_update
     WHERE v2_culvert."id"               = OLD."cul_id";
     END;
 
+drop trigger if exists v2_culvert_view_delete;
 drop trigger if exists v2_culvert_delete;
 
-create trigger v2_culvert_delete
+create trigger v2_culvert_view_delete
     instead of delete
     on v2_culvert_view
     BEGIN
@@ -752,6 +755,125 @@ create trigger v2_culvert_delete
 	id not in (select connection_node_start_id from v2_orifice)     AND 
 	id not in (select connection_node_end_id from v2_orifice);
     end;
+
+----------------------------------------------------------------------------------------
+--------------------------------- V2 Culvert edits -------------------------------------
+----------------------------------------------------------------------------------------
+drop trigger if exists v2_culvert_insert_bef;
+
+create trigger v2_culvert_insert_bef
+    before insert 
+    on v2_culvert
+    BEGIN 
+    INSERT INTO v2_connection_nodes( 
+        storage_area, 
+		the_geom,
+		code) 
+    SELECT 
+	    0.1, 
+		ST_startpoint(NEW.the_geom), 
+		NEW.code 
+    where not exists( 
+        select * from v2_connection_nodes 
+		where the_geom = ST_Startpoint(NEW.the_geom)); 
+
+    INSERT INTO v2_connection_nodes( 
+        storage_area, 
+		the_geom,
+		code) 
+    SELECT 
+	    0.1, 
+		ST_endpoint(NEW.the_geom), 
+		NEW.code 
+    where not exists( 
+        select * from v2_connection_nodes 
+		where the_geom = ST_endpoint(NEW.the_geom)); 
+    END;
+drop trigger if exists v2_culvert_insert_aft;
+
+create trigger v2_culvert_insert_aft
+    after insert
+    on v2_culvert
+    BEGIN 
+    update v2_culvert 
+    set 
+    connection_node_start_id = (select 
+	                                a.id 
+								from v2_connection_nodes a 
+								where MbrTouches(ST_startpoint(NEW.the_geom),a.the_geom) =1),
+    connection_node_end_id =(select 
+	                             a.id 
+							 from v2_connection_nodes a 
+							 where MbrTouches(ST_endpoint(NEW.the_geom),a.the_geom) =1)
+    where connection_node_start_id is NULL AND connection_node_end_id is NULL;
+    END;
+
+drop trigger if exists v2_culvert_update_bef;
+
+create trigger v2_culvert_update_bef
+    BEFORE UPDATE
+    ON v2_culvert
+    BEGIN 
+    INSERT INTO v2_connection_nodes( 
+        storage_area, 
+		the_geom,
+		code) 
+    SELECT 
+	    0.1, 
+		ST_startpoint(NEW.the_geom), 
+		NEW.code 
+    where not exists( 
+        select * from v2_connection_nodes 
+		where the_geom = ST_Startpoint(NEW.the_geom)); 
+
+    INSERT INTO v2_connection_nodes( 
+        storage_area, 
+		the_geom,
+		code) 
+    SELECT 
+	    0.1, 
+		ST_endpoint(NEW.the_geom), 
+		NEW.code 
+    where not exists( 
+        select * from v2_connection_nodes 
+		where the_geom = ST_endpoint(NEW.the_geom));
+    
+    UPDATE v2_culvert
+    SET 
+    connection_node_start_id = (select 
+	                                a.id 
+								from v2_connection_nodes a 
+								where MbrTouches(ST_startpoint(NEW.the_geom),a.the_geom) =1),
+    connection_node_end_id =(select 
+	                             a.id 
+							 from v2_connection_nodes a 
+							 where MbrTouches(ST_endpoint(NEW.the_geom),a.the_geom) =1)
+    where id = NEW.id;
+    END;
+
+drop trigger if exists v2_culvert_delete;
+
+create trigger v2_culvert_delete
+    after delete
+    on v2_culvert
+    BEGIN
+    DELETE FROM v2_connection_nodes where 
+	id not in (select connection_node_id       from v2_manhole)     AND 
+	id not in (select connection_node_start_id from v2_pipe)        AND 
+	id not in (select connection_node_end_id   from v2_pipe)        AND 
+	id not in (select connection_node_start_id from v2_weir)        AND 
+	id not in (select connection_node_end_id   from v2_weir)        AND 
+	id not in (select connection_node_start_id from v2_pumpstation) AND 
+	id not in (select connection_node_end_id   from v2_pumpstation 
+	           where connection_node_end_id is not null)            AND 
+	id not in (select connection_node_start_id from v2_channel)     AND 
+	id not in (select connection_node_end_id   from v2_channel)     AND 
+	id not in (select connection_node_start_id from v2_culvert)     AND 
+	id not in (select connection_node_end_id   from v2_culvert)     AND 
+	id not in (select connection_node_start_id from v2_orifice)     AND 
+	id not in (select connection_node_end_id from v2_orifice);
+    end;
+
 
 ----------------------------------------------------------------------------------------
 --------------------------------- V2 Channel edits -------------------------------------
@@ -803,6 +925,49 @@ create trigger v2_channel_insert_aft
 							 from v2_connection_nodes a 
 							 where MbrTouches(ST_endpoint(NEW.the_geom),a.the_geom) =1)
     where connection_node_start_id is NULL AND connection_node_end_id is NULL;
+    END;
+
+drop trigger if exists v2_channel_update_bef;
+
+create trigger v2_channel_update_bef
+    BEFORE UPDATE
+    ON v2_channel
+    BEGIN 
+    INSERT INTO v2_connection_nodes( 
+        storage_area, 
+		the_geom,
+		code) 
+    SELECT 
+	    0.1, 
+		ST_startpoint(NEW.the_geom), 
+		NEW.code 
+    where not exists( 
+        select * from v2_connection_nodes 
+		where the_geom = ST_Startpoint(NEW.the_geom)); 
+
+    INSERT INTO v2_connection_nodes( 
+        storage_area, 
+		the_geom,
+		code) 
+    SELECT 
+	    0.1, 
+		ST_endpoint(NEW.the_geom), 
+		NEW.code 
+    where not exists( 
+        select * from v2_connection_nodes 
+		where the_geom = ST_endpoint(NEW.the_geom));
+    
+    UPDATE v2_channel
+    SET 
+    connection_node_start_id = (select 
+	                                a.id 
+								from v2_connection_nodes a 
+								where MbrTouches(ST_startpoint(NEW.the_geom),a.the_geom) =1),
+    connection_node_end_id =(select 
+	                             a.id 
+							 from v2_connection_nodes a 
+							 where MbrTouches(ST_endpoint(NEW.the_geom),a.the_geom) =1)
+    where id = NEW.id;
     END;
 
 drop trigger if exists v2_channel_delete;
