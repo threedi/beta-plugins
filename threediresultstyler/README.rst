@@ -17,7 +17,7 @@ The main features are:
 
 Before using this tool make sure you have loaded a 3Di model using the 3Di plugin.
 
-![Toolbar](images/toolbar.png?raw=true "Toolbar")
+![Toolbar](https://raw.githubusercontent.com/threedi/beta-plugins/emiel-improve-readme/threediresultstyler/images/toolbar.PNG)
 
 Load DEM
 ---------------
