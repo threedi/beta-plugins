@@ -17,14 +17,14 @@ The main features are:
 
 Before using this tool make sure you have loaded a 3Di model using the 3Di plugin.
 
-.. image:: images/toolbar.PNG
+.. image:: images/toolbar.png
 
 Load DEM
 ---------------
-The 'Load DEM'-button will lookup the relative reference to your elevation raster in the 'v2_global_settings' table. The colourmap will be rescaled relative to the view extent and a opacity slider is added in the 'Layers' menu.
+The 'Load DEM'-button will lookup the relative reference to your elevation raster in the 'v2_global_settings' table. The colourmap will be rescaled relative to the view extent and an opacity slider is added in the 'Layers' menu.
 
-.. image:: images/dem_aerial.PNG
-.. image:: images/background_sliders.PNG
+.. image:: images/dem_aerial.png
+.. image:: images/background_sliders.png
 
 Add PDOK (Netherlands only)
 ---------------------------
@@ -39,7 +39,7 @@ Add SQLite connection
 An SpatiaLite connection to the loaded model schematisation (.sqlite file) is made with the name 3Di plugin: <<filename>>, <<YYYY-MM-DD HH:MM>>.
 You can use this connection to load additional tables or execute tools from the 3Di toolbox.
 
-.. image:: images/sqlite_connection.PNG
+.. image:: images/sqlite_connection.png
 
 Save / Load layer tree settings
 -------------------------------
@@ -51,18 +51,18 @@ You can save the following settings of the schematisation groups and layers in y
 
 These settings will be stored in a JSON file which can be loaded later using the 'Load layer tree settings' button.
 
-.. image:: images/layer_tree.PNG
+.. image:: images/layer_tree.png
 
 Highlight flowlines with a high Courant number
 ----------------------------------------------
 Before using this tool, load a model result and use the animation layers to show the flow velocity on a certain timestep. When you click 'highligh' this tool will highlight any 1D flowline with a Courant number higher than indicated in the toolbar. A higher courant number leads to a thicker highligt.
-Flowlines with a high Courant number could lead to timestep-reduction, although this is not stricktly necessary.
+Flowlines with a high Courant number could lead to timestep-reduction, although this is not strictly necessary.
 
-.. image:: images/courant_highlight.PNG
+.. image:: images/courant_highlight.png
 
 
 Load 2D grid
 ------------
 Before using this tool, load a model result. The 2D calculation grid will be added as a memory layer to the QGIS-project.
 
-.. image:: images/2d_grid.PNG
+.. image:: images/2d_grid.png
