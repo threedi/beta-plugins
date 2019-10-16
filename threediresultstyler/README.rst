@@ -24,7 +24,7 @@ Load DEM
 The 'Load DEM'-button will lookup the relative reference to your elevation raster in the 'v2_global_settings' table. The colourmap will be rescaled relative to the view extent and a opacity slider is added in the 'Layers' menu.
 
 .. image:: images/dem_aerial.PNG
-.. image:: images/background_slider.PNG
+.. image:: images/background_sliders.PNG
 
 Add PDOK (Netherlands only)
 ---------------------------
