@@ -1,5 +1,8 @@
 # beta-plugins
-Beta plugins for use of 3Di in the modeler interface
+
+In this repository you will find beta plugins for use of 3Di in the modeler interface. These are experiments to test new functionalities and might not fully work. They have been developed by advisors from different companies. For support or use of these plugins please correspond with the author of the plugin.
+
+If there is a plugin that you like to have implemented in the 3Di stack let us know via servicedesk@nelen-schuurmans.nl 
 
 These are Plugins developed for QGIS to aid in the modelling with 3Di. They are tested on QGIS 3.4.5. Most likely the plugins will function on newer QGIS versions as well, but this is not tested. The plugins are not compatible with QGIS 2 versions. 
 
