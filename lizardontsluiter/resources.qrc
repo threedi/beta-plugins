@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/plugins/Lizardontsluiter" >
-        <file>icon.png</file>
-    </qresource>
-</RCC>
