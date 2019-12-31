@@ -189,10 +189,11 @@ class importHydx:
         return None
 
     def getConnectionDetails(self,value):
-        password = self.s.value(value+'/password')
-        username = self.s.value(value+'/username')
-        port = self.s.value(value+'/port')
-        host = self.s.value(value+'/host')
+        value = value.split()[1]
+        password = self.s_postgresql.value(value+'/password')
+        username = self.s_postgresql.value(value+'/username')
+        port = self.s_postgresql.value(value+'/port')
+        host = self.s_postgresql.value(value+'/host')
         self.threedi_db_settings = {
                         "threedi_dbname": value,
                         "threedi_host": host,
@@ -200,7 +201,24 @@ class importHydx:
                         "threedi_password": password,
                         "threedi_port": port,
                     }
-    
+
+    def get_databases(self):
+        self.s_spatialite = QSettings()
+        self.s_spatialite.beginGroup("SpatiaLite/connections")
+        all_spatialite_dbkeys = self.s_spatialite.allKeys()
+        databases = []
+
+        for key in all_spatialite_dbkeys:
+            databases.append('Spatialite: '+key.split("/")[0])
+        
+        self.s_postgresql = QSettings()
+        self.s_postgresql.beginGroup("PostgreSQL/connections")
+        all_pgsql_dbkeys = self.s_postgresql.allKeys()
+        for key in all_pgsql_dbkeys:
+            databases.append('Postgresql: '+key.split("/")[0])
+        databases = list(dict.fromkeys(databases))
+        return databases
+        
     def run(self):
         """Run method that performs all the real work"""
 
@@ -211,13 +229,8 @@ class importHydx:
             self.dlg = importHydxDialog()
             
         self.dlg.hydxButton.clicked.connect(self.getHydxFromUserSelection)
-        self.s = QSettings()
-        self.s.beginGroup("PostgreSQL/connections")
-        all_dbkeys = self.s.allKeys()
-        databases = []
-        for key in all_dbkeys:
-            databases.append(key.split("/")[0])
-        databases = list(dict.fromkeys(databases))
+        databases = self.get_databases()
+        
         self.dlg.databases.addItems(databases)
         
         self.dlg.databases.currentTextChanged.connect(self.getConnectionDetails)
