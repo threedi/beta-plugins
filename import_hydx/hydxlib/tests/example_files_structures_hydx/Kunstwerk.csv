@@ -1,0 +1,20 @@
+UNI_IDE;KWK_TYP;BWS_NIV;PRO_BOK;DRL_COE;DRL_CAP;OVS_BRE;OVS_NIV;OVS_VOH;OVS_COE;PMP_CAP;PMP_AN1;PMP_AF1;PMP_AN2;PMP_AF2;QDH_NIV;QDH_DEB;AAN_OVN;AAN_OVB;AAN_CAP;AAN_ANS;AAN_AFS;ALG_TOE
+drl96;DRL;;0.00;0.600;;;;;;;;;;;;;;;;;;Opmerking bij doorlaat
+drl97;DRL;;0.00;0.800;4.00;;;;;;;;;;;;;;;;;
+knp78;UIT;-5.00;;;;;;;;;;;;;;;;;;;;
+knp80;UIT;-4.00;;;;;;;;;;;;;;;;;;;;Opmerking bij uitlaat
+knp84;UIT;-5.00;;;;;;;;;;;;;;;;;;;;
+ovs82;OVS;;;;;5;2.25;;0.800;;;;;;;;EXJ;NRM;;;;
+ovs83;OVS;;;;;3;2.70;0.25;0.900;;;;;;;;ONT;EXJ;;;;Opmerking bij overstort
+ovs84;OVS;;;;;3;3.70;;0.700;;;;;;;;NRM;ONT;;;;
+ovs85;OVS;;;;;5;0.00;;0.800;;;;;;;;;;;;;
+ovs86;OVS;;;;;5;4.00;;0.800;;;;;;;;;;;;;
+ovs87;OVS;;;;;5;0.20;;0.800;;;;;;;;;;;;;
+pmp88;PMP;;;;;;;;;72;0.50;0.00;;;;;;;NRM;;;
+pmp89;PMP;;;;;;;;;7.2;4.50;2.50;;;4.50 5 5.50 6;2 3 4.5 7.2;;;EXJ;;;
+pmp90;PMP;;;;;;;;;18;;;0.50;0.80;;;;;ONT;;NRM;
+pmp91;PMP;;;;;;;;;144;3.50;2.00;;;;;;;;NRM;EXJ;
+pmp92;PMP;;;;;;;;;18;-1.00;-1.50;;;;;;;;EXJ;ONT;
+pmp93;PMP;;;;;;;;;3.6;0.50;-1.50;;;;;;;;ONT;;
+pmp94;PMP;;;;;;;;;10.8;0.80;-1.20;;;;;;;;;;
+pmp95;PMP;;;;;;;;;14.4;0.50;-1.50;;;;;;;;;;Opmerking bij pomp

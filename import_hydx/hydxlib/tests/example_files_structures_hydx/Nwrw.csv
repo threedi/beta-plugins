@@ -1,0 +1,13 @@
+AFV_IDE;AFV_BRG;AFV_IFX ;AFV_IFN ;AFV_IFA ;AFV_IFH ;AFV_AFS ;AFV_LEN ;AFV_HEL ;AFV_RUW;ALG_TOE
+GVH_HEL;0;0;0;0;0;0.5;;;;Gesloten verharding hellend
+GVH_VLA;0.5;0;0;0;0;0.2;;;;Gesloten verharding vlak
+GVH_VLU;1;0;0;0;0;0.1;;;;Gesloten verharding vlak uitgestrekt
+OVH_HEL;0;2;0.5;3;0.1;0.5;;;;Open verharding hellend
+OVH_VLA;0.5;2;0.5;3;0.1;0.2;;;;Open verharding vlak
+OVH_VLU;1;2;0.5;3;0.1;0.1;;;;Open verharding vlak uitgestrekt
+DAK_HEL;0;0;0;0;0;0.5;;;;Dakoppervlak hellend
+DAK_VLA;2;0;0;0;0;0.2;;;;Dakoppervlak vlak
+DAK_VLU;4;0;0;0;0;0.1;;;;Dakoppervlak vlak uitgestrekt
+ONV_HEL;2;5;1;3;0.1;0.5;;;;Onverhard hellend
+ONV_VLA;4;5;1;3;0.1;0.2;;;;Onverhard vlak
+ONV_VLU;6;5;1;3;0.1;0.1;;;;Onverhard vlak uitgestrekt

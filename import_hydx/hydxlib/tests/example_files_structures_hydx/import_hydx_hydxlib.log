@@ -1,0 +1,12 @@
+INFO: Log file is created in hydx directory: 'C:\\hydxlib\\hydxlib\\tests\\example_files_structures_hydx\\import_hydx_hydxlib.log'
+INFO: Started exchange of GWSW-hydx at 2019-12-31 08:44:03.252606
+INFO: import type 'hydx' 
+INFO: export type 'threedi' 
+WARNING: The following hydx file is currently not implemented in this importer: hydxlib\tests\example_files_structures_hydx\ItObject.csv
+WARNING: The following hydx file is currently not implemented in this importer: hydxlib\tests\example_files_structures_hydx\Meta.csv
+WARNING: The following hydx file is currently not implemented in this importer: hydxlib\tests\example_files_structures_hydx\Nwrw.csv
+ERROR: Multiple elements 'Connection node' are created with the same code 'knp9'
+WARNING: The following discharge object misses information to be used by 3Di exporter: knp10
+WARNING: The following discharge object misses information to be used by 3Di exporter: lei4
+INFO: GWSW-hydx exchange created elements: {'cross_sections': 40, 'connection_nodes': 85, 'manholes': 84, 'pipes': 80, 'pumpstations': 8, 'weirs': 6, 'orifices': 2, 'outlets': 3, 'impervious_surfaces': 330}
+INFO: Exchange of GWSW-hydx finished
