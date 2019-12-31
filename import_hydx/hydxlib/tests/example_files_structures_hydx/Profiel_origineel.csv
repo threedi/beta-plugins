@@ -1,0 +1,48 @@
+PRO_IDE;PRO_MAT;PRO_VRM;PRO_BRE;PRO_HGT;TAB_BRE;TAB_HGT;ALG_TOE
+BET1000;BET;RND;1000;;;;Standaard maat
+BET1100;BET;RND;1100;;;;Standaard maat
+BET1200;BET;RND;1200;;;;Standaard maat
+BET1250;BET;RND;1250;;;;Standaard maat
+BET1300;BET;RND;1300;;;;Standaard maat
+BET1400;BET;RND;1400;;;;Standaard maat
+BET1500;BET;RND;1500;;;;Standaard maat
+BET1600;BET;RND;1600;;;;Standaard maat
+BET1700;BET;RND;1700;;;;Standaard maat
+BET1800;BET;RND;1800;;;;Standaard maat
+BET1900;BET;RND;1900;;;;Standaard maat
+BET2000;BET;RND;2000;;;;Standaard maat
+BET250;BET;RND;250;;;;Standaard maat
+BET300;BET;RND;300;;;;Standaard maat
+BET400;BET;RND;400;;;;Standaard maat
+BET500;BET;RND;500;;;;Standaard maat
+BET600;BET;RND;600;;;;Standaard maat
+BET700;BET;RND;700;;;;Standaard maat
+BET800;BET;RND;800;;;;Standaard maat
+BET900;BET;RND;900;;;;Standaard maat
+EI1000;BET;EIV;1000;1500;;;Standaard maat
+EI250;BET;EIV;250;375;;;Standaard maat
+EI300;BET;EIV;300;450;;;Standaard maat
+EI400;BET;EIV;400;600;;;Standaard maat
+EI500;BET;EIV;500;750;;;Standaard maat
+EI600;BET;EIV;600;900;;;Standaard maat
+EI700;BET;EIV;700;1050;;;Standaard maat
+EI800;BET;EIV;800;1200;;;Standaard maat
+EI900;BET;EIV;900;1350;;;Standaard maat
+PVC160;PVC;RND;160;;;;Standaard maat
+PVC200;PVC;RND;200;;;;Standaard maat
+PVC250;PVC;RND;250;;;;Standaard maat
+PVC315;PVC;RND;315;;;;Standaard maat
+PVC400;PVC;RND;400;;;;Standaard maat
+PVC500;PVC;RND;500;;;;Standaard maat
+PRO1;;XYV;;;0.1 0.5 1 1.5;0 0.25 0.5 1;Toegevoegde maat
+PRO2;GRE;RHK;400;;400;;Toegevoegde maat
+PRO4;GIJ;RHK;400;;400;;Toegevoegde maat
+PRO5;MSW;RHK;500;;500;;Toegevoegde maat
+PRO6;HPE;RND;500;;;;Toegevoegde maat
+PRO7;PIJ;RND;300;;;;Toegevoegde maat
+PRO8;STL;RND;300;;;;Toegevoegde maat
+PRO9;BET;EIV;350;525;;;Toegevoegde maat
+PRO10;BET;RHK;2000;1000;;;Toegevoegde maat
+PRO11;BET;TAB;;;0.1 0.5 1 1.5;0 0.25 0.5 1;Toegevoegde maat
+PRO12;BET;TAB;;;;;HEUL
+PRO3;BET;TAB;;;;;MUIL

@@ -427,8 +427,8 @@ class Threedi:
                 code = "rectangle_w{width}_open".format(**cross_section)
             elif cross_section["shape"] == Constants.SHAPE_TABULATED_RECTANGLE:
                 code = "rectangle_w{width}_h{height}".format(**cross_section)
-                cross_section["width"] = "{0} {0} 0".format(cross_section["width"])
-                cross_section["height"] = "0 {0} {0}".format(cross_section["height"])
+                cross_section["width"] = "{0} 0".format(cross_section["width"])
+                cross_section["height"] = "0 {0}".format(cross_section["height"])
             else:
                 code = "default"
             # add unique cross_sections to cross_section definition

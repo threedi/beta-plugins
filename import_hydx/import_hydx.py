@@ -189,18 +189,28 @@ class importHydx:
         return None
 
     def getConnectionDetails(self,value):
+        type = value.split()[0]
         value = value.split()[1]
-        password = self.s_postgresql.value(value+'/password')
-        username = self.s_postgresql.value(value+'/username')
-        port = self.s_postgresql.value(value+'/port')
-        host = self.s_postgresql.value(value+'/host')
-        self.threedi_db_settings = {
-                        "threedi_dbname": value,
-                        "threedi_host": host,
-                        "threedi_user": username,
-                        "threedi_password": password,
-                        "threedi_port": port,
-                    }
+
+        if type == 'Postgresql:':
+            password = self.s_postgresql.value(value+'/password')
+            username = self.s_postgresql.value(value+'/username')
+            port = self.s_postgresql.value(value+'/port')
+            host = self.s_postgresql.value(value+'/host')
+            self.threedi_db_settings = {
+                            "threedi_dbname": value,
+                            "threedi_host": host,
+                            "threedi_user": username,
+                            "threedi_password": password,
+                            "threedi_port": port,
+                            "type": "Postgresql"
+                        }
+        else:
+            sqlite_path = self.s_spatialite.value(value+'/sqlitepath')
+            self.threedi_db_settings = {"db_file": sqlite_path,
+                                        "type": "Spatialite"
+                                       }
+            
 
     def get_databases(self):
         self.s_spatialite = QSettings()
@@ -227,12 +237,11 @@ class importHydx:
         if self.first_start == True:
             self.first_start = False
             self.dlg = importHydxDialog()
-            
+            databases = self.get_databases()
+            self.dlg.databases.clear()
+            self.dlg.databases.addItems(databases)
         self.dlg.hydxButton.clicked.connect(self.getHydxFromUserSelection)
-        databases = self.get_databases()
-        
-        self.dlg.databases.addItems(databases)
-        
+
         self.dlg.databases.currentTextChanged.connect(self.getConnectionDetails)
 
         # show the dialog
@@ -241,8 +250,6 @@ class importHydx:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
             run_import_export("hydx","threedi",self.dlg.hydxFile.text(),self.threedi_db_settings)
             QMessageBox.information(
             None,

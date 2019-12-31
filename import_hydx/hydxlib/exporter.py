@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 from sqlalchemy.orm import load_only
+from copy import copy
+from osgeo import ogr
+from osgeo import osr
 
 from import_hydx.hydxlib.threedi import Threedi
 from import_hydx.hydxlib.sql_models.threedi_database import ThreediDatabase
@@ -18,6 +21,17 @@ from import_hydx.hydxlib.sql_models.model_schematisation import (
 )
 
 logger = logging.getLogger(__name__)
+
+def transform(wkt, srid_source, srid_dest):
+    source_crs = osr.SpatialReference()
+    source_crs.ImportFromEPSG(srid_source)
+    dest_crs = osr.SpatialReference()
+    dest_crs.ImportFromEPSG(srid_dest)
+    transformation = osr.CoordinateTransformation(source_crs, dest_crs)
+
+    point = ogr.CreateGeometryFromWkt(wkt)
+    point.Transform(transformation)
+    return point.ExportToWkt()
 
 
 def export_threedi(hydx, threedi_db_settings):
@@ -41,16 +55,22 @@ def write_threedi_to_db(threedi, threedi_db_settings):
 
     commit_counts = {}
 
-    db = ThreediDatabase(
-        {
-            "host": threedi_db_settings["threedi_host"],
-            "port": threedi_db_settings["threedi_port"],
-            "database": threedi_db_settings["threedi_dbname"],
-            "username": threedi_db_settings["threedi_user"],
-            "password": threedi_db_settings["threedi_password"],
-        },
-        "postgres",
-    )
+    if threedi_db_settings["type"] == 'Spatialite':
+        db = ThreediDatabase(
+            { "db_file": threedi_db_settings["db_file"],
+              "db_path": threedi_db_settings["db_file"]})
+
+    elif threedi_db_settings["type"] == 'Postgresql':
+        db = ThreediDatabase(
+            {
+                "host": threedi_db_settings["threedi_host"],
+                "port": threedi_db_settings["threedi_port"],
+                "database": threedi_db_settings["threedi_dbname"],
+                "username": threedi_db_settings["threedi_user"],
+                "password": threedi_db_settings["threedi_password"],
+            },
+            "postgres",
+        )
 
     session = db.get_session()
 
@@ -79,6 +99,8 @@ def write_threedi_to_db(threedi, threedi_db_settings):
     for cross_section in threedi.cross_sections.values():
         cross_section_list.append(CrossSectionDefinition(**cross_section))
     commit_counts["cross_sections"] = len(cross_section_list)
+    print(cross_section_list)
+    print(cross_section_list[0])
     session.bulk_save_objects(cross_section_list)
     session.commit()
 
@@ -91,9 +113,17 @@ def write_threedi_to_db(threedi, threedi_db_settings):
     cross_section_dict = {m.code: m.id for m in cross_section_list}
 
     connection_node_list = []
-    srid = 28992
+    srid = 4326
+    if db.db_type == "postgres":
+            geom_col = session.execute(
+                "SELECT srid FROM geometry_columns "
+                "WHERE f_table_name = 'v2_connection_nodes' AND "
+                "f_geometry_column = 'the_geom'"
+            )
+            srid = geom_col.fetchone()[0]
+
     for connection_node in threedi.connection_nodes:
-        wkt = "POINT({0} {1})".format(*connection_node["geom"])
+        wkt = transform("POINT({0} {1})".format(*connection_node["geom"]),28992,srid)
         connection_node_list.append(
             ConnectionNode(
                 code=connection_node["code"],
