@@ -1,0 +1,17 @@
+VER_IDE;VER_TYP;VER_DAG;VER_VOL;U00_DAG;U01_DAG;U02_DAG;U03_DAG;U04_DAG;U05_DAG;U06_DAG;U07_DAG;U08_DAG;U09_DAG;U10_DAG;U11_DAG;U12_DAG;U13_DAG;U14_DAG;U15_DAG;U16_DAG;U17_DAG;U18_DAG;U19_DAG;U20_DAG;U21_DAG;U22_DAG;U23_DAG;ALG_TOE
+Proceslozer;CST;1;0.1;;;;;;;;;;;;;;;;;;;;;;;;;Voorbeeld
+Proceslozer;CST;2;0.2;;;;;;;;;;;;;;;;;;;;;;;;;Voorbeeld
+Proceslozer;CST;3;0.3;;;;;;;;;;;;;;;;;;;;;;;;;Voorbeeld
+Proceslozer;CST;4;0.4;;;;;;;;;;;;;;;;;;;;;;;;;Voorbeeld
+Proceslozer;CST;5;0.3;;;;;;;;;;;;;;;;;;;;;;;;;Voorbeeld
+Proceslozer;CST;6;0.2;;;;;;;;;;;;;;;;;;;;;;;;;Voorbeeld
+Proceslozer;CST;7;0.1;;;;;;;;;;;;;;;;;;;;;;;;;Voorbeeld
+Inwoner;DAG;;0.12;1.5;1.5;1.5;1.5;1.5;3;4;5;6;6.5;7.5;8.5;7.5;6.5;6;5;5;5;4;3.5;3;2.5;2;2;Standaard
+Kantoor;VAR;1;0.06;0;0;0;0;0;0;0;0;10;10;10;10;10;10;10;10;10;10;0;0;0;0;0;0;Voorbeeld
+Kantoor;VAR;2;0.06;0;0;0;0;0;0;0;0;10;10;10;10;10;10;10;10;10;10;0;0;0;0;0;0;Voorbeeld
+Kantoor;VAR;3;0.06;0;0;0;0;0;0;0;0;10;10;10;10;10;10;10;10;10;10;0;0;0;0;0;0;Voorbeeld
+Kantoor;VAR;4;0.06;0;0;0;0;0;0;0;0;10;10;10;10;10;10;10;10;10;10;0;0;0;0;0;0;Voorbeeld
+Kantoor;VAR;5;0.06;0;0;0;0;0;0;0;0;10;10;10;10;10;10;10;10;10;10;0;0;0;0;0;0;Voorbeeld
+Kantoor;VAR;6;0;0;0;0;0;0;0;0;0;10;10;10;10;10;10;10;10;10;10;0;0;0;0;0;0;Voorbeeld
+Kantoor;VAR;7;0;0;0;0;0;0;0;0;0;10;10;10;10;10;10;10;10;10;10;0;0;0;0;0;0;Voorbeeld
+Bedrijf;DAG;;0.06;0;0;0;0;0;0;0;0;10;10;10;10;10;10;10;10;10;10;0;0;0;0;0;0;Standaard
