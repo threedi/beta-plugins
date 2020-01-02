@@ -31,7 +31,7 @@ class OptionException(Exception):
 
 def run_import_export(
     import_type, export_type, hydx_path=None, threedi_db_settings=None
-):
+    ):
     """ Run import and export functionality of hydxlib
 
     Args:
@@ -115,6 +115,7 @@ def write_logging_to_file(log_relpath):
     formatter = logging.Formatter("%(levelname)s: %(message)s")
     fh.setFormatter(formatter)
     logging.getLogger("hydxlib").addHandler(fh)
+    return
 
 
 def get_parser():
