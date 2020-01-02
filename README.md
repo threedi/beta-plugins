@@ -14,7 +14,8 @@ C:\Users\YOUR_USER_NAME\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugi
 Afterwards you should open QGIS, go to plugin manager, installed plugins, and activate the new plugins.
 
 - apiconsole3di: starts a 3Di simulation through the API.
-- edit3dischematisation: alters 1D views to make them editable. Requires loading the model through the threediPlugin
 - build2dmodel: Extracts elevation, landuse and soil rasters from lizard and converts them to proper 3Di rasters
+- edit3dischematisation: alters 1D views to make them editable. Requires loading the model through the threediPlugin
+- import_hydx: imports a GWSW Hydx dataset to a 3Di model.
 - resultsdownloader: Searches for 3Di simulation results and facilitates downloading/visualising these
 - threediresultstyler: Adds functionality like adding a styled DEM, areal photo's, saving/loading settings in the Layer menu (visibility, expanded groups and filters) and showing Courant numbers of the calculated results.
