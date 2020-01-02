@@ -99,10 +99,10 @@ def write_threedi_to_db(threedi, threedi_db_settings):
     for cross_section in threedi.cross_sections.values():
         cross_section_list.append(CrossSectionDefinition(**cross_section))
     commit_counts["cross_sections"] = len(cross_section_list)
-    print(cross_section_list)
-    print(cross_section_list[0])
-    session.bulk_save_objects(cross_section_list)
-    session.commit()
+    #session.bulk_save_objects(cross_section_list)
+    #session.commit()
+    for xsec in cross_section_list:
+        session.execute("INSERT INTO v2_cross_section_definition(shape,width,height,code) VALUES({0}, '{1}', '{2}', '{3}')".format(xsec.shape,xsec.width,xsec.height,xsec.code))
 
     cross_section_list = (
         session.query(CrossSectionDefinition)

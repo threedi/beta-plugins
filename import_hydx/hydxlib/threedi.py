@@ -242,10 +242,14 @@ class Threedi:
         combined_display_name_string = self.get_connection_display_names_from_manholes(
             hydx_connection
         )
-        breedte_diameterprofiel = transform_unit_mm_to_m(
-            hydx_profile.breedte_diameterprofiel
-        )
-        hoogteprofiel = transform_unit_mm_to_m(hydx_profile.hoogteprofiel)
+        if hydx_profile.vormprofiel in ('EIV', 'RND', 'RHK'):
+            breedte_diameterprofiel = transform_unit_mm_to_m(
+                hydx_profile.breedte_diameterprofiel
+            )
+            hoogteprofiel = transform_unit_mm_to_m(hydx_profile.hoogteprofiel)
+        else:
+            breedte_diameterprofiel = hydx_profile.tabulatedbreedte
+            hoogteprofiel = hydx_profile.tabulatedhoogte
 
         pipe = {
             "code": hydx_connection.identificatieknooppuntofverbinding,
@@ -373,15 +377,17 @@ class Threedi:
         hydx_profile,
         combined_display_name_string,
     ):
-
         hydx_connection = self.get_discharge_coefficients(
             hydx_connection, hydx_structure
         )
-
-        breedte_diameterprofiel = transform_unit_mm_to_m(
-            hydx_profile.breedte_diameterprofiel
-        )
-        hoogteprofiel = transform_unit_mm_to_m(hydx_profile.hoogteprofiel)
+        if hydx_profile.vormprofiel in ('EIV', 'RND', 'RHK'):
+            breedte_diameterprofiel = transform_unit_mm_to_m(
+                hydx_profile.breedte_diameterprofiel
+            )
+            hoogteprofiel = transform_unit_mm_to_m(hydx_profile.hoogteprofiel)
+        else:
+            breedte_diameterprofiel = hydx_profile.tabulatedbreedte
+            hoogteprofiel = hydx_profile.tabulatedhoogte
 
         orifice = {
             "code": hydx_connection.identificatieknooppuntofverbinding,
@@ -427,8 +433,8 @@ class Threedi:
                 code = "rectangle_w{width}_open".format(**cross_section)
             elif cross_section["shape"] == Constants.SHAPE_TABULATED_RECTANGLE:
                 code = "rectangle_w{width}_h{height}".format(**cross_section)
-                cross_section["width"] = "{0} 0".format(cross_section["width"])
-                cross_section["height"] = "0 {0}".format(cross_section["height"])
+                cross_section["width"] = "{0}".format(cross_section["width"])
+                cross_section["height"] = "{0}".format(cross_section["height"])
             else:
                 code = "default"
             # add unique cross_sections to cross_section definition
