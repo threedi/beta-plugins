@@ -101,7 +101,7 @@ class ThreediDatabase(object):
         if self._engine is None or get_seperate_engine:
             if self.db_type == "spatialite":
                 engine = create_engine(
-                    "sqlite:///{0}".format(self.settings["db_path"]), echo=self.echo
+                    "sqlite:///{0}".format(self.settings["db_path"]), echo=self.echo,connect_args={'check_same_thread': False}
                 )
                 listen(engine, "connect", load_spatialite)
                 if get_seperate_engine:

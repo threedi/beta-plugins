@@ -5,6 +5,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 from PyQt5.QtWidgets import QAction,QFileDialog,QMessageBox
 from import_hydx.hydxlib.scripts import *
+from qgis.core import QgsApplication, QgsTask, QgsMessageLog
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
@@ -207,7 +208,34 @@ class importHydx:
             databases.append('Postgresql: '+key.split("/")[0])
         databases = list(dict.fromkeys(databases))
         return databases
-        
+
+    def stopped(task):
+        QgsMessageLog.logMessage(
+        'Task "{name}" was canceled'.format(
+            name=task.description()),
+        MESSAGE_CATEGORY, Qgis.Info)
+
+    def completed(self,exception, result=None):
+        """This is called when doSomething is finished.
+        Exception is not None if doSomething raises an exception.
+        result is the return value of doSomething."""
+        if exception is None:
+            if result is None:
+                QgsMessageLog.logMessage(
+                    'Completed with no exception and no result '\
+                    '(probably manually canceled by the user)',
+                    MESSAGE_CATEGORY, Qgis.Warning)
+            else:
+                QMessageBox.information(
+                None,
+                "Result of hydx import",
+                "Your HydX file has succesfully been imported",
+                )
+        else:
+            QgsMessageLog.logMessage("Exception: {}".format(exception),
+                                     MESSAGE_CATEGORY, Qgis.Critical)
+            raise exception
+
     def run(self):
         """Run method that performs all the real work"""
 
@@ -229,10 +257,8 @@ class importHydx:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            run_import_export("hydx","threedi",self.dlg.hydxFile.text(),self.threedi_db_settings)
-            QMessageBox.information(
-            None,
-            "Result of hydx import",
-            "Your HydX file has succesfully been imported",
-            )
+            task1 = QgsTask.fromFunction('import hydx', run_import_export,
+                             on_finished=self.completed, import_type="hydx",export_type="threedi",
+                             hydx_path=self.dlg.hydxFile.text(),threedi_db_settings=self.threedi_db_settings)
+            QgsApplication.taskManager().addTask(task1)
             pass
