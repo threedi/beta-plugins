@@ -29,7 +29,7 @@ class OptionException(Exception):
     pass
 
 
-def run_import_export(
+def run_import_export(task,
     import_type, export_type, hydx_path=None, threedi_db_settings=None
     ):
     """ Run import and export functionality of hydxlib
@@ -105,7 +105,7 @@ def run_import_export(
 
     logger.info("Exchange of GWSW-hydx finished")
 
-    return "method is finished"  # Return value only for testing
+    return {'task': task.description()}
 
 
 def write_logging_to_file(log_relpath):
