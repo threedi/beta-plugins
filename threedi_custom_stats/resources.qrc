@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/threedi_custom_stats" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
