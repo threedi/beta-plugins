@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/threedi_leak_detector" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
