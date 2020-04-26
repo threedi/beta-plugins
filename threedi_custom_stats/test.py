@@ -3,9 +3,10 @@ from ThreeDiResultAggregation import *
 
 # ga='C:\\Users\\leendert.vanwolfswin\\Documents\\sloterplas\\Sloterplas_vulkaanuitbarsting\\gridadmin.h5'
 # res='C:\\Users\\leendert.vanwolfswin\\Documents\\sloterplas\\Sloterplas_vulkaanuitbarsting\\results_3di.nc'
-ga='C:\\Users\\leendert.vanwolfswin\\Documents\\bergeijk\\rev26\\Bui08\\gridadmin.h5'
-res='C:\\Users\\leendert.vanwolfswin\\Documents\\bergeijk\\rev26\\Bui08\\results_3di.nc'
-
+# ga='C:\\Users\\leendert.vanwolfswin\\Documents\\bergeijk\\rev26\\Bui08\\gridadmin.h5'
+# res='C:\\Users\\leendert.vanwolfswin\\Documents\\bergeijk\\rev26\\Bui08\\results_3di.nc'
+ga= "C:/Users/leendert.vanwolfswin/Documents/heugem-limmel/resultaat/heugem_limmel_geul_midden/rev3/T25 4u droog/gridadmin.h5"
+res= "C:/Users/leendert.vanwolfswin/Documents/heugem-limmel/resultaat/heugem_limmel_geul_midden/rev3/T25 4u droog/results_3di.nc"
 gr = GridH5ResultAdmin(ga, res)
 #
 # from threedigrid.admin.nodes.exporters import NodesOgrExporter
@@ -50,12 +51,18 @@ print(das)
 #print(type(gr.lines))
 #print(gr.lines.filter(id__in=[23]).data['line_geometries'])
 
-bbox = [153637.2250, 370814.6548, 153837.7750, 370975.3452]
+bbox = [185746.2278, 320514.5504, 186318.2898, 320733.7015]
 # bbox= None
 # ca = custom_aggregation(gr=gr, variable='q_abs', method='sum', threshold=None,
 #                       bbox=None, start_time=None, end_time=None, subsets=None)
 
-ca, rast = aggregate_threedi_results(gridadmin=ga, results_3di=res, demanded_aggregations=das, bbox=bbox, start_time=0, end_time=3600)
+ca, rast = aggregate_threedi_results(gridadmin=ga,
+                                     results_3di=res,
+                                     demanded_aggregations=das,
+                                     bbox=bbox,
+                                     start_time=0,
+                                     end_time=3600,
+                                     interpolation_method='linear')
 ogr_fllyr = ca.GetLayerByName('flowline')
 if ogr_fllyr is not None:
     print('flowline layer has {} features'.format(ogr_fllyr.GetFeatureCount()))

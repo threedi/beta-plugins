@@ -22,6 +22,7 @@ except:
 warnings.filterwarnings('ignore')
 ogr.UseExceptions()
 
+
 def get_extension_mapping(vector, raster, create_capability):
     ext_mapping = {}
     for i in range(ogr.GetDriverCount()):
@@ -255,14 +256,14 @@ def hybrid_time_aggregate(gr,
                           ):
     if 'q_' in variable:
         flows = flow_per_node(gr=gr, node_ids=ids,
-                      start_time=start_time,
-                      end_time=end_time,
-                      out='_out' in variable,
-                      aggregation_method=method)
+                              start_time=start_time,
+                              end_time=end_time,
+                              out='_out' in variable,
+                              aggregation_method=method)
         if '_x' in variable:
-            result = flows[:,1]
+            result = flows[:, 1]
         elif '_y' in variable:
-            result = flows[:,2]
+            result = flows[:, 2]
         else:
             raise Exception('Unknown aggregation variable "{}".'.format(variable))
     else:
@@ -271,7 +272,6 @@ def hybrid_time_aggregate(gr,
     result *= multiplier
 
     return result
-
 
 
 def empty_raster_from_vector_layer(layer, pixel_size_x, pixel_size_y, bands=1, nodatavalue=-9999):
@@ -312,42 +312,94 @@ def flowline_angle_x(lines):
     return np.arctan2(delta[:, 1], delta[:, 0])  # results in counter-clockwise values from -pi to pi
 
 
-def rasterize_point_layer(point_layer, column_name, pixel_size, pre_resample_method):
-    """
-    Rasterize a point layer
-    """
-
-    tmp_drv = ogr.GetDriverByName('SQLite')
-    tmp_fn = '/vsimem/resample_point_inputs.sqlite'
-    tmp_ds = tmp_drv.CreateDataSource(tmp_fn)
-    tmp_lyr = tmp_ds.CopyLayer(src_layer=point_layer, new_name='points')
-
-    # Apply Pre-Resample Method
-    if pre_resample_method == PRM_NONE: # no processing before resampling (e.g. for water levels, velocities); divide by 1
-        prm_factor = '1'
-    elif pre_resample_method == PRM_SPLIT: # split the original value over the new pixels
-        prm_factor = '(sqrt(ST_Area(geom)) / tgt_cell_size)*(sqrt(ST_Area(geom)) / tgt_cell_size)'
-    elif pre_resample_method == PRM_1D: # for flows (q) in x or y direction: scale with pixel resolution; divide by (res_old/res_new)
-        prm_factor = '(sqrt(ST_Area(geom)) / tgt_cell_size)'
+def rasterize_cell_layer(cell_layer, column_name, pixel_size, interpolation_method=None, pre_resample_method=PRM_NONE):
+    non_interpolated_ds = empty_raster_from_vector_layer(layer=cell_layer,
+                                               pixel_size_x=pixel_size,
+                                               pixel_size_y=pixel_size
+                                               )
+    gdal.RasterizeLayer(dataset=non_interpolated_ds,
+                        bands=[1],
+                        layer=cell_layer,
+                        options=['ATTRIBUTE=' + column_name])
+    if interpolation_method is None:
+        return non_interpolated_ds
     else:
-        raise Exception('Unknown pre-resample method')
+        mask_band = non_interpolated_ds.GetRasterBand(1)
+        mask_array = mask_band.ReadAsArray()
 
-    sql="""UPDATE points SET {col} = {col}/{factor}""".format(col=column_name, factor=prm_factor)
-    tmp_ds.ExecuteSQL(sql, dialect='SQLITE')
+        tmp_drv = ogr.GetDriverByName('ESRI Shapefile')
+        tmp_fn = '/vsimem/point.shp'
+        tmp_ds = tmp_drv.CreateDataSource(tmp_fn)
+        srs = cell_layer.GetSpatialRef()
+        tmp_lyr = tmp_ds.CreateLayer('point', srs, ogr.wkbPoint)
 
-    xmin, xmax, ymin, ymax = point_layer.GetExtent()
-    raster_x_size = (xmax - xmin) / pixel_size
-    raster_y_size = (ymax - ymin) / pixel_size
+        # Add input Layer Fields to the output Layer
+        field_defn = ogr.FieldDefn('val', ogr.OFTReal)
+        tmp_lyr.CreateField(field_defn)
 
-    grid_ds = gdal.Grid('tmp_rast', tmp_fn, format='MEM',
-                     outputType=gdal.GDT_Float32, layers=['points'],
-                     algorithm='linear', zfield=column_name, width=raster_x_size, height=raster_y_size)
+        # Get the output Layer's Feature Definition
+        out_layer_defn = tmp_lyr.GetLayerDefn()
 
-    return grid_ds
+        # Add features to the output Layer
+        for i in range(0, cell_layer.GetFeatureCount()):
+            # Get the input Feature
+            in_feature = cell_layer.GetFeature(i)
+
+            # Create output Feature
+            out_feature = ogr.Feature(out_layer_defn)
+
+            # Set geometry as centroid
+            geom = in_feature.GetGeometryRef()
+            centroid = geom.Centroid()
+            out_feature.SetGeometry(centroid)
+
+            # Apply Pre-Resample Method
+            in_value = in_feature.GetField(column_name)
+            in_cell_size = np.sqrt(in_feature.GetGeometryRef().Area())
+            if pre_resample_method == PRM_NONE:  # no processing before resampling (e.g. for water levels,
+                                                 # velocities); divide by 1
+                out_value = in_value
+            elif pre_resample_method == PRM_SPLIT:  # split the original value over the new pixels
+                out_value = in_value / (in_cell_size / pixel_size)**2
+            elif pre_resample_method == PRM_1D:  # for flows (q) in x or y direction: scale with pixel resolution;
+                                                 # divide by (res_old/res_new)
+                out_value = in_value / (in_cell_size / pixel_size)
+            else:
+                raise Exception('Unknown pre-resample method')
+
+            # Add field values from input Layer
+            out_feature.SetField('val', out_value)
+
+            # Add new feature to output Layer
+            tmp_lyr.CreateFeature(out_feature)
+
+        tmp_lyr.SyncToDisk()
+
+        xmin, xmax, ymin, ymax = cell_layer.GetExtent()
+        raster_x_size = (xmax - xmin) / pixel_size
+        raster_y_size = (ymax - ymin) / pixel_size
+        output_bounds = [xmin, ymax, xmax, ymin]
+        interpolated_ds = gdal.Grid('tmp_rast',
+                              tmp_fn,
+                              format='MEM',
+                              outputType=gdal.GDT_Float32,
+                              # layers=['point'],
+                              algorithm=interpolation_method,
+                              zfield='val',
+                              width=raster_x_size,
+                              height=raster_y_size,
+                              outputBounds=output_bounds,
+                              noData=-9999)
+        interpolated_band = interpolated_ds.GetRasterBand(1)
+        interpolated_array = interpolated_band.ReadAsArray()
+        interpolated_array[mask_array == -9999] = -9999
+        interpolated_ds.GetRasterBand(1).WriteArray(interpolated_array)
+        interpolated_ds.GetRasterBand(1).SetNoDataValue(-9999)
+        gdal.Unlink(tmp_fn)
+    return interpolated_ds
 
 
 def pixels_to_geoms(raster: gdal.Dataset, column_names, output_geom_type, output_layer_name: str):
-
     """
     Convert a single or multiband raster to a point or polygon layer.
 
@@ -382,8 +434,8 @@ def pixels_to_geoms(raster: gdal.Dataset, column_names, output_geom_type, output
         ring_ytop_origin = ymax
         ring_ybottom_origin = ymax + pixel_size_y
     elif output_geom_type == ogr.wkbPoint:
-        first_col_x = xmin + pixel_size_x/2.0
-        first_row_y = ymax + pixel_size_y/2.0
+        first_col_x = xmin + pixel_size_x / 2.0
+        first_row_y = ymax + pixel_size_y / 2.0
     else:
         raise Exception('Invalid output geometry type. Choose one of [ogr.wkbPoint, ogr.wkbPolygon].')
 
@@ -392,9 +444,10 @@ def pixels_to_geoms(raster: gdal.Dataset, column_names, output_geom_type, output
     out_data_source = out_driver.CreateDataSource('')
     srs = osr.SpatialReference()
     srs.ImportFromWkt(raster.GetProjection())
-    out_layer = out_data_source.CreateLayer(output_layer_name, srs, geom_type=output_geom_type )
+    out_layer = out_data_source.CreateLayer(output_layer_name, srs, geom_type=output_geom_type)
 
     band_arrays = []
+    ndv = []
 
     for i, attr_name in enumerate(column_names, start=1):
         band = raster.GetRasterBand(i)
@@ -419,6 +472,7 @@ def pixels_to_geoms(raster: gdal.Dataset, column_names, output_geom_type, output
 
         band_array_i = band.ReadAsArray()
         band_arrays.append(band_array_i)
+        ndv.append(band.GetNoDataValue())
 
     feature_defn = out_layer.GetLayerDefn()
 
@@ -442,15 +496,14 @@ def pixels_to_geoms(raster: gdal.Dataset, column_names, output_geom_type, output
 
             # fill field values, checking if at least one isn't nodata
             any_valid_val = False
-            for i, field in enumerate(column_names, start=1):
-                band = raster.GetRasterBand(i)
-                ndv = band.GetNoDataValue()
-                val = band.ReadAsArray(xoff=countcols-1, yoff=countrows-1, win_xsize=1, win_ysize=1)
-                if val is None or val == ndv:
-                    val = -9999
+            for i, field in enumerate(column_names):
+                val = band_arrays[i][countrows - 1, countcols - 1]
+                if val is None:
+                    val = ndv[i]
                 else:
                     val = val.item()
-                    any_valid_val = True
+                    if val != ndv[i]:
+                        any_valid_val = True
                 out_feature.SetField(field, val)
 
             if any_valid_val:
@@ -467,12 +520,10 @@ def pixels_to_geoms(raster: gdal.Dataset, column_names, output_geom_type, output
                     geom.AddGeometry(ring)
                 elif output_geom_type == ogr.wkbPoint:
                     geom.AddPoint(x, y)
-
                 out_feature.SetGeometry(geom)
 
                 # create feature
                 out_layer.CreateFeature(out_feature)
-                out_feature = None
 
             # new envelope for next poly
             if output_geom_type == ogr.wkbPolygon:
@@ -488,7 +539,6 @@ def pixels_to_geoms(raster: gdal.Dataset, column_names, output_geom_type, output
         elif output_geom_type == ogr.wkbPoint:
             x += pixel_size_x
 
-    srs=None
     return out_data_source
 
 
@@ -562,7 +612,8 @@ def flow_per_node(gr: GridH5ResultAdmin, node_ids: list, start_time: int, end_ti
     # if there are any nodes without flowlinks, they will have been missed so far
     linkless_node_ids = node_ids[np.logical_not(np.in1d(node_ids, start_node_ids_unique))]
     if linkless_node_ids.ndim > 0 and linkless_node_ids.size > 0:
-        linkless_node_zeroflow = np.c_[linkless_node_ids, np.zeros([linkless_node_ids.size, 2])] #can't use hstack here to add a (x,2)-shaped array to a (x)-shaped array
+        linkless_node_zeroflow = np.c_[linkless_node_ids, np.zeros(
+            [linkless_node_ids.size, 2])]  # can't use hstack here to add a (x,2)-shaped array to a (x)-shaped array
         in_or_out_flow = np.vstack([in_or_out_flow, linkless_node_zeroflow])
 
     in_or_out_flow = in_or_out_flow[in_or_out_flow[:, 0].argsort()]  # sort by first column, i.e., node id
@@ -984,24 +1035,12 @@ def threedigrid_to_ogr(threedigrid_src, tgt_ds, attributes: dict, attr_data_type
             out_layer.CreateFeature(feature)
             feature = None
 
-    return # tgt_ds
-
-
-def rasterize_cell_layer(cell_layer, column_name, min_cell_size):
-    gdal_mem_layer = empty_raster_from_vector_layer(layer=cell_layer,
-                                                    pixel_size_x=min_cell_size,
-                                                    pixel_size_y=min_cell_size
-                                                    )
-    gdal.RasterizeLayer(dataset=gdal_mem_layer,
-                        bands=[1],
-                        layer=cell_layer,
-                        options=['ATTRIBUTE=' + column_name])
-    return gdal_mem_layer
+    return  # tgt_ds
 
 
 def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggregations: list,
-                              bbox=None, start_time: int = None, end_time: int = None, subsets=None, epsg: int = 28992, 
-                              resample_point_layer: bool = False, resolution: float = None):
+                              bbox=None, start_time: int = None, end_time: int = None, subsets=None, epsg: int = 28992,
+                              interpolation_method: str = None, resolution: float = None):
     """
 
     :param gridadmin: path to gridadmin.h5
@@ -1046,7 +1085,7 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                 raise Exception('No nodes found within bounding box.')
 
         new_column_name = demanded_aggregation_as_column_name(da)
-        if da['variable'] in AGGREGATION_VARIABLES.short_names(var_type=VT_FLOW):
+        if da['variable'] in AGGREGATION_VARIABLES.short_names(var_types=[VT_FLOW]):
             if first_pass_flowlines:
                 line_results['id'] = lines.id.astype(int)
                 if gr.has_1d:
@@ -1054,15 +1093,15 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                     line_results['spatialite_id'] = lines.content_pk
                 first_pass_flowlines = False
             line_results[new_column_name] = time_aggregate(nodes_or_lines=lines,
-                                                               start_time=start_time,
-                                                               end_time=end_time,
-                                                               variable=da['variable'],
-                                                               sign=da['sign'],
-                                                               method=da['method'],
-                                                               threshold=da['threshold'],
-                                                               multiplier=da['multiplier']
-                                                               )
-        elif da['variable'] in AGGREGATION_VARIABLES.short_names(var_type=VT_NODE):
+                                                           start_time=start_time,
+                                                           end_time=end_time,
+                                                           variable=da['variable'],
+                                                           sign=da['sign'],
+                                                           method=da['method'],
+                                                           threshold=da['threshold'],
+                                                           multiplier=da['multiplier']
+                                                           )
+        elif da['variable'] in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE]):
             if first_pass_nodes:
                 node_results['id'] = nodes.id.astype(int)
                 if gr.has_1d:
@@ -1077,7 +1116,7 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                                                            threshold=da['threshold'],
                                                            multiplier=da['multiplier']
                                                            )
-        elif da['variable'] in AGGREGATION_VARIABLES.short_names(var_type=VT_NODE_HYBRID):
+        elif da['variable'] in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE_HYBRID]):
             if first_pass_nodes:
                 node_results['id'] = nodes.id.astype(int)
                 if gr.has_1d:
@@ -1114,24 +1153,24 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
         # rasters
         cell_layer = tgt_ds.GetLayerByName('cell')
         if cell_layer.GetFeatureCount() > 0:
+            first_pass_rasters = True
             if resolution is None:
                 resolution = gr.grid.dx[0]
-            sql = 'SELECT * FROM node'
-            if gr.has_1d:
-                sql += ' WHERE spatialite_id = 0'
-            points_2d = tgt_ds.ExecuteSQL(sql)
             column_names = []
-            first_pass_rasters = True
             band_nr = 0
-            for col in node_results.keys():
-                if col not in ['id', 'spatialite_id', 'content_type']:
+            # for col in node_results.keys():
+            for da in demanded_aggregations:
+                if da['variable'] in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE, VT_NODE_HYBRID]):
+                    col = demanded_aggregation_as_column_name(da)
                     band_nr += 1
-                    agg_var_str=col.split('_')[0]
-                    agg_var = AGGREGATION_VARIABLES.get_by_short_name(agg_var_str)
-                    out_rasters[col] = rasterize_point_layer(point_layer=points_2d,
-                                                             column_name=col,
-                                                             pixel_size=resolution,
-                                                             pre_resample_method=agg_var.pre_resample_method)
+                    agg_var = AGGREGATION_VARIABLES.get_by_short_name(da['variable'])
+                    prm=agg_var.pre_resample_method
+                    out_rasters[col] = rasterize_cell_layer(cell_layer=cell_layer,
+                                                            column_name=col,
+                                                            pixel_size=resolution,
+                                                            interpolation_method=interpolation_method,
+                                                            pre_resample_method=prm)
+                    ndv = out_rasters[col].GetRasterBand(1).GetNoDataValue()
                     column_names.append(col)
                     if first_pass_rasters:
                         first_pass_rasters = False
@@ -1142,8 +1181,8 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                         srs = osr.SpatialReference()
                         srs.ImportFromWkt(tmp_ds.GetProjection())
                         points_resampled_lyr = tgt_ds.CreateLayer('node_resampled',
-                                           srs=srs,
-                                           geom_type=ogr.wkbPoint)
+                                                                  srs=srs,
+                                                                  geom_type=ogr.wkbPoint)
                         field = ogr.FieldDefn(col, ogr.OFTReal)
                         points_resampled_lyr.CreateField(field)
                     else:
@@ -1152,6 +1191,7 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                         src_arr = src_band.ReadAsArray()
                         tmp_band = tmp_ds.GetRasterBand(band_nr)
                         tmp_band.WriteArray(src_arr)
+                        tmp_band.SetNoDataValue(src_band.GetNoDataValue())
                         field = ogr.FieldDefn(col, ogr.OFTReal)
                         points_resampled_lyr.CreateField(field)
 
@@ -1163,11 +1203,6 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
             for feat in tmp_points_resampled_lyr:
                 points_resampled_lyr.CreateFeature(feat)
                 feat = None
-            # drv = ogr.GetDriverByName('GPKG')
-            # tgtDS = drv.CreateDataSource('C:/Users/leendert.vanwolfswin/Documents/ongewoon.gpkg')
-            # tgtDS.CopyLayer(src_layer = points_resampled_lyr, new_name='test',
-            #                 options=['GEOMETRY_NAME=geom', 'OVERWRITE=YES']
-            #                 )
 
     # flowline layer
     if len(line_results) > 0:
@@ -1181,8 +1216,6 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
         threedigrid_to_ogr(threedigrid_src=lines, tgt_ds=tgt_ds, attributes=attributes, attr_data_types=attr_data_types)
 
     return tgt_ds, out_rasters
-
-
 
 
 def get_parser():

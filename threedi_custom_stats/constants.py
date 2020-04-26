@@ -12,6 +12,7 @@ PRM_NONE = 0  # no processing before resampling (e.g. for water levels, velociti
 PRM_SPLIT = 1  # split the original value over the new pixels; divide by (res_old/res_new)*2
 PRM_1D = 2  # for flows (q) in x or y direction: scale with pixel resolution; divide by (res_old/res_new)
 
+
 class AggregationList(list):
     def __init__(self):
         super().__init__()
@@ -26,17 +27,21 @@ class AggregationList(list):
                     result[var.long_name] = var.short_name
         return result
 
-    def short_names(self, var_type=None):
+    def short_names(self, var_types=None):
         result = list()
         for var in self:
-            if var.var_type == var_type or var_type is None:
+            if var.var_type is None:
+                result.append(var.short_name)
+            elif var.var_type in var_types:
                 result.append(var.short_name)
         return result
 
-    def long_names(self, var_type=None):
+    def long_names(self, var_types=None):
         result = list()
         for var in self:
-            if var.var_type == var_type or var_type is None:
+            if var.var_type is None:
+                result.append(var.long_name)
+            elif var.var_type in var_types:
                 result.append(var.long_name)
         return result
 
@@ -52,7 +57,8 @@ class AggregationList(list):
 
 
 class AggregationVariable:
-    def __init__(self, short_name, long_name, signed: bool, applicable_methods: list, var_type:int, units:dict, can_resample:bool, pre_resample_method: int = PRM_NONE):
+    def __init__(self, short_name, long_name, signed: bool, applicable_methods: list, var_type: int, units: dict,
+                 can_resample: bool, pre_resample_method: int = PRM_NONE):
         self.short_name = short_name
         self.long_name = long_name
         self.signed = signed
@@ -72,6 +78,7 @@ class AggregationMethod:
         self.integrates_over_time = integrates_over_time
         self.is_percentage = is_percentage
         self.var_type = None
+
 
 # Variable types
 VT_FLOW = 0
@@ -112,7 +119,7 @@ ALL_AGG_METHODS_NO_SUM.remove('sum')
 
 # Aggregation variables
 agg_var_list = [
-    {'short_name': 'q', 'long_name':'Discharge', 'signed':True, 'applicable_methods':ALL_AGG_METHODS, 'var_type':VT_FLOW, 'units': {('m3', 's'): (1, 1)}, 'can_resample':False, 'pre_resample_method':PRM_NONE},
+    {'short_name': 'q', 'long_name': 'Discharge', 'signed': True, 'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_FLOW, 'units': {('m3', 's'): (1, 1)}, 'can_resample':False, 'pre_resample_method':PRM_NONE},
     {'short_name': 'u', 'long_name':'Velocity', 'signed':True, 'applicable_methods':ALL_AGG_METHODS_NO_SUM, 'var_type':VT_FLOW, 'units':{('m', 's'):(1, 1)}, 'can_resample':False, 'pre_resample_method':PRM_NONE},
     # NOT YET IMPLEMENTED (MY CODE) {'short_name': 'au', 'long_name': 'Wet crosssectional area', 'signed': False,'applicable_methods': ALL_AGG_METHODS_NO_SUM, 'var_type': VT_FLOW, 'units':{('m2',):(1,)}, 'can_resample': False, 'pre_resample_method': PRM_NONE},
     # NOT YET IMPLEMENTED (MY CODE) {'short_name': 'qp', 'long_name': 'Discharge in interflow layer', 'signed': True, 'applicable_methods': ALL_AGG_METHODS,'var_type': VT_FLOW, 'units':{('m3','s'):(1,1)}, 'can_resample': False, 'pre_resample_method': PRM_NONE},
@@ -131,24 +138,36 @@ agg_var_list = [
     # DOESNT WORK (THREEDIGRID) {'short_name': 'ucy', 'long_name': 'Flow velocity in y direction at cell center', 'signed': True, 'applicable_methods': ALL_AGG_METHODS_NO_SUM, 'var_type': VT_NODE, 'units': {('m', 's'): (1, 1)}, 'can_resample': True, 'pre_resample_method': PRM_NONE},
     # NOT YET IMPLEMENTED (MY CODE) 'Flow direction in cell center': 'u_dir_cell', # moeilijk
     # 'Leakage' ???
-    {'short_name': 'q_lat', 'long_name': 'Lateral discharge', 'signed': True, 'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('m3','s'): (1, 1)}, 'can_resample': True, 'pre_resample_method': PRM_SPLIT},
-    {'short_name': 'q_lat_mm', 'long_name': 'Lateral discharge per m2', 'signed': True, 'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('mm', 's'): (1, 1),('mm', 'h'): (1, 3600)}, 'can_resample': True, 'pre_resample_method': PRM_NONE},
-    {'short_name': 'intercepted_volume', 'long_name': 'Intercepted volume', 'signed': False, 'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('m3',): (1,)}, 'can_resample': True, 'pre_resample_method': PRM_SPLIT},
-    {'short_name': 'intercepted_volume_mm', 'long_name': 'Intercepted volume per m2', 'signed': False, 'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('mm',): (1,)}, 'can_resample': True, 'pre_resample_method': PRM_NONE},
-    {'short_name': 'q_sss', 'long_name': 'Surface sources and sinks discharge', 'signed': True, 'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('m3','s'): (1, 1)}, 'can_resample': True, 'pre_resample_method': PRM_SPLIT},
-    {'short_name': 'q_sss_mm', 'long_name': 'Surface sources and sinks discharge per m2', 'signed': True, 'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('mm', 's'): (1, 1), ('mm', 'h'): (1, 3600)}, 'can_resample': True, 'pre_resample_method': PRM_NONE},
+    {'short_name': 'q_lat', 'long_name': 'Lateral discharge', 'signed': True,
+     'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('m3','s'): (1, 1)},
+     'can_resample': True, 'pre_resample_method': PRM_SPLIT},
+    {'short_name': 'q_lat_mm', 'long_name': 'Lateral discharge per m2', 'signed': True,
+     'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('mm', 's'): (1, 1), ('mm', 'h'): (1, 3600)},
+     'can_resample': True, 'pre_resample_method': PRM_NONE},
+    {'short_name': 'intercepted_volume', 'long_name': 'Intercepted volume', 'signed': False,
+     'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('m3',): (1,)},
+     'can_resample': True, 'pre_resample_method': PRM_SPLIT},
+    {'short_name': 'intercepted_volume_mm', 'long_name': 'Intercepted volume per m2', 'signed': False,
+     'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('mm',): (1,)},
+     'can_resample': True, 'pre_resample_method': PRM_NONE},
+    {'short_name': 'q_sss', 'long_name': 'Surface sources and sinks discharge', 'signed': True,
+     'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('m3', 's'): (1, 1)},
+     'can_resample': True, 'pre_resample_method': PRM_SPLIT},
+    {'short_name': 'q_sss_mm', 'long_name': 'Surface sources and sinks discharge per m2', 'signed': True,
+     'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE, 'units': {('mm', 's'): (1, 1), ('mm', 'h'): (1, 3600)},
+     'can_resample': True, 'pre_resample_method': PRM_NONE},
     {'short_name': 'q_in_x', 'long_name': 'Node inflow in x direction', 'signed': False,
      'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE_HYBRID, 'units': {('m3', 's'): (1, 1)},
-     'can_resample': True, 'pre_resample_method': PRM_SPLIT},
+     'can_resample': True, 'pre_resample_method': PRM_1D},
     {'short_name': 'q_in_y', 'long_name': 'Node inflow in y direction', 'signed': False,
      'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE_HYBRID, 'units': {('m3', 's'): (1, 1)},
-     'can_resample': True, 'pre_resample_method': PRM_SPLIT},
+     'can_resample': True, 'pre_resample_method': PRM_1D},
     {'short_name': 'q_out_x', 'long_name': 'Node outflow in x direction', 'signed': False,
      'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE_HYBRID, 'units': {('m3', 's'): (1, 1)},
-     'can_resample': True, 'pre_resample_method': PRM_SPLIT},
+     'can_resample': True, 'pre_resample_method': PRM_1D},
     {'short_name': 'q_out_y', 'long_name': 'Node outflow in y direction', 'signed': False,
      'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_NODE_HYBRID, 'units': {('m3', 's'): (1, 1)},
-     'can_resample': True, 'pre_resample_method': PRM_SPLIT}
+     'can_resample': True, 'pre_resample_method': PRM_1D}
 ]
 
 AGGREGATION_VARIABLES = AggregationList()
@@ -163,6 +182,6 @@ for var in agg_var_list:
 #
 # HYBRID_FLOWLINE_VARIABLES = {'Gradient': 'dhdx'}
 NA_TEXT = '[Not applicable]'
-DIRECTION_SIGNS = {'Positive':'pos', 'Negative':'neg','Absolute':'abs', 'Net':'net', NA_TEXT:''}
+DIRECTION_SIGNS = {'Positive': 'pos', 'Negative': 'neg','Absolute': 'abs', 'Net': 'net', NA_TEXT: ''}
 
 NON_TS_REDUCING_KCU = [3, 4, 51, 52, 53, 54, 55, 56, 57, 58, 150, 200, 300, 400, 500]

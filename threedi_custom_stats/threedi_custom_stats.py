@@ -249,6 +249,10 @@ class ThreeDiCustomStats:
 
             # Resample point layer
             resample_point_layer = self.dlg.checkBoxResample.isChecked()
+            if resample_point_layer:
+                interpolation_method = 'linear'
+            else:
+                interpolation_method = None
 
             self.iface.messageBar().pushMessage("Info",
                                                     "Started aggregating 3Di results",
@@ -263,7 +267,7 @@ class ThreeDiCustomStats:
                                                           start_time=start_time,
                                                           end_time=end_time,
                                                           subsets=subsets,
-                                                          resample_point_layer=resample_point_layer)
+                                                          interpolation_method=interpolation_method)
 
             # Add layers to layer tree
             # They are added in order so the raster is below the polygon is below the line is below the point layer
@@ -299,12 +303,13 @@ class ThreeDiCustomStats:
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
 
-            ogr_lyr = ogr_ds.GetLayerByName('node_resampled')
-            if ogr_lyr is not None:
-                if ogr_lyr.GetFeatureCount() > 0:
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
-                    project = QgsProject.instance()
-                    project.addMapLayer(qgs_lyr)
+            if resample_point_layer:
+                ogr_lyr = ogr_ds.GetLayerByName('node_resampled')
+                if ogr_lyr is not None:
+                    if ogr_lyr.GetFeatureCount() > 0:
+                        qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
+                        project = QgsProject.instance()
+                        project.addMapLayer(qgs_lyr)
 
             # Styling
             # style_fn = 'C:/Users/leendert.vanwolfswin/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins/threedi_custom_stats/style/flowmap.qml'
