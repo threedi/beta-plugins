@@ -8,6 +8,7 @@ import warnings
 from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 from threedigrid.admin.nodes.models import Nodes, Cells
 from threedigrid.admin.lines.models import Lines
+from threedigrid.admin.utils import KCUDescriptor
 
 import gdal
 import numpy as np
@@ -18,6 +19,18 @@ try:
     from constants import *
 except:
     from .constants import *
+
+KCU_DICT = KCUDescriptor()
+NODE_TYPE_DICT = {
+    1: '2D surface water',
+    2: '2D groundwater',
+    3: '1D without storage',
+    4: '1D with storage',
+    5: '2D surface water boundary',
+    6: '2D groundwater boundary',
+    7: '1D boundary'
+}
+
 
 warnings.filterwarnings('ignore')
 ogr.UseExceptions()
@@ -1040,14 +1053,17 @@ def threedigrid_to_ogr(threedigrid_src, tgt_ds, attributes: dict, attr_data_type
                 if attr_data_types[attr] in [ogr.OFTInteger]:
                     val = int(val)
                 if attr_data_types[attr] in [ogr.OFTString]:
-                    val = val.decode('utf-8')
+                    if type(val) == np.str_:
+                        val = str(val)
+                    else:
+                        val = val.decode('utf-8')
                 feature.SetField(attr, val)
 
             # create the actual feature
             out_layer.CreateFeature(feature)
             feature = None
 
-    return  # tgt_ds
+    return
 
 
 def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggregations: list,
@@ -1103,6 +1119,8 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                 if gr.has_1d:
                     line_results['content_type'] = lines.content_type
                     line_results['spatialite_id'] = lines.content_pk
+                line_results['kcu'] = lines.kcu
+                line_results['kcu_description'] = np.vectorize(KCU_DICT.get)(lines.kcu)
                 first_pass_flowlines = False
             line_results[new_column_name] = time_aggregate(nodes_or_lines=lines,
                                                            start_time=start_time,
@@ -1118,6 +1136,8 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                 node_results['id'] = nodes.id.astype(int)
                 if gr.has_1d:
                     node_results['spatialite_id'] = nodes.content_pk
+                node_results['node_type'] = nodes.node_type
+                node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
                 first_pass_nodes = False
             node_results[new_column_name] = time_aggregate(nodes_or_lines=nodes,
                                                            start_time=start_time,
@@ -1133,6 +1153,8 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                 node_results['id'] = nodes.id.astype(int)
                 if gr.has_1d:
                     node_results['spatialite_id'] = nodes.content_pk
+                node_results['node_type'] = nodes.node_type
+                node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
                 first_pass_nodes = False
             node_results[new_column_name] = hybrid_time_aggregate(gr=gr,
                                                                   ids=nodes.id,
