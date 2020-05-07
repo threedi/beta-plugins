@@ -123,6 +123,8 @@ def time_aggregate(nodes_or_lines, start_time, end_time, variable, method, sign=
         raw_values = ts.q
     elif variable == 'u':
         raw_values = ts.u1
+    elif variable == 'au':
+        raw_values = ts.au
     elif variable == 'ts_max':
         if hasattr(nodes_or_lines, 'line_geometries'):
             if nodes_or_lines.line_geometries.ndim == 0:
@@ -947,6 +949,16 @@ def demanded_aggregation_as_column_name(da):
         thres_parsed = str(da['threshold']).replace('.', '_')
         column_name_list.append(thres_parsed)
     return '_'.join(column_name_list).lower()
+
+
+def filter_demanded_aggregations(das, variable_types):
+    result = []
+    for da in das:
+        var_short_name = da['variable']
+        variable = AGGREGATION_VARIABLES.get_by_short_name(var_short_name)
+        if variable.var_type in variable_types:
+            result.append(da)
+    return result
 
 
 def threedigrid_to_ogr(threedigrid_src, tgt_ds, attributes: dict, attr_data_types: dict, epsg: int = 28992):

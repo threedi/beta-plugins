@@ -119,9 +119,15 @@ ALL_AGG_METHODS_NO_SUM.remove('sum')
 
 # Aggregation variables
 agg_var_list = [
-    {'short_name': 'q', 'long_name': 'Discharge', 'signed': True, 'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_FLOW, 'units': {('m3', 's'): (1, 1)}, 'can_resample':False, 'pre_resample_method':PRM_NONE},
-    {'short_name': 'u', 'long_name':'Velocity', 'signed':True, 'applicable_methods':ALL_AGG_METHODS_NO_SUM, 'var_type':VT_FLOW, 'units':{('m', 's'):(1, 1)}, 'can_resample':False, 'pre_resample_method':PRM_NONE},
-    # NOT YET IMPLEMENTED (MY CODE) {'short_name': 'au', 'long_name': 'Wet crosssectional area', 'signed': False,'applicable_methods': ALL_AGG_METHODS_NO_SUM, 'var_type': VT_FLOW, 'units':{('m2',):(1,)}, 'can_resample': False, 'pre_resample_method': PRM_NONE},
+    {'short_name': 'q', 'long_name': 'Discharge', 'signed': True,
+     'applicable_methods': ALL_AGG_METHODS, 'var_type': VT_FLOW, 'units': {('m3', 's'): (1, 1)},
+     'can_resample':False, 'pre_resample_method':PRM_NONE},
+    {'short_name': 'u', 'long_name':'Velocity', 'signed':True,
+     'applicable_methods':ALL_AGG_METHODS_NO_SUM, 'var_type': VT_FLOW, 'units': {('m', 's'): (1, 1)},
+     'can_resample':False, 'pre_resample_method':PRM_NONE},
+    {'short_name': 'au', 'long_name': 'Wet crosssectional area', 'signed': False,
+     'applicable_methods': ALL_AGG_METHODS_NO_SUM, 'var_type': VT_FLOW, 'units': {('m2',): (1,)},
+     'can_resample': False, 'pre_resample_method': PRM_NONE},
     # NOT YET IMPLEMENTED (MY CODE) {'short_name': 'qp', 'long_name': 'Discharge in interflow layer', 'signed': True, 'applicable_methods': ALL_AGG_METHODS,'var_type': VT_FLOW, 'units':{('m3','s'):(1,1)}, 'can_resample': False, 'pre_resample_method': PRM_NONE},
     # NOT YET IMPLEMENTED (MY CODE) {'short_name': 'up1', 'long_name': 'Velocity in interflow layer', 'signed': True,'applicable_methods': ALL_AGG_METHODS_NO_SUM,'var_type': VT_FLOW, 'units':{('m','s'):(1,1)}, 'can_resample': False, 'pre_resample_method': PRM_NONE},
     {'short_name': 'ts_max', 'long_name': 'Max. possible timestep', 'signed': False,'applicable_methods': ALL_AGG_METHODS_NO_SUM,'var_type': VT_FLOW, 'units':{('s'):(1,)}, 'can_resample': False, 'pre_resample_method': PRM_NONE},
