@@ -681,7 +681,7 @@
     </widget>
     <widget class="QComboBox" name="comboBoxFlowlinesStyleType">
      <property name="enabled">
-      <bool>false</bool>
+      <bool>true</bool>
      </property>
      <property name="geometry">
       <rect>
@@ -744,7 +744,7 @@
       <string>Cells</string>
      </property>
     </widget>
-    <widget class="QComboBox" name="comboBoxCellsStyleCol1">
+    <widget class="QComboBox" name="comboBoxCellsStyleCol">
      <property name="enabled">
       <bool>false</bool>
      </property>
@@ -757,7 +757,7 @@
       </rect>
      </property>
     </widget>
-    <widget class="QComboBox" name="comboBoxNodesStyleCol1">
+    <widget class="QComboBox" name="comboBoxNodesStyleCol">
      <property name="enabled">
       <bool>false</bool>
      </property>
@@ -770,7 +770,7 @@
       </rect>
      </property>
     </widget>
-    <widget class="QComboBox" name="comboBoxFlowlinesStyleCol1">
+    <widget class="QComboBox" name="comboBoxFlowlinesStyleCol">
      <property name="enabled">
       <bool>false</bool>
      </property>
@@ -781,19 +781,6 @@
        <width>191</width>
        <height>22</height>
       </rect>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pushButtonUpdate">
-     <property name="geometry">
-      <rect>
-       <x>90</x>
-       <y>250</y>
-       <width>93</width>
-       <height>28</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Update</string>
      </property>
     </widget>
     <widget class="QPushButton" name="pushButtonFlowlinesStyleConfig">
@@ -809,7 +796,7 @@
       <string>Choose columns...</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="pushButtonCellStyleConfig">
+    <widget class="QPushButton" name="pushButtonCellsStyleConfig">
      <property name="geometry">
       <rect>
        <x>290</x>
@@ -833,6 +820,32 @@
      </property>
      <property name="text">
       <string>Choose columns...</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_9">
+     <property name="geometry">
+      <rect>
+       <x>290</x>
+       <y>20</y>
+       <width>81</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Column(s):</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_10">
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>20</y>
+       <width>81</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Styling type:</string>
      </property>
     </widget>
    </widget>

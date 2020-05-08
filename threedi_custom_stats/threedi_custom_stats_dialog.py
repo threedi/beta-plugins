@@ -32,6 +32,7 @@ from qgis.core import Qgis, QgsProject, QgsCoordinateReferenceSystem
 from qgis.gui import QgsFileWidget
 
 from .ThreeDiResultAggregation import *
+from collections import namedtuple
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -39,6 +40,21 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 
 dialog_ui_fn = os.path.join(os.path.dirname(__file__), 'test_dialog.ui')
 
+#### Styling related declarations --------------------
+STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
+StyleType = namedtuple('StyleType', 'function qml')
+
+
+def style_on_single_column(layer, qml: str, column: str):
+    layer.loadNamedStyle(qml)
+    layer.renderer().setClassAttribute(column)
+    layer.renderer().updateClasses(vlayer=layer,
+                                   mode=layer.renderer().mode(),
+                                   nclasses=len(layer.renderer().ranges()))
+    layer.triggerRepaint()
+    return
+
+# --------------------
 
 class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
     def __init__(self, iface, parent=None):
@@ -53,6 +69,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.iface = iface
 
         self.gr = ''
+        self.demanded_aggregations = []
 
         self.pushButtonAddAggregation.clicked.connect(self.add_aggregation)
         self.pushButtonRemoveAggregation.clicked.connect(self.remove_aggregation)
@@ -70,11 +87,10 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.checkBoxGenerateRasters.stateChanged.connect(self.enable_raster_folder_widget)
         self.mQgsFileWidgetRasterFolder.setStorageMode(QgsFileWidget.GetDirectory)
         self.mQgsFileWidgetRasterFolder.fileChanged.connect(self.validate)
+
+        self.set_styling_tab()
+
         self.dialogButtonBoxOKCancel.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(False)
-
-        self.demanded_aggregations = []
-
-        self.pushButtonUpdate.clicked.connect(self.update_demanded_aggregations)
 
     def add_aggregation(self):
         """Add a new row to tableWidgetAggregations, always last row"""
@@ -123,7 +139,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                               method=method
                               )
         units_combobox.currentTextChanged.connect(self.units_combobox_text_changed)
-
+        self.update_demanded_aggregations()
         self.validate()
 
     def remove_aggregation(self):
@@ -212,6 +228,71 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 units_widget.addItem(units_str)
                 units_widget.setItemData(i, multiplier)
 
+    def set_styling_tab(self):
+        # Flowlines
+        self.comboBoxFlowlinesStyleType.clear()
+        self.comboBoxFlowlinesStyleCol.clear()
+        self.pushButtonFlowlinesStyleConfig.setVisible(False)
+        self.comboBoxFlowlinesStyleCol.setVisible(False)
+        filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_FLOW, VT_FLOW_HYBRID])
+        if len(filtered_das) > 0:
+            item_data = {'function': style_on_single_column, 'qml': os.path.join(STYLE_DIR, 'flowline.qml')}
+            self.comboBoxFlowlinesStyleType.addItem('Single column graduated')
+            self.comboBoxFlowlinesStyleType.setItemData(0, item_data)
+            self.comboBoxFlowlinesStyleType.setEnabled(True)
+            self.comboBoxFlowlinesStyleCol.setVisible(True)
+            self.comboBoxFlowlinesStyleCol.setEnabled(True)
+            for da in filtered_das:
+                column_name = demanded_aggregation_as_column_name(da)
+                if column_name is not None:
+                    self.comboBoxFlowlinesStyleCol.addItem(demanded_aggregation_as_column_name(da))
+        else:
+            self.comboBoxFlowlinesStyleType.setEnabled(False)
+            self.comboBoxFlowlinesStyleCol.setEnabled(False)
+
+        # Nodes
+        self.comboBoxNodesStyleType.clear()
+        self.comboBoxNodesStyleCol.clear()
+        self.pushButtonNodesStyleConfig.setVisible(False)
+        self.comboBoxNodesStyleCol.setVisible(False)
+        filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_NODE, VT_NODE_HYBRID])
+        if len(filtered_das) > 0:
+            item_data = {'function': style_on_single_column, 'qml': os.path.join(STYLE_DIR, 'node.qml')}
+            self.comboBoxNodesStyleType.addItem('Single column graduated')
+            self.comboBoxNodesStyleType.setItemData(0, item_data)
+            self.comboBoxNodesStyleType.setEnabled(True)
+            self.comboBoxNodesStyleCol.setVisible(True)
+            self.comboBoxNodesStyleCol.setEnabled(True)
+            for da in filtered_das:
+                column_name = demanded_aggregation_as_column_name(da)
+                if column_name is not None:
+                    self.comboBoxNodesStyleCol.addItem(demanded_aggregation_as_column_name(da))
+        else:
+            self.comboBoxNodesStyleType.setEnabled(False)
+            self.comboBoxNodesStyleCol.setEnabled(False)
+
+        # Cells
+        self.comboBoxCellsStyleType.clear()
+        self.comboBoxCellsStyleCol.clear()
+        self.pushButtonCellsStyleConfig.setVisible(False)
+        self.comboBoxCellsStyleCol.setVisible(False)
+        filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_NODE, VT_NODE_HYBRID])
+        if len(filtered_das) > 0:
+            item_data = {'function': style_on_single_column, 'qml': os.path.join(STYLE_DIR, 'cell.qml')}
+            self.comboBoxCellsStyleType.addItem('Single column graduated')
+            self.comboBoxCellsStyleType.setItemData(0, item_data)
+            self.comboBoxCellsStyleType.setEnabled(True)
+            self.comboBoxCellsStyleCol.setVisible(True)
+            self.comboBoxCellsStyleCol.setEnabled(True)
+            for da in filtered_das:
+                column_name = demanded_aggregation_as_column_name(da)
+                if column_name is not None:
+                    self.comboBoxCellsStyleCol.addItem(demanded_aggregation_as_column_name(da))
+        else:
+            self.comboBoxCellsStyleType.setEnabled(False)
+            self.comboBoxCellsStyleCol.setEnabled(False)
+
+
     def update_gr(self):
         results_3di = self.QgsFileWidget3DiResults.filePath()
         gridadmin = self.QgsFileWidgetGridAdmin.filePath()
@@ -284,14 +365,14 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
             # Threshold
             row_dict['threshold'] = self.tableWidgetAggregations.cellWidget(row, 3).value()
-            self.demanded_aggregations.append(row_dict)
 
             # Multiplier (unit conversion)
             units_widget = self.tableWidgetAggregations.cellWidget(row, 4)
             row_dict['multiplier'] = units_widget.itemData(units_widget.currentIndex())
+
             self.demanded_aggregations.append(row_dict)
 
-        # self.set_styling_tab()
+        self.set_styling_tab()
 
     # def set_styling_tab(self):
     #

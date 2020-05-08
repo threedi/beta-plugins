@@ -954,15 +954,17 @@ def ogr_connection(host, port, user, password, database, **kwargs):
 
 def demanded_aggregation_as_column_name(da):
     column_name_list = []
-    column_name_list.append(da['variable'])
-    if AGGREGATION_VARIABLES.get_by_short_name(da['variable']).signed:
-        column_name_list.append(da['sign'])
-    column_name_list.append(da['method'])
-    if da['method'] in ['above_thres', 'below_thres']:
-        thres_parsed = str(da['threshold']).replace('.', '_')
-        column_name_list.append(thres_parsed)
-    return '_'.join(column_name_list).lower()
-
+    try:
+        column_name_list.append(da['variable'])
+        if AGGREGATION_VARIABLES.get_by_short_name(da['variable']).signed:
+            column_name_list.append(da['sign'])
+        column_name_list.append(da['method'])
+        if da['method'] in ['above_thres', 'below_thres']:
+            thres_parsed = str(da['threshold']).replace('.', '_')
+            column_name_list.append(thres_parsed)
+        return '_'.join(column_name_list).lower()
+    except KeyError:
+        return None
 
 def filter_demanded_aggregations(das, variable_types):
     result = []

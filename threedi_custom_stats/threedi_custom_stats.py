@@ -37,8 +37,6 @@ from .resources import *
 from .threedi_custom_stats_dialog import ThreeDiCustomStatsDialog
 import os.path
 
-STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
-
 # TODO: cfl strictness factors instelbaar maken
 # TODO: berekening van max timestep ook op basis van volume vs. debiet
 # TODO: Presets definiëren:
@@ -46,9 +44,13 @@ STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
 # - Verbindingen die meer dan 80% van de tijd een tijdstap van 5 seconden onmogelijk maken
 # - Minipijltjes
 # - Waterbalans per rekennode
+# - Max peilstijging (max - first)
 # TODO: opties af laten hangen van wat er in het model aanwezig is
 # TODO: styling automatisch laten toepassen
 # - Fase 2: styling kiesbaar maken
+
+# TODO: dit weghalen als het helemaal is verplaatst naar _dialog.py
+STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
 
 
 def style_on_single_column(layer, qml: str, column: str):
@@ -286,12 +288,12 @@ class ThreeDiCustomStats:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: cells')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    filtered_das = filter_demanded_aggregations(das=self.dlg.demanded_aggregations,
-                                                                variable_types=[VT_NODE, VT_NODE_HYBRID])
-                    style_column = demanded_aggregation_as_column_name(filtered_das[0])
-                    style_on_single_column(layer=qgs_lyr,
-                                           qml=os.path.join(STYLE_DIR, 'cell.qml'),
-                                           column=style_column)
+                    style_column = self.dlg.comboBoxCellsStyleCol.currentText()
+                    style_function = self.dlg.comboBoxCellsStyleType.currentData()['function']
+                    qml = self.dlg.comboBoxCellsStyleType.currentData()['qml']
+                    style_function(layer=qgs_lyr,
+                                   qml=qml,
+                                   column=style_column)
 
                     # raster layer
                     if self.dlg.checkBoxGenerateRasters.isChecked():
@@ -310,12 +312,12 @@ class ThreeDiCustomStats:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: flowlines')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    filtered_das = filter_demanded_aggregations(das=self.dlg.demanded_aggregations,
-                                                                variable_types=[VT_FLOW, VT_FLOW_HYBRID])
-                    style_column = demanded_aggregation_as_column_name(filtered_das[0])
-                    style_on_single_column(layer=qgs_lyr,
-                                           qml=os.path.join(STYLE_DIR, 'flowline.qml'),
-                                           column=style_column)
+                    style_column = self.dlg.comboBoxFlowlinesStyleCol.currentText()
+                    style_function = self.dlg.comboBoxFlowlinesStyleType.currentData()['function']
+                    qml = self.dlg.comboBoxFlowlinesStyleType.currentData()['qml']
+                    style_function(layer=qgs_lyr,
+                                   qml=qml,
+                                   column=style_column)
 
             ogr_lyr = ogr_ds.GetLayerByName('node')
             if ogr_lyr is not None:
@@ -323,12 +325,12 @@ class ThreeDiCustomStats:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: nodes')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    filtered_das = filter_demanded_aggregations(das=self.dlg.demanded_aggregations,
-                                                                variable_types=[VT_NODE, VT_NODE_HYBRID])
-                    style_column = demanded_aggregation_as_column_name(filtered_das[0])
-                    style_on_single_column(layer=qgs_lyr,
-                                           qml=os.path.join(STYLE_DIR, 'node.qml'),
-                                           column=style_column)
+                    style_column = self.dlg.comboBoxNodesStyleCol.currentText()
+                    style_function = self.dlg.comboBoxNodesStyleType.currentData()['function']
+                    qml = self.dlg.comboBoxNodesStyleType.currentData()['qml']
+                    style_function(layer=qgs_lyr,
+                                   qml=qml,
+                                   column=style_column)
 
             if resample_point_layer:
                 ogr_lyr = ogr_ds.GetLayerByName('node_resampled')
@@ -337,12 +339,12 @@ class ThreeDiCustomStats:
                         qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
                         project = QgsProject.instance()
                         project.addMapLayer(qgs_lyr)
-                        filtered_das = filter_demanded_aggregations(das=self.dlg.demanded_aggregations,
-                                                                    variable_types=[VT_NODE, VT_NODE_HYBRID])
-                        style_column = demanded_aggregation_as_column_name(filtered_das[0])
-                        style_on_single_column(layer=qgs_lyr,
-                                               qml=os.path.join(STYLE_DIR, 'node.qml'),
-                                               column=style_column)
+                        style_column = self.dlg.comboBoxNodesStyleCol.currentText()
+                        style_function = self.dlg.comboBoxNodesStyleType.currentData()['function']
+                        qml = self.dlg.comboBoxNodesStyleType.currentData()['qml']
+                        style_function(layer=qgs_lyr,
+                                       qml=qml,
+                                       column=style_column)
 
             self.iface.messageBar().pushMessage("Success",
                                                 "Finished custom aggregation",
