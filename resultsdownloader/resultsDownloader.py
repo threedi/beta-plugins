@@ -29,11 +29,13 @@ MESSAGE_CATEGORY = 'downloadtask'
 
 LIZARD_URL = "https://demo.lizard.net/api/v3/"
 RESULT_LIMIT = 10
+REQUESTS_HEADERS = {}
 
 log = logging.getLogger()
 
 SCENARIO_FILTERS = {
-    "name": "name__icontains",
+    "name": "name",
+    "name__icontains": "name__icontains",
     "uuid": "uuid",
     "id": "id",
     "model_revision": "model_revision",
@@ -56,8 +58,9 @@ class downloadtask(QgsTask):
     @staticmethod
     def get_raster(scenario_uuid, raster_code,REQUESTS_HEADERS):
         """return json of raster based on scenario uuid and raster type"""
+     
         r = requests.get(
-            url="{}scenarios/{}".format(LIZARD_URL, scenario_uuid), headers=REQUESTS_HEADERS
+            url="{}scenarios/{}".format(LIZARD_URL, scenario_uuid), headers=get_headers()
         )
         r.raise_for_status()
         for result in r.json()["result_set"]:
@@ -67,28 +70,26 @@ class downloadtask(QgsTask):
     @staticmethod
     def create_raster_task(raster, target_srs, resolution, REQUESTS_HEADERS, bounds=None, time=None):
         """create Lizard raster task"""
-
         if bounds == None:
             bounds = raster["spatial_bounds"]
-
+            bounds_srs = "EPSG:4326"
+      
         e = bounds["east"]
         w = bounds["west"]
         n = bounds["north"]
         s = bounds["south"]
-
-        source_srs = "EPSG:4326"
-
+      
         bbox = "POLYGON(({} {},{} {},{} {},{} {},{} {}))".format(
             w, n, e, n, e, s, w, s, w, n
         )
-
+      
         url = "{}rasters/{}/data/".format(LIZARD_URL, raster["uuid"])
         if time is None:
             # non temporal raster
             payload = {
                 "cellsize": resolution,
                 "geom": bbox,
-                "srs": source_srs,
+                "srs": bounds_srs,
                 "target_srs": target_srs,
                 "format": "geotiff",
                 "async": "true",
@@ -98,13 +99,13 @@ class downloadtask(QgsTask):
             payload = {
                 "cellsize": resolution,
                 "geom": bbox,
-                "srs": source_srs,
+                "srs": bounds_srs,
                 "target_srs": target_srs,
                 "time": time,
                 "format": "geotiff",
                 "async": "true",
             }
-        r = requests.get(url=url, headers=REQUESTS_HEADERS, params=payload)
+        r = requests.get(url=url, headers=get_headers(), params=payload)
         r.raise_for_status()
         return r.json()
 
@@ -112,26 +113,34 @@ class downloadtask(QgsTask):
     def get_task_status(task_uuid,REQUESTS_HEADERS):
         """return status of task"""
         url = "{}tasks/{}/".format(LIZARD_URL, task_uuid)
-        r = requests.get(url=url, headers=REQUESTS_HEADERS)
-        r.raise_for_status()
-        return r.json()["task_status"]
+        try:
+            r = requests.get(url=url, headers=get_headers())
+            r.raise_for_status()
+            return r.json()["task_status"]
+        except:
+            return "UNKNOWN"
 
     @staticmethod
-    def get_task_download_url(task_uuid,REQUESTS_HEADERS):
-        """return url of successful task"""
+    def get_task_status(task_uuid):
+        """return status of task"""
         url = "{}tasks/{}/".format(LIZARD_URL, task_uuid)
-        r = requests.get(url=url, headers=REQUESTS_HEADERS)
-        r.raise_for_status()
-        return r.json()["result_url"]
+        try:
+            r = requests.get(url=url, headers=get_headers())
+            r.raise_for_status()
+            return r.json()["task_status"]
+        except:
+            return "UNKNOWN"
 
     @staticmethod
-    def download_file(url, path,REQUESTS_HEADERS):
+    def download_file(url, path):
         """download url to specified path"""
         logging.debug("Start downloading file: {}".format(url))
-        r = requests.get(url, auth=(REQUESTS_HEADERS["username"], REQUESTS_HEADERS["password"]))
+        r = requests.get(
+            url, auth=(get_headers()["username"], get_headers()["password"]), stream=True
+        )
         r.raise_for_status()
         with open(path, "wb") as file:
-            for chunk in r.iter_content(100000):
+            for chunk in r.iter_content(1024 * 1024 * 10):
                 file.write(chunk)
 
     def run(self):
@@ -139,25 +148,38 @@ class downloadtask(QgsTask):
                                   MESSAGE_CATEGORY, Qgis.Info)
         for raster_code in self.rasters:
             raster = self.get_raster(self.scenarioUUID, raster_code,self.REQUESTS_HEADERS)
-            task = self.create_raster_task(raster, self.downloadProjection, self.cellSize, self.REQUESTS_HEADERS, None, None)
+            task = self.create_raster_task(
+            raster,
+            self.downloadProjection,
+            self.cellSize,
+            self.REQUESTS_HEADERS
+            )
             task_uuid = task["task_id"]
+
             log.debug("Start waiting for task {} to finish".format(task_uuid))
-            while self.get_task_status(task_uuid,REQUESTS_HEADERS) == "PENDING":
+            task_status = get_task_status(task_uuid)
+            while (
+                task_status == "PENDING"
+                or task_status == "UNKNOWN"
+                or task_status == "STARTED"
+                or task_status == "RETRY"
+            ):
                 sleep(5)
                 log.debug("Still waiting for task {}".format(task_uuid))
+                task_status = self.get_task_status(task_uuid)
                 if self.isCanceled():
                     return False
 
 
-            if self.get_task_status(task_uuid,REQUESTS_HEADERS) == "SUCCESS":
+            if self.get_task_status(task_uuid) == "SUCCESS":
                 # task is a succes, return download url
                 log.debug(
                     "Task succeeded, start downloading url: {}".format(
-                        self.get_task_download_url(task_uuid,REQUESTS_HEADERS)
+                        get_task_download_url(task_uuid)
                     )
                 )
-                download_url = self.get_task_download_url(task_uuid,REQUESTS_HEADERS)
-                self.download_file(download_url, os.path.join(self.rasterDirectory,raster_code+'.tif'),self.REQUESTS_HEADERS)
+                download_url = get_task_download_url(task_uuid)
+                self.download_file(download_url, os.path.join(self.rasterDirectory,raster_code+'.tif'))
             else:
                 log.debug("Task failed")
             if self.isCanceled():
@@ -374,7 +396,8 @@ class resultsDownloader:
             key = static_rasters[i]["name_3di"]
             value = static_rasters[i]["code_3di"]
             self.raster_code_dict[key]=value
-            self.raster_wms_dict[key]=static_rasters[i]["code_wms"]
+            self.raster_wms_dict[key]=static_rasters[i]["wms_info"]["layer"]
+            self
         raster_names = []
         for key in self.raster_code_dict:
             raster_names.append(key)
