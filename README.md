@@ -19,3 +19,4 @@ Afterwards you should open QGIS, go to plugin manager, installed plugins, and ac
 - import_hydx: imports a GWSW Hydx dataset to a 3Di model.
 - resultsdownloader: Searches for 3Di simulation results and facilitates downloading/visualising these
 - threediresultstyler: Adds functionality like adding a styled DEM, areal photo's, saving/loading settings in the Layer menu (visibility, expanded groups and filters) and showing Courant numbers of the calculated results.
+- pipelevelcalculator: Calculate pipe levels based on a design and DEM.
