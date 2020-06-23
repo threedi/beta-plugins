@@ -1055,10 +1055,10 @@ def threedigrid_to_ogr(threedigrid_src, tgt_ds, attributes: dict, attr_data_type
                 if attr_data_types[attr] in [ogr.OFTInteger]:
                     val = int(val)
                 if attr_data_types[attr] in [ogr.OFTString]:
-                    if type(val) == np.str_:
-                        val = str(val)
-                    else:
+                    if type(val) == bytes:
                         val = val.decode('utf-8')
+                    else:
+                        val = str(val)
                 feature.SetField(attr, val)
 
             # create the actual feature
