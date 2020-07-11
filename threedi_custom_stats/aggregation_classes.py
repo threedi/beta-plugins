@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 # Pre resample methods
 PRM_NONE = 0  # no processing before resampling (e.g. for water levels, velocities); divide by 1
@@ -122,3 +122,12 @@ class Aggregation:
             return '_'.join(column_name_list).lower()
         except AttributeError:
             return None
+
+
+def filter_demanded_aggregations(das: List[Aggregation], variable_types):
+    result = []
+    for da in das:
+        if da.variable.var_type in variable_types:
+            result.append(da)
+    return result
+

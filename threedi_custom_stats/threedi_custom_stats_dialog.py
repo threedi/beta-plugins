@@ -37,6 +37,7 @@ from qgis.gui import QgsFileWidget
 
 from .threedi_result_aggregation import *
 from .presets import *
+
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'threedi_custom_stats_dialog_base.ui'))
@@ -74,9 +75,13 @@ def style_as_vector(layer, qml: str, x: str, y: str):
     layer.renderer().sourceSymbol().setDataDefinedAngle(data_defined_angle)
     layer.triggerRepaint()
 
+
 def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str):
     layer.loadNamedStyle(qml)
+    filter_expression = '{col1} >10 or {col2} > 50 or {col3} > 80'.format(col1=col1, col2=col2, col3=col3)
+    layer.renderer().rootRule().children()[0].setFilterExpression(filterExp=filter_expression)
     layer.triggerRepaint()
+
 
 def update_column_widget(self, demanded_aggregations, aggregation_variable_types: list):
     self.clear()
@@ -123,7 +128,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
         for preset in PRESETS:
             self.comboBoxPreset.addItem(preset.name)
-            self.comboBoxPreset.setItemData(self.comboBoxPreset.count()-1, preset)
+            self.comboBoxPreset.setItemData(self.comboBoxPreset.count() - 1, preset)
         self.comboBoxPreset.currentIndexChanged.connect(self.preset_combobox_changed)
 
         for widget in self.flowline_styling_widgets:
@@ -343,7 +348,6 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
         self.comboBoxFlowlinesStyleType.currentIndexChanged.connect(self.flowline_styling_type_changed)
 
-
         # Nodes style type combobox
         item_data = {'function': style_on_single_column,
                      'kwargs_getter': self.get_nodes_style_col1_value,
@@ -377,7 +381,8 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.comboBoxFlowlinesStyleCol1.update = MethodType(update_column_widget, self.comboBoxFlowlinesStyleCol1)
         self.comboBoxFlowlinesStyleCol2.update = MethodType(update_column_widget, self.comboBoxFlowlinesStyleCol2)
         self.comboBoxFlowlinesStyleCol3.update = MethodType(update_column_widget, self.comboBoxFlowlinesStyleCol3)
-        self.pushButtonFlowlinesStyleConfig.update = MethodType(update_column_widget, self.pushButtonFlowlinesStyleConfig)
+        self.pushButtonFlowlinesStyleConfig.update = MethodType(update_column_widget,
+                                                                self.pushButtonFlowlinesStyleConfig)
         self.comboBoxNodesStyleCol1.update = MethodType(update_column_widget, self.comboBoxNodesStyleCol1)
         self.comboBoxNodesStyleCol2.update = MethodType(update_column_widget, self.comboBoxNodesStyleCol2)
         self.pushButtonNodesStyleConfig.update = MethodType(update_column_widget, self.pushButtonNodesStyleConfig)
@@ -435,7 +440,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             relevant_widgets = type_widget.itemData(type_widget.currentIndex())['widgets']
             for i, widget in enumerate(relevant_widgets):
                 widget.update(demanded_aggregations=self.demanded_aggregations,
-                              aggregation_variable_types=[VT_FLOW,VT_FLOW_HYBRID])
+                              aggregation_variable_types=[VT_FLOW, VT_FLOW_HYBRID])
                 widget.setCurrentIndex(i)
                 widget.setVisible(True)
                 widget.setEnabled(True)
@@ -452,7 +457,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             relevant_widgets = type_widget.itemData(type_widget.currentIndex())['widgets']
             for i, widget in enumerate(relevant_widgets):
                 widget.update(demanded_aggregations=self.demanded_aggregations,
-                              aggregation_variable_types=[VT_NODE,VT_NODE_HYBRID])
+                              aggregation_variable_types=[VT_NODE, VT_NODE_HYBRID])
                 widget.setCurrentIndex(i)
                 widget.setVisible(True)
                 widget.setEnabled(True)
@@ -469,7 +474,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             relevant_widgets = type_widget.itemData(type_widget.currentIndex())['widgets']
             for i, widget in enumerate(relevant_widgets):
                 widget.update(demanded_aggregations=self.demanded_aggregations,
-                              aggregation_variable_types=[VT_NODE,VT_NODE_HYBRID])
+                              aggregation_variable_types=[VT_NODE, VT_NODE_HYBRID])
                 widget.setCurrentIndex(i)
                 widget.setVisible(True)
                 widget.setEnabled(True)
@@ -493,7 +498,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             if os.path.isfile(gridadmin):
                 self.QgsFileWidgetGridAdmin.setFilePath(gridadmin)
                 self.update_gr()
-                output_timestep_best_guess=int(self.gr.nodes.timestamps[-1]/(len(self.gr.nodes.timestamps)-1))
+                output_timestep_best_guess = int(self.gr.nodes.timestamps[-1] / (len(self.gr.nodes.timestamps) - 1))
                 self.doubleSpinBoxStartTime.setMaximum(int(self.gr.nodes.timestamps[-1]))
                 self.doubleSpinBoxStartTime.setSingleStep(output_timestep_best_guess)
                 self.doubleSpinBoxEndTime.setSingleStep(output_timestep_best_guess)
@@ -513,7 +518,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
     def set_extent_from_map_canvas(self):
         canvas_extent = self.iface.mapCanvas().extent()
         project = QgsProject.instance()
-        crs=project.crs()
+        crs = project.crs()
         self.mExtentGroupBox.setOutputExtentFromUser(canvas_extent, crs)
         # self.mExtentGroupBox.setCurrentExtent()
 
@@ -526,6 +531,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def preset_combobox_changed(self, index):
         preset = self.comboBoxPreset.itemData(index)
+        self.presetHelpTextBrowser.setText(preset.description)
         self.apply_preset(preset)
 
     def apply_preset(self, preset: Preset):
@@ -547,7 +553,6 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
     def update_demanded_aggregations(self):
         self.demanded_aggregations = []
         for row in range(self.tableWidgetAggregations.rowCount()):
-
             # Variable
             variable_widget = self.tableWidgetAggregations.cellWidget(row, 0)
             variable = variable_widget.itemData(variable_widget.currentIndex())
@@ -593,4 +598,3 @@ class StylingConfigDialog(QtWidgets.QDialog):
         super(StylingConfigDialog, self).__init__(parent)
         uic.loadUi(dialog_ui_fn, self)
         self.show()
-

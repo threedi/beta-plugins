@@ -291,9 +291,9 @@ def flowline_angle_x(lines):
 
 def rasterize_cell_layer(cell_layer, column_name, pixel_size, interpolation_method=None, pre_resample_method=PRM_NONE):
     non_interpolated_ds = empty_raster_from_vector_layer(layer=cell_layer,
-                                               pixel_size_x=pixel_size,
-                                               pixel_size_y=pixel_size
-                                               )
+                                                         pixel_size_x=pixel_size,
+                                                         pixel_size_y=pixel_size
+                                                         )
     gdal.RasterizeLayer(dataset=non_interpolated_ds,
                         bands=[1],
                         layer=cell_layer,
@@ -334,12 +334,12 @@ def rasterize_cell_layer(cell_layer, column_name, pixel_size, interpolation_meth
             in_value = in_feature.GetField(column_name)
             in_cell_size = np.sqrt(in_feature.GetGeometryRef().Area())
             if pre_resample_method == PRM_NONE:  # no processing before resampling (e.g. for water levels,
-                                                 # velocities); divide by 1
+                # velocities); divide by 1
                 out_value = in_value
             elif pre_resample_method == PRM_SPLIT:  # split the original value over the new pixels
-                out_value = in_value / (in_cell_size / pixel_size)**2
+                out_value = in_value / (in_cell_size / pixel_size) ** 2
             elif pre_resample_method == PRM_1D:  # for flows (q) in x or y sign: scale with pixel resolution;
-                                                 # divide by (res_old/res_new)
+                # divide by (res_old/res_new)
                 out_value = in_value / (in_cell_size / pixel_size)
             else:
                 raise Exception('Unknown pre-resample method')
@@ -357,16 +357,16 @@ def rasterize_cell_layer(cell_layer, column_name, pixel_size, interpolation_meth
         raster_y_size = (ymax - ymin) / pixel_size
         output_bounds = [xmin, ymax, xmax, ymin]
         interpolated_ds = gdal.Grid('tmp_rast',
-                              tmp_fn,
-                              format='MEM',
-                              outputType=gdal.GDT_Float32,
-                              # layers=['point'],
-                              algorithm=interpolation_method,
-                              zfield='val',
-                              width=raster_x_size,
-                              height=raster_y_size,
-                              outputBounds=output_bounds,
-                              noData=-9999)
+                                    tmp_fn,
+                                    format='MEM',
+                                    outputType=gdal.GDT_Float32,
+                                    # layers=['point'],
+                                    algorithm=interpolation_method,
+                                    zfield='val',
+                                    width=raster_x_size,
+                                    height=raster_y_size,
+                                    outputBounds=output_bounds,
+                                    noData=-9999)
         interpolated_band = interpolated_ds.GetRasterBand(1)
         interpolated_array = interpolated_band.ReadAsArray()
         interpolated_array[mask_array == -9999] = -9999
@@ -598,329 +598,6 @@ def flow_per_node(gr: GridH5ResultAdmin, node_ids: list, start_time: int, end_ti
     in_or_out_flow = in_or_out_flow[in_or_out_flow[:, 0].argsort()]  # sort by first column, i.e., node id
     # select only the requested nodes
     result = select_from_2d_array_where_col_x_in(array_2d=in_or_out_flow, col_nr=0, values=node_ids)
-    return result
-
-
-def enrich_mini_arrows(mini_arrows, cell_size):
-    # calculate resultant of q
-    resultant = np.sqrt(np.square(mini_arrows[:, 1]) + np.square(mini_arrows[:, 2]))
-
-    # calculate the azimuth of the resultant (radians)
-    azimuth = np.arctan2(mini_arrows[:, 1], mini_arrows[:, 2])  # results in clockwise values from -pi to pi
-    azimuth[azimuth < 0] += 2 * np.pi  # clockwise values from 0 to 2pi
-
-    # calculate the outflow in mm
-    outflow_mm = ((resultant * 1000) / (cell_size ** 2)).astype('float32')
-    outflow_x_mm = (mini_arrows[:, 1] * 1000) / (cell_size ** 2)
-    outflow_y_mm = (mini_arrows[:, 2] * 1000) / (cell_size ** 2)
-
-    # calculate the percentile of the flow
-    # print(outflow_mm.shape[0])
-    # print(outflow_mm)
-    # print(outflow_mm.argsort())
-    ranks = np.argsort(np.argsort(outflow_mm))
-    percentile = ranks / float((outflow_mm.shape[0]) - 1)
-
-    # concatenate the columns
-    result = np.c_[mini_arrows,
-                   resultant,
-                   azimuth,
-                   outflow_mm,
-                   outflow_x_mm,
-                   outflow_y_mm,
-                   percentile]
-
-    return result
-
-
-def xy_abc2rast(xy_abc, pixel_size_x, pixel_size_y, nodatavalue, epsg=28992, where='center'):
-    """ Convert nd array to a gdal raster Dataset, where columns a,b,c..n will be placed in separate bands
-        :param epsg: epsg code
-        :param xy_abc: numpy ndarray (dtype float32) of shape nrow = n, ncol >= 3. \
-                    col #0 = x ordinate, \
-                    col #1 = y ordinate, \
-                    col #2..n = value (a,b,c)
-        :param pixel_size_x: x resolution of the output raster
-        :param pixel_size_y: y resolution of the output raster
-        :param nodatavalue: nodata-value of the output raster
-        :param where: 'center' or 'upperLeft' to indicate what point in the pixel the xy coordinates represent
-        :return osgeo.gdal.Dataset
-    """
-    xmin = np.min(xy_abc[:, 0])
-    xmax = np.max(xy_abc[:, 0])
-    ymin = np.min(xy_abc[:, 1])
-    ymax = np.max(xy_abc[:, 1])
-    width = int((xmax - xmin) / pixel_size_x + 1)
-    height = int((ymax - ymin) / pixel_size_y + 1)
-
-    # create output 2d array of required size, fill with nodata value
-    bandcount = xy_abc.shape[1] - 2
-
-    outarr = np.full([height, width, bandcount], nodatavalue, dtype='float32')
-
-    # write values from xyz to their location in the out array
-
-    for i in xy_abc:
-        x_idx = int((i[0] - xmin) / pixel_size_x)
-        y_idx = int((i[1] - ymin) / pixel_size_y)
-        for j in range(bandcount):
-            outarr[y_idx, x_idx, j] = i[j + 2]
-
-    # write out array to in-memory gdal raster
-    drv = gdal.GetDriverByName('MEM')
-    ds = drv.Create('', xsize=width, ysize=height, bands=1, eType=gdal.GDT_Float32)
-    # Set the geotransform using ds.SetGeoTransform where the argument is a six element tuple:
-    #    (upper_left_x, x_resolution, x_skew, upper_left_y, y_skew, y_resolution)
-    shift = -0.5
-    if where == 'upperLeft':
-        shift = 0.0
-    ds.SetGeoTransform((xmin + shift * pixel_size_x,
-                        pixel_size_x,
-                        0,
-                        ymax - shift * pixel_size_x,
-                        0,
-                        -1 * abs(pixel_size_y))
-                       )
-    raster_srs = osr.SpatialReference()
-    raster_srs.ImportFromEPSG(epsg)
-    ds.SetProjection(raster_srs.ExportToWkt())
-
-    for i in range(bandcount):
-        bandnr = i + 1
-        if bandnr > 1:
-            ds.AddBand(datatype=gdal.GDT_Float32)
-        ds.GetRasterBand(bandnr).WriteArray(np.flipud(outarr[:, :, i]))
-        ds.GetRasterBand(bandnr).SetNoDataValue(nodatavalue)
-
-    return ds
-
-
-def add_coordinates_as_bands(rast, where='center'):
-    geotransform = rast.GetGeoTransform()
-    indexgrid = np.mgrid[0:rast.RasterYSize, 0:rast.RasterXSize]  # [0,:,:] = y index, [1,:,:] = x index
-    shift = 0.5
-    if where == 'upperLeft':
-        shift = 0
-    x_ordinate = geotransform[0] + (indexgrid[1, :, :] + shift) * geotransform[1]
-    y_ordinate = geotransform[3] + (indexgrid[0, :, :] + shift) * geotransform[5]
-    nbands = rast.RasterCount
-
-    drv = gdal.GetDriverByName('MEM')
-    outrast = drv.CreateCopy('', rast)
-    outrast.AddBand(datatype=gdal.GDT_Float32)
-    outrast.GetRasterBand(nbands + 1).WriteArray(x_ordinate)
-    outrast.AddBand(datatype=gdal.GDT_Float32)
-    outrast.GetRasterBand(nbands + 2).WriteArray(y_ordinate)
-    return outrast
-
-
-def mini_arrows_to_ogr(src, tgt_layer, epsg=28992):
-    """ Write mini arrows numpy array (src) to ogr in-memory vector layer as point features with attributes
-    """
-
-    # create an output datasource in memory
-    tgt_drv = ogr.GetDriverByName('MEMORY')
-    tgt_ds = tgt_drv.CreateDataSource('')
-
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(epsg)
-
-    outLayer = tgt_ds.CreateLayer(tgt_layer,
-                                  srs,
-                                  geom_type=ogr.wkbPoint
-                                  )
-
-    # define fields
-    uIdField = ogr.FieldDefn("uid", ogr.OFTInteger)
-    outLayer.CreateField(uIdField)
-
-    nodeIdField = ogr.FieldDefn("node_id", ogr.OFTInteger)
-    outLayer.CreateField(nodeIdField)
-
-    q_m3Field = ogr.FieldDefn("outflow_m3", ogr.OFTReal)
-    outLayer.CreateField(q_m3Field)
-
-    q_mmField = ogr.FieldDefn("outflow_mm", ogr.OFTReal)
-    outLayer.CreateField(q_mmField)
-
-    q_x_mmField = ogr.FieldDefn("outflow_x_mm", ogr.OFTReal)
-    outLayer.CreateField(q_x_mmField)
-
-    q_y_mmField = ogr.FieldDefn("outflow_y_mm", ogr.OFTReal)
-    outLayer.CreateField(q_y_mmField)
-
-    azimuthField = ogr.FieldDefn("azimuth", ogr.OFTReal)
-    outLayer.CreateField(azimuthField)
-
-    percentileField = ogr.FieldDefn("percentile", ogr.OFTReal)
-    outLayer.CreateField(percentileField)
-
-    # Create the feature and set values
-    featureDefn = outLayer.GetLayerDefn()
-
-    for i in range(src.shape[0]):
-        uid = i + 1
-        node_id = src[i, 0]
-        outflow_m3_i = src[i, 5]
-        azimuth_i = src[i, 6]
-        outflow_mm_i = src[i, 7]
-        outflow_x_mm_i = src[i, 8]
-        outflow_y_mm_i = src[i, 9]
-        percentile_i = src[i, 10]
-
-        shape = ogr.Geometry(ogr.wkbPoint)
-        shape.SetPoint(0, src[i, 3], src[i, 4])
-
-        feature = ogr.Feature(featureDefn)
-        feature.SetGeometry(shape)
-        feature.SetField("uid", uid)
-        feature.SetField("node_id", node_id)
-        feature.SetField("outflow_m3", outflow_m3_i)
-        feature.SetField("outflow_mm", outflow_mm_i)
-        feature.SetField("outflow_x_mm", outflow_x_mm_i)
-        feature.SetField("outflow_y_mm", outflow_y_mm_i)
-        feature.SetField("azimuth", azimuth_i)
-        feature.SetField("percentile", percentile_i)
-
-        outLayer.CreateFeature(feature)
-        feature = None
-
-    return tgt_ds
-
-
-def ogr_connection(host, port, user, password, database, **kwargs):
-    ogr_conn = ("PG:host={} port={} user='{}'"
-                "password='{}' dbname='{}'").format(host,
-                                                    port,
-                                                    user,
-                                                    password,
-                                                    database)
-    return ogr.Open(ogr_conn)
-
-
-# def make_mini_arrows(gr, tgt_layer, bbox=None, start_time=0, end_time=None):
-#     """ Calculate the resultant of the total outflow per node, resampled to grid_space
-#         :param tgt_layer: name of the resulting layer
-#         :param gr: threedigrid GridH5ResultAdmin object
-#         :param bbox: bounding box: list of [LowerLeftX, LowerLeftY, UpperRightX, UpperRightY] for filtering or None for
-#         no filtering
-#         :param start_time: start time (seconds after start of simulation).
-#         :param end_time: end time (seconds after start of simulation). None for 'end of simulation'
-#     """
-#
-#     lines_2d = gr.lines.subset('2D_OPEN_WATER')
-#     nodes_2d = gr.nodes.subset('2D_OPEN_WATER')
-#
-#     # Select 2D nodes and flowlinks in bbox
-#     if bbox is not None:
-#         if not (bbox[0] < bbox[2]) and (bbox[1] < bbox[3]):
-#             raise Exception('Invalid bounding box.')
-#         lines_2d = lines_2d.filter(line_coords__in_bbox=bbox)
-#         if lines_2d.count == 0:
-#             raise Exception('No 2d flowlines found within bounding box.')
-#         nodes_2d = nodes_2d.filter(coordinates__in_bbox=bbox)
-#         if nodes_2d.count == 0:
-#             raise Exception('No 2d nodes found within bounding box.')
-#
-#     # Calculate mini arrows
-#     outflow = flow_per_node(lines_2d, start_time=start_time, end_time=end_time)
-#     # if there are any 2d open water nodes without flowlinks, there will be a shape mismatch between 'outflow' and nodes
-#     linkless_node_ids = nodes_2d.id[np.logical_not(np.in1d(nodes_2d.id, outflow[:, 0]))]
-#     zeroes = np.zeros(linkless_node_ids.size * 2).reshape(2, linkless_node_ids.size)
-#     linkless_node_outflow = np.c_[linkless_node_ids, zeroes.T]
-#     outflow = np.vstack([outflow, linkless_node_outflow])
-#     outflow = outflow[outflow[:, 0].argsort()]  # sort by first column, i.e., node id
-#     mini_arrows = np.c_[outflow, nodes_2d.data['coordinates'].T]
-#     # Calculate cell size per node
-#     cell_sizes = gr.grid.dx
-#     coordinates = nodes_2d.data['cell_coords']
-#     dx = coordinates[2, :] - coordinates[0, :]
-#
-#     # Process nodes by cell size
-#     first_pass = True
-#     for i, cell_size in enumerate(cell_sizes):
-#         if cell_size in dx:  # if bbox is used, the selected data may not contain all cell sizes in the model
-#             cells_size_i_idx = np.where(dx == cell_size)  # indices of the nodes that have cell size i
-#             cells_size_i_ids = nodes_2d.id[cells_size_i_idx]  # ids of the nodes that have cell size i
-#
-#             # select q_2d_cum_out_x_sum and q_2d_cum_out_y_sum for the ids in this set
-#             # this works because mini_arrows array and nodes_2d.data are both sorted by id
-#             mini_arrows_i = mini_arrows[np.in1d(mini_arrows[:, 0], cells_size_i_ids), :]
-#             if first_pass:  # no resampling required for smallest cell size
-#                 mini_arrows_resampled = mini_arrows_i
-#                 first_pass = False
-#             elif i > 0:
-#                 # resample to grid_space
-#                 mini_arrows_i_resampled = resample_mini_arrows(mini_arrows_i, src_cell_size=cell_size,
-#                                                                tgt_cell_size=cell_sizes[0])
-#                 # add to the existing result set
-#                 mini_arrows_resampled = np.vstack([mini_arrows_resampled, mini_arrows_i_resampled])
-#
-#     rich_arrows = enrich_mini_arrows(mini_arrows_resampled, cell_size=cell_sizes[0])
-#     mem_mini_arrows = mini_arrows_to_ogr(src=rich_arrows, tgt_layer=tgt_layer)
-#
-#     return mem_mini_arrows
-
-#
-# def MiniArrowsIO(GridAdminH5, Results3DiNetCDF, tgtLayer, tgtFileName=None, host=None, port=5432, database=None,
-#                  user=None, password=None, **kwargs):
-#     # Make a GridH5ResultAdmin object
-#     gr = GridH5ResultAdmin(GridAdminH5, Results3DiNetCDF)
-#
-#     kwargs['tgtLayer'] = tgtLayer
-#     kwargs['gr'] = gr
-#     # kwargs['bbox'] = bbox
-#     # kwargs['start_time'] = start_time
-#     # kwargs['end_time'] = end_time
-#
-#     # Determine output format and location
-#     if tgtFileName is None:  # case: result must be written to database
-#         tgtDS = ogr_connection(host=host, port=port, user=user, password=password,
-#                                database=database)  # will raise exception if connection details are incorrect
-#         if tgtDS is None:
-#             raise Exception(
-#                 'Could not establish connection with database with connection details: host={h}, port={p}, user={u}, '
-#                 'database={d}'.format(
-#                     h=host, p=port, u=user, d=database))
-#         tgtDS.ExecuteSQL('CREATE EXTENSION IF NOT EXISTS postgis;')
-#         if len(tgtLayer.split('.')) > 1:
-#             tgtDS.ExecuteSQL('CREATE SCHEMA IF NOT EXISTS {};'.format(tgtLayer.split('.')[0]))
-#
-#     else:  # case: result must be written to file
-#         if not (host is None and database is None and user is None and password is not None):
-#             print('Notice: tgtFileName specified, database connection parameters are ignored.')
-#         extension = tgtFileName.split('.')[-1].lower()
-#         extensionMapping = get_extension_mapping(vector=True, raster=False, create_capability=True)
-#         tgtDriverName = extensionMapping[extension]
-#         tgtDriver = ogr.GetDriverByName(tgtDriverName)
-#         tgtDS = tgtDriver.CreateDataSource(tgtFileName)
-#
-#     # Make miniArrows
-#     print('Calculating mini arrows...')
-#     mem_mini_arrows = make_mini_arrows(**kwargs)
-#
-#     # open layer
-#     print('Writing mini arrows to target file or database...')
-#     srcLayer = mem_mini_arrows.GetLayer(tgtLayer)
-#     outLayer = tgtDS.CopyLayer(src_layer=srcLayer, new_name=tgtLayer,
-#                                options=['GEOMETRY_NAME=geom', 'OVERWRITE=YES', 'PGSQL_OGR_FID=uid',
-#                                         'PG_USE_COPY=YES']
-#                                )
-#
-#     # materialize layer
-#     outLayer = None
-#     tgtDS = None
-#     srcLayer = None
-#
-#     print('Successfully created mini arrows.')
-#     return 0
-
-
-def filter_demanded_aggregations(das: List[Aggregation], variable_types):
-    result = []
-    for da in das:
-        if da.variable.var_type in variable_types:
-            result.append(da)
     return result
 
 
