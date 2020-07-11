@@ -28,7 +28,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 from qgis.core import Qgis, QgsProject, QgsRasterLayer
 
-from .ThreeDiResultAggregation import *
+from .threedi_result_aggregation import *
 from .ogr2qgis import *
 
 # Initialize Qt resources from file resources.py
@@ -47,20 +47,7 @@ import os.path
 # - Max peilstijging (max - first)
 # TODO: opties af laten hangen van wat er in het model aanwezig is
 # TODO: styling automatisch laten toepassen
-# - Fase 2: styling kiesbaar maken
-
-# TODO: dit weghalen als het helemaal is verplaatst naar _dialog.py
-STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
-
-
-def style_on_single_column(layer, qml: str, column: str):
-    layer.loadNamedStyle(qml)
-    layer.renderer().setClassAttribute(column)
-    layer.renderer().updateClasses(vlayer=layer,
-                                   mode=layer.renderer().mode(),
-                                   nclasses=len(layer.renderer().ranges()))
-    layer.triggerRepaint()
-    return
+# - Fase 3: fancy stylings toevoegen
 
 
 class ThreeDiCustomStats:
@@ -288,12 +275,12 @@ class ThreeDiCustomStats:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: cells')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    style_column = self.dlg.comboBoxCellsStyleCol.currentText()
+                    style_kwargs = self.dlg.comboBoxCellsStyleType.currentData()['kwargs_getter']()
                     style_function = self.dlg.comboBoxCellsStyleType.currentData()['function']
                     qml = self.dlg.comboBoxCellsStyleType.currentData()['qml']
-                    style_function(layer=qgs_lyr,
-                                   qml=qml,
-                                   column=style_column)
+                    style_function(qgs_lyr,
+                                   qml,
+                                   **style_kwargs)
 
                     # raster layer
                     if self.dlg.checkBoxGenerateRasters.isChecked():
@@ -312,12 +299,12 @@ class ThreeDiCustomStats:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: flowlines')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    style_column = self.dlg.comboBoxFlowlinesStyleCol.currentText()
+                    style_kwargs = self.dlg.comboBoxFlowlinesStyleType.currentData()['kwargs_getter']()
                     style_function = self.dlg.comboBoxFlowlinesStyleType.currentData()['function']
                     qml = self.dlg.comboBoxFlowlinesStyleType.currentData()['qml']
-                    style_function(layer=qgs_lyr,
-                                   qml=qml,
-                                   column=style_column)
+                    style_function(qgs_lyr,
+                                   qml,
+                                   **style_kwargs)
 
             ogr_lyr = ogr_ds.GetLayerByName('node')
             if ogr_lyr is not None:
@@ -325,12 +312,12 @@ class ThreeDiCustomStats:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: nodes')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    style_column = self.dlg.comboBoxNodesStyleCol.currentText()
+                    style_kwargs = self.dlg.comboBoxNodesStyleType.currentData()['kwargs_getter']()
                     style_function = self.dlg.comboBoxNodesStyleType.currentData()['function']
                     qml = self.dlg.comboBoxNodesStyleType.currentData()['qml']
-                    style_function(layer=qgs_lyr,
-                                   qml=qml,
-                                   column=style_column)
+                    style_function(qgs_lyr,
+                                   qml,
+                                   **style_kwargs)
 
             if resample_point_layer:
                 ogr_lyr = ogr_ds.GetLayerByName('node_resampled')
@@ -339,12 +326,12 @@ class ThreeDiCustomStats:
                         qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
                         project = QgsProject.instance()
                         project.addMapLayer(qgs_lyr)
-                        style_column = self.dlg.comboBoxNodesStyleCol.currentText()
+                        style_kwargs = self.dlg.comboBoxNodesStyleType.currentData()['kwargs_getter']()
                         style_function = self.dlg.comboBoxNodesStyleType.currentData()['function']
                         qml = self.dlg.comboBoxNodesStyleType.currentData()['qml']
-                        style_function(layer=qgs_lyr,
-                                       qml=qml,
-                                       column=style_column)
+                        style_function(qgs_lyr,
+                                       qml,
+                                       **style_kwargs)
 
             self.iface.messageBar().pushMessage("Success",
                                                 "Finished custom aggregation",

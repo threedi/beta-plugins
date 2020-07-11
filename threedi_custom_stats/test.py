@@ -1,4 +1,4 @@
-from ThreeDiResultAggregation import *
+from threedi_result_aggregation import *
 # from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 
 # ga='C:\\Users\\leendert.vanwolfswin\\Documents\\sloterplas\\Sloterplas_vulkaanuitbarsting\\gridadmin.h5'
