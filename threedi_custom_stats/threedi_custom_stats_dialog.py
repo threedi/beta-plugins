@@ -32,11 +32,12 @@ from qgis.PyQt import QtWidgets
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QPersistentModelIndex
 from qgis.PyQt.QtCore import Qt
-from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsMarkerSymbol
+from qgis.core import QgsProject, QgsCoordinateReferenceSystem
 from qgis.gui import QgsFileWidget
 
 from .threedi_result_aggregation import *
 from .presets import *
+from .style import *
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -49,39 +50,6 @@ DEFAULT_AGGREGATION = Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_na
                                   method=AGGREGATION_METHODS.get_by_short_name('sum')
                                   )
 
-#### Styling related declarations --------------------
-STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
-StyleType = namedtuple('StyleType', 'function qml')
-
-
-def style_on_single_column(layer, qml: str, column: str):
-    layer.loadNamedStyle(qml)
-    layer.renderer().setClassAttribute(column)
-    layer.renderer().updateClasses(vlayer=layer,
-                                   mode=layer.renderer().mode(),
-                                   nclasses=len(layer.renderer().ranges()))
-    layer.triggerRepaint()
-
-
-def style_as_vector(layer, qml: str, x: str, y: str):
-    layer.loadNamedStyle(qml)
-    class_attribute_string = 'sqrt("{x}" * "{x}" + "{y}" * "{y}")'.format(x=x, y=y)
-    layer.renderer().setClassAttribute(class_attribute_string)
-    layer.renderer().updateClasses(vlayer=layer,
-                                   mode=layer.renderer().mode(),
-                                   nclasses=len(layer.renderer().ranges()))
-    rotation_expression = 'degrees(azimuth( make_point( 0,0), make_point( "{x}",  "{y}" )))'.format(x=x, y=y)
-    data_defined_angle = QgsMarkerSymbol().dataDefinedAngle().fromExpression(rotation_expression)
-    layer.renderer().sourceSymbol().setDataDefinedAngle(data_defined_angle)
-    layer.triggerRepaint()
-
-
-def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str):
-    layer.loadNamedStyle(qml)
-    filter_expression = '{col1} >10 or {col2} > 50 or {col3} > 80'.format(col1=col1, col2=col2, col3=col3)
-    layer.renderer().rootRule().children()[0].setFilterExpression(filterExp=filter_expression)
-    layer.triggerRepaint()
-
 
 def update_column_widget(self, demanded_aggregations, aggregation_variable_types: list):
     self.clear()
@@ -90,9 +58,8 @@ def update_column_widget(self, demanded_aggregations, aggregation_variable_types
         column_name = da.as_column_name()
         if column_name is not None:
             self.addItem(da.as_column_name())
+    self.addItem('')
 
-
-# --------------------
 
 class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
     def __init__(self, iface, parent=None):
@@ -108,35 +75,11 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
         self.gr = ''
         self.demanded_aggregations = []
-        self.flowline_styling_widgets = [
-            self.comboBoxFlowlinesStyleCol1,
-            self.comboBoxFlowlinesStyleCol2,
-            self.comboBoxFlowlinesStyleCol3,
-            self.pushButtonFlowlinesStyleConfig
-        ]
-
-        self.node_styling_widgets = [
-            self.comboBoxNodesStyleCol1,
-            self.comboBoxNodesStyleCol2,
-            self.pushButtonNodesStyleConfig
-        ]
-
-        self.cell_styling_widgets = [
-            self.comboBoxCellsStyleCol1,
-            self.pushButtonCellsStyleConfig
-        ]
 
         for preset in PRESETS:
             self.comboBoxPreset.addItem(preset.name)
             self.comboBoxPreset.setItemData(self.comboBoxPreset.count() - 1, preset)
         self.comboBoxPreset.currentIndexChanged.connect(self.preset_combobox_changed)
-
-        for widget in self.flowline_styling_widgets:
-            widget.setVisible(False)
-        for widget in self.node_styling_widgets:
-            widget.setVisible(False)
-        for widget in self.cell_styling_widgets:
-            widget.setVisible(False)
 
         self.pushButtonAddAggregation.clicked.connect(self.add_aggregation)
         self.pushButtonRemoveAggregation.clicked.connect(self.remove_aggregation)
@@ -147,13 +90,10 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
 
         self.QgsFileWidget3DiResults.fileChanged.connect(self.results_3di_selected)
+        self.QgsFileWidgetGridAdmin.fileChanged.connect(self.gridadmin_selected)
         self.pushButtonMapCanvas.clicked.connect(self.set_extent_from_map_canvas)
         self.set_extent_from_map_canvas()
         self.mExtentGroupBox.setChecked(False)
-
-        self.checkBoxGenerateRasters.stateChanged.connect(self.enable_raster_folder_widget)
-        self.mQgsFileWidgetRasterFolder.setStorageMode(QgsFileWidget.GetDirectory)
-        self.mQgsFileWidgetRasterFolder.fileChanged.connect(self.validate)
 
         self.init_styling_tab()
         self.set_styling_tab()
@@ -305,179 +245,154 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 units_widget.addItem(units_str)
                 units_widget.setItemData(i, multiplier)
 
-    def get_flowlines_style_col1_value(self):
-        return {'column': self.comboBoxFlowlinesStyleCol1.currentText()}
-
-    def get_flowlines_style_3_column_values(self):
-        return {'col1': self.comboBoxFlowlinesStyleCol1.currentText(),
-                'col2': self.comboBoxFlowlinesStyleCol2.currentText(),
-                'col3': self.comboBoxFlowlinesStyleCol3.currentText()
-                }
-
-    def get_nodes_style_col1_value(self):
-        return {'column': self.comboBoxNodesStyleCol1.currentText()}
-
-    def get_nodes_style_vector_values(self):
-        return {'x': self.comboBoxNodesStyleCol1.currentText(),
-                'y': self.comboBoxNodesStyleCol2.currentText()
-                }
-
-    def get_cells_style_col1_value(self):
-        return {'column': self.comboBoxCellsStyleCol1.currentText()}
+    def get_styling_parameters(self, output_type):
+        if output_type == 'node':
+            params_widget = self.tableWidgetNodesStyleParams
+        elif output_type == 'flowline':
+            params_widget = self.tableWidgetFlowlinesStyleParams
+        elif output_type == 'cell':
+            params_widget = self.tableWidgetCellsStyleParams
+        else:
+            raise ValueError('Invalid output type. Choose one of [node, flowline, cell].')
+        result = {}
+        for row in range(params_widget.rowCount()):
+            result[params_widget.item(row, 0).text()] = params_widget.cellWidget(row, 1).currentText()
+        return result
 
     def init_styling_tab(self):
-        # Flowlines style type combobox
-        item_data = {'function': style_on_single_column,
-                     'kwargs_getter': self.get_flowlines_style_col1_value,
-                     'qml': os.path.join(STYLE_DIR, 'flowline.qml'),
-                     'widgets': [self.comboBoxFlowlinesStyleCol1]
-                     }
-        self.comboBoxFlowlinesStyleType.addItem('Single column graduated')
-        self.comboBoxFlowlinesStyleType.setItemData(0, item_data)
+        for style in STYLES:
+            if style.output_type == 'flowline':
+                type_widget = self.comboBoxFlowlinesStyleType
+            elif style.output_type == 'node':
+                type_widget = self.comboBoxNodesStyleType
+            elif style.output_type == 'cell':
+                type_widget = self.comboBoxCellsStyleType
 
-        # TODO: Add styling for timestep reduction analysis
-        item_data = {'function': style_ts_reduction_analysis,
-                     'kwargs_getter': self.get_flowlines_style_3_column_values,
-                     'qml': os.path.join(STYLE_DIR, 'ts_reduction_analysis.qml'),
-                     'widgets': [self.comboBoxFlowlinesStyleCol1,
-                                 self.comboBoxFlowlinesStyleCol2,
-                                 self.comboBoxFlowlinesStyleCol3]
-                     }
-        self.comboBoxFlowlinesStyleType.addItem('Timestep reduction analysis')
-        self.comboBoxFlowlinesStyleType.setItemData(1, item_data)
+            row = type_widget.count()
+            type_widget.addItem(style.name)
+            type_widget.setItemData(row, style)
 
         self.comboBoxFlowlinesStyleType.currentIndexChanged.connect(self.flowline_styling_type_changed)
-
-        # Nodes style type combobox
-        item_data = {'function': style_on_single_column,
-                     'kwargs_getter': self.get_nodes_style_col1_value,
-                     'qml': os.path.join(STYLE_DIR, 'node.qml'),
-                     'widgets': [self.comboBoxNodesStyleCol1]
-                     }
-        self.comboBoxNodesStyleType.addItem('Single column graduated')
-        self.comboBoxNodesStyleType.setItemData(0, item_data)
-        item_data = {'function': style_as_vector,
-                     'kwargs_getter': self.get_nodes_style_vector_values,
-                     'qml': os.path.join(STYLE_DIR, 'vector.qml'),
-                     'widgets': [self.comboBoxNodesStyleCol1,
-                                 self.comboBoxNodesStyleCol2,
-                                 ]
-                     }
-        self.comboBoxNodesStyleType.addItem('Vector')
-        self.comboBoxNodesStyleType.setItemData(1, item_data)
         self.comboBoxNodesStyleType.currentIndexChanged.connect(self.node_styling_type_changed)
-
-        # Cells style type combobox
-        item_data = {'function': style_on_single_column,
-                     'kwargs_getter': self.get_cells_style_col1_value,
-                     'qml': os.path.join(STYLE_DIR, 'cell.qml'),
-                     'widgets': [self.comboBoxCellsStyleCol1]
-                     }
-        self.comboBoxCellsStyleType.addItem('Single column graduated')
-        self.comboBoxCellsStyleType.setItemData(0, item_data)
         self.comboBoxCellsStyleType.currentIndexChanged.connect(self.cell_styling_type_changed)
-
-        # add update method to style config widgets
-        self.comboBoxFlowlinesStyleCol1.update = MethodType(update_column_widget, self.comboBoxFlowlinesStyleCol1)
-        self.comboBoxFlowlinesStyleCol2.update = MethodType(update_column_widget, self.comboBoxFlowlinesStyleCol2)
-        self.comboBoxFlowlinesStyleCol3.update = MethodType(update_column_widget, self.comboBoxFlowlinesStyleCol3)
-        self.pushButtonFlowlinesStyleConfig.update = MethodType(update_column_widget,
-                                                                self.pushButtonFlowlinesStyleConfig)
-        self.comboBoxNodesStyleCol1.update = MethodType(update_column_widget, self.comboBoxNodesStyleCol1)
-        self.comboBoxNodesStyleCol2.update = MethodType(update_column_widget, self.comboBoxNodesStyleCol2)
-        self.pushButtonNodesStyleConfig.update = MethodType(update_column_widget, self.pushButtonNodesStyleConfig)
-        self.comboBoxCellsStyleCol1.update = MethodType(update_column_widget, self.comboBoxCellsStyleCol1)
-        self.pushButtonCellsStyleConfig.update = MethodType(update_column_widget, self.pushButtonCellsStyleConfig)
+        self.doubleSpinBoxResolution.valueChanged.connect(self.raster_resolution_changed)
+        self.doubleSpinBoxNodesLayerResolution.valueChanged.connect(self.nodes_layer_resolution_changed)
+        self.groupBoxRasters.toggled.connect(self.enable_raster_folder_widget)
+        self.mQgsFileWidgetRasterFolder.setStorageMode(QgsFileWidget.GetDirectory)
+        self.mQgsFileWidgetRasterFolder.fileChanged.connect(self.validate)
 
     def set_styling_tab(self,
-                        flowline_styling_type: str = 'Single column graduated',
-                        nodes_styling_type: str = 'Single column graduated',
-                        cells_styling_type: str = 'Single column graduated'
+                        flowline_style: Style = STYLE_FLOW_DIRECTION,
+                        nodes_style: Style = STYLE_SINGLE_COLUMN_GRADUATED_NODE,
+                        cells_style: Style = STYLE_SINGLE_COLUMN_GRADUATED_CELL,
+                        flowlines_style_param_values: dict = None,
+                        cells_style_param_values: dict = None,
+                        nodes_style_param_values: dict = None
                         ):
         # Flowlines
-        for widget in self.flowline_styling_widgets:
-            widget.setVisible(False)
         filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_FLOW, VT_FLOW_HYBRID])
         if len(filtered_das) > 0:
-            idx = self.comboBoxFlowlinesStyleType.findText(flowline_styling_type)
-            if idx > -1:
-                self.comboBoxFlowlinesStyleType.setCurrentIndex(idx)
-            self.comboBoxFlowlinesStyleType.setEnabled(True)
-            self.flowline_styling_type_changed()
+            if flowline_style is None:
+                self.groupBoxFlowlines.setChecked(False)
+            else:
+                idx = self.comboBoxFlowlinesStyleType.findText(flowline_style.name)
+                if idx > -1:
+                    self.comboBoxFlowlinesStyleType.setCurrentIndex(idx)
+                self.groupBoxFlowlines.setChecked(True)
+            self.groupBoxFlowlines.setEnabled(True)
+            self.flowline_styling_type_changed(param_values=flowlines_style_param_values)
         else:
-            self.comboBoxFlowlinesStyleType.setEnabled(False)
+            self.groupBoxFlowlines.setEnabled(False)
+            self.groupBoxFlowlines.setChecked(False)
 
         # Nodes and cells
-        for widget in self.node_styling_widgets:
-            widget.setVisible(False)
-        for widget in self.cell_styling_widgets:
-            widget.setVisible(False)
         filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_NODE, VT_NODE_HYBRID])
         if len(filtered_das) > 0:
-            idx = self.comboBoxNodesStyleType.findText(nodes_styling_type)
-            if idx > -1:
-                self.comboBoxNodesStyleType.setCurrentIndex(idx)
-            self.comboBoxNodesStyleType.setEnabled(True)
-            self.node_styling_type_changed()
-            idx = self.comboBoxCellsStyleType.findText(cells_styling_type)
-            if idx > -1:
-                self.comboBoxCellsStyleType.setCurrentIndex(idx)
-            self.comboBoxCellsStyleType.setEnabled(True)
-            self.cell_styling_type_changed()
+            if nodes_style is None:
+                self.groupBoxNodes.setChecked(False)
+            else:
+                idx = self.comboBoxNodesStyleType.findText(nodes_style.name)
+                if idx > -1:
+                    self.comboBoxNodesStyleType.setCurrentIndex(idx)
+                self.groupBoxNodes.setChecked(True)
+
+            if cells_style is None:
+                self.groupBoxCells.setChecked(False)
+            else:
+                idx = self.comboBoxCellsStyleType.findText(cells_style.name)
+                if idx > -1:
+                    self.comboBoxCellsStyleType.setCurrentIndex(idx)
+                self.groupBoxCells.setChecked(True)
+
+            # Do not automatically set groupBoxRasters to Checked because this requires follow-up input from the user
+
+            self.groupBoxNodes.setEnabled(True)
+            self.groupBoxCells.setEnabled(True)
+            self.groupBoxRasters.setEnabled(True)
+
+            self.node_styling_type_changed(param_values=nodes_style_param_values)
+            self.cell_styling_type_changed(param_values=cells_style_param_values)
+
         else:
-            self.comboBoxNodesStyleType.setEnabled(False)
-            self.comboBoxCellsStyleType.setEnabled(False)
+            self.groupBoxNodes.setEnabled(False)
+            self.groupBoxCells.setEnabled(False)
+            self.groupBoxRasters.setEnabled(False)
 
-    def flowline_styling_type_changed(self):
-        # set flowline styling config widgets to invisible
-        for widget in self.flowline_styling_widgets:
-            widget.setVisible(False)
+            self.groupBoxNodes.setChecked(False)
+            self.groupBoxCells.setChecked(False)
+            self.groupBoxRasters.setChecked(False)
 
-        # make new widgets visible and try to set combobox current text based on demanded aggregations
-        type_widget = self.comboBoxFlowlinesStyleType
+    def styling_type_changed(self, output_type: str, param_values: dict = None):
+        if output_type == 'flowline':
+            params_widget = self.tableWidgetFlowlinesStyleParams
+            type_widget = self.comboBoxFlowlinesStyleType
+            aggregation_variable_types = [VT_FLOW, VT_FLOW_HYBRID]
+        elif output_type == 'node':
+            params_widget = self.tableWidgetNodesStyleParams
+            type_widget = self.comboBoxNodesStyleType
+            aggregation_variable_types = [VT_NODE, VT_NODE_HYBRID]
+        elif output_type == 'cell':
+            params_widget = self.tableWidgetCellsStyleParams
+            type_widget = self.comboBoxCellsStyleType
+            aggregation_variable_types = [VT_NODE, VT_NODE_HYBRID]
+        else:
+            raise ValueError('Invalid output type. Choose one of [node, flowline, cell].')
+        for i in reversed(range(params_widget.rowCount())):
+            params_widget.removeRow(i)
         item_data = type_widget.itemData(type_widget.currentIndex())
         if item_data is not None:
-            relevant_widgets = type_widget.itemData(type_widget.currentIndex())['widgets']
-            for i, widget in enumerate(relevant_widgets):
-                widget.update(demanded_aggregations=self.demanded_aggregations,
-                              aggregation_variable_types=[VT_FLOW, VT_FLOW_HYBRID])
-                widget.setCurrentIndex(i)
-                widget.setVisible(True)
-                widget.setEnabled(True)
+            params = item_data.params
+            for row, (param_name, param_type) in enumerate(params.items()):
+                params_widget.insertRow(row)
+                param_name_item = QtWidgets.QTableWidgetItem(param_name)
+                params_widget.setItem(row, 0, param_name_item)
+                param_input_widget = QtWidgets.QComboBox()
+                param_input_widget.update = MethodType(update_column_widget,
+                                                       param_input_widget)
+                param_input_widget.update(demanded_aggregations=self.demanded_aggregations,
+                                          aggregation_variable_types=aggregation_variable_types)
+                params_widget.setCellWidget(row, 1, param_input_widget)
+        if param_values is not None:
+            for param, value in param_values.items():
+                row = params_widget.findItems(param, Qt.MatchFixedString)[0].row()
+                params_input_widget = params_widget.cellWidget(row, 1)
+                idx = params_input_widget.findText(value)
+                params_input_widget.setCurrentIndex(idx)
 
-    def node_styling_type_changed(self):
-        # set node styling config widgets to invisible
-        for widget in self.node_styling_widgets:
-            widget.setVisible(False)
+    def node_styling_type_changed(self, signal: int = 1, param_values: dict = None):
+        self.styling_type_changed(output_type='node', param_values=param_values)
 
-        # make new widgets visible
-        type_widget = self.comboBoxNodesStyleType
-        item_data = type_widget.itemData(type_widget.currentIndex())
-        if item_data is not None:
-            relevant_widgets = type_widget.itemData(type_widget.currentIndex())['widgets']
-            for i, widget in enumerate(relevant_widgets):
-                widget.update(demanded_aggregations=self.demanded_aggregations,
-                              aggregation_variable_types=[VT_NODE, VT_NODE_HYBRID])
-                widget.setCurrentIndex(i)
-                widget.setVisible(True)
-                widget.setEnabled(True)
+    def cell_styling_type_changed(self, signal: int = 1, param_values: dict = None):
+        self.styling_type_changed(output_type='cell', param_values=param_values)
 
-    def cell_styling_type_changed(self):
-        # set cell styling config widgets to invisible
-        for widget in self.cell_styling_widgets:
-            widget.setVisible(False)
+    def flowline_styling_type_changed(self, signal: int = 1, param_values: dict = None):
+        self.styling_type_changed(output_type='flowline', param_values=param_values)
 
-        # make new widgets visible
-        type_widget = self.comboBoxCellsStyleType
-        item_data = type_widget.itemData(type_widget.currentIndex())
-        if item_data is not None:
-            relevant_widgets = type_widget.itemData(type_widget.currentIndex())['widgets']
-            for i, widget in enumerate(relevant_widgets):
-                widget.update(demanded_aggregations=self.demanded_aggregations,
-                              aggregation_variable_types=[VT_NODE, VT_NODE_HYBRID])
-                widget.setCurrentIndex(i)
-                widget.setVisible(True)
-                widget.setEnabled(True)
+    def raster_resolution_changed(self):
+        self.doubleSpinBoxNodesLayerResolution.setValue(self.doubleSpinBoxResolution.value())
+
+    def nodes_layer_resolution_changed(self):
+        self.doubleSpinBoxResolution.setValue(self.doubleSpinBoxNodesLayerResolution.value())
 
     def update_gr(self):
         results_3di = self.QgsFileWidget3DiResults.filePath()
@@ -486,11 +401,28 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             self.gr = GridH5ResultAdmin(gridadmin, results_3di)
             crs = QgsCoordinateReferenceSystem("EPSG:{}".format(self.gr.epsg_code))
             self.mExtentGroupBox.setOutputCrs(crs)
+            output_timestep_best_guess = int(self.gr.nodes.timestamps[-1] / (len(self.gr.nodes.timestamps) - 1))
+            self.doubleSpinBoxStartTime.setMaximum(int(self.gr.nodes.timestamps[-1]))
+            self.doubleSpinBoxStartTime.setSingleStep(output_timestep_best_guess)
+            self.doubleSpinBoxEndTime.setSingleStep(output_timestep_best_guess)
+            self.doubleSpinBoxEndTime.setMaximum(int(self.gr.nodes.timestamps[-1]))
+            self.doubleSpinBoxEndTime.setValue(int(self.gr.nodes.timestamps[-1]))
+            self.doubleSpinBoxResolution.setValue(self.gr.grid.dx[0])
+            self.doubleSpinBoxNodesLayerResolution.setValue(self.gr.grid.dx[0])
+            if self.mQgsFileWidgetRasterFolder.filePath() == '':
+                results_3di_dir = os.path.dirname(results_3di)
+                self.mQgsFileWidgetRasterFolder.setFilePath(results_3di_dir)
+            # Onderstaande is tijdelijk nodig vanwege een bug in threedigrid of qgis of de combinatie
+            if hasattr(self.gr.lines, 'line_geometries'):
+                self.lineGeometryWarningLabel.setText('')
+            else:
+                self.lineGeometryWarningLabel.setText("Warning: no line geometries found. Flowline length instead "
+                                                      "of geometry length will be used to calculate max timestep \n"
+                                                      "for culverts and channels.")
         else:
             self.gr = None
 
     def results_3di_selected(self):
-        # set path to gridadmin.h5
         results_3di = self.QgsFileWidget3DiResults.filePath()
         if os.path.isfile(results_3di):
             results_3di_dir = os.path.dirname(results_3di)
@@ -498,21 +430,10 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             if os.path.isfile(gridadmin):
                 self.QgsFileWidgetGridAdmin.setFilePath(gridadmin)
                 self.update_gr()
-                output_timestep_best_guess = int(self.gr.nodes.timestamps[-1] / (len(self.gr.nodes.timestamps) - 1))
-                self.doubleSpinBoxStartTime.setMaximum(int(self.gr.nodes.timestamps[-1]))
-                self.doubleSpinBoxStartTime.setSingleStep(output_timestep_best_guess)
-                self.doubleSpinBoxEndTime.setSingleStep(output_timestep_best_guess)
-                self.doubleSpinBoxEndTime.setMaximum(int(self.gr.nodes.timestamps[-1]))
-                self.doubleSpinBoxEndTime.setValue(int(self.gr.nodes.timestamps[-1]))
-                if self.mQgsFileWidgetRasterFolder.filePath() == '':
-                    self.mQgsFileWidgetRasterFolder.setFilePath(results_3di_dir)
-                # Onderstaande is tijdelijk nodig vanwege een bug in threedigrid of qgis of de combinatie
-                if hasattr(self.gr.lines, 'line_geometries'):
-                    self.lineGeometryWarningLabel.setText('')
-                else:
-                    self.lineGeometryWarningLabel.setText("Warning: no line geometries found. Flowline length instead "
-                                                          "of geometry length will be used to calculate max timestep "
-                                                          "for culverts and channels.")
+        self.validate()
+
+    def gridadmin_selected(self):
+        self.update_gr()
         self.validate()
 
     def set_extent_from_map_canvas(self):
@@ -523,7 +444,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         # self.mExtentGroupBox.setCurrentExtent()
 
     def enable_raster_folder_widget(self):
-        if self.checkBoxGenerateRasters.isChecked():
+        if self.groupBoxRasters.isChecked():
             self.mQgsFileWidgetRasterFolder.setEnabled(True)
         else:
             self.mQgsFileWidgetRasterFolder.setEnabled(False)
@@ -535,6 +456,9 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.apply_preset(preset)
 
     def apply_preset(self, preset: Preset):
+        """ Set dialog widgets according to given preset.
+        If no styling is given for a output_type, that output type's styling panel checkbox is set to False"""
+
         # remove existing aggregations
         self.tableWidgetAggregations.setRowCount(0)
 
@@ -546,9 +470,12 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.checkBoxResample.setChecked(preset.resample_point_layer)
 
         # set styling from preset
-        self.set_styling_tab(flowline_styling_type=preset.flowlines_styling_type,
-                             nodes_styling_type=preset.nodes_styling_type,
-                             cells_styling_type=preset.cells_styling_type)
+        self.set_styling_tab(flowline_style=preset.flowlines_style,
+                             nodes_style=preset.nodes_style,
+                             cells_style=preset.cells_style,
+                             flowlines_style_param_values=preset.flowlines_style_param_values,
+                             nodes_style_param_values=preset.nodes_style_param_values,
+                             cells_style_param_values=preset.cells_style_param_values)
 
     def update_demanded_aggregations(self):
         self.demanded_aggregations = []
@@ -588,7 +515,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             valid = False
         if not self.tableWidgetAggregations.rowCount() > 0:
             valid = False
-        if self.checkBoxGenerateRasters.isChecked() and self.mQgsFileWidgetRasterFolder.filePath() == '':
+        if self.groupBoxRasters.isChecked() and self.mQgsFileWidgetRasterFolder.filePath() == '':
             valid = False
         self.dialogButtonBoxOKCancel.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(valid)
 

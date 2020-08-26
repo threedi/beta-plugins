@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """ Calculate the resultant of the total outflow per node, resampled to grid_space """
-
+# TODO: zorgen dat de content_type zonder 'b prefix wordt gegeven
 import argparse
 import warnings
 from typing import List
@@ -30,9 +30,10 @@ def time_intervals(nodes_or_lines, start_time, end_time):
     and the first timestamp after end_time (ts_end_time)
     The length of the time_intervals arrays is guaranteed to be the same as the number of timestamps between
     the returned ts_start_time and ts_end_time"""
-    if end_time is None:
-        end_time = nodes_or_lines.timestamps[-1]  # last timestamp
-    if start_time is None:
+    last_timestamp = nodes_or_lines.timestamps[-1]
+    if end_time is None or end_time > last_timestamp:
+        end_time = last_timestamp
+    if start_time is None or start_time < 0:
         start_time = 0
     # Check validity of temporal filtering, part 1 of 2
     assert start_time < end_time
@@ -154,25 +155,27 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
     elif aggregation.variable.short_name == 'infiltration_rate_mm':
         ts_infiltration_rate_simple = ts.infiltration_rate_simple
         ts_infiltration_rate_simple[ts_infiltration_rate_simple == -9999] = np.nan
-        raw_values = np.divide(np.multiply(ts_infiltration_rate_simple, 1000), ts.sumax)
+        raw_values = np.divide(ts_infiltration_rate_simple, ts.sumax)
     elif aggregation.variable.short_name == 'q_lat':
         raw_values = ts.q_lat
-    elif aggregation.variable.short_name == 'q_lat_m':
+    elif aggregation.variable.short_name == 'q_lat_mm':
         ts_q_lat = ts.q_lat
         ts_q_lat[ts_q_lat == -9999] = np.nan
-        raw_values = np.divide(np.multiply(ts_q_lat, 1000), nodes_or_lines.sumax)
+        raw_values = np.divide(ts_q_lat, nodes_or_lines.sumax)
+    # TODO: FIX: code below raises error 'AttributeError: 'Nodes' object has no attribute 'intercepted_volume'
+    # Cause could be that model does not have interception?
     elif aggregation.variable.short_name == 'intercepted_volume':
         raw_values = ts.intercepted_volume
     elif aggregation.variable.short_name == 'intercepted_volume_mm':
         ts_intercepted_volume = ts.intercepted_volume
         ts_intercepted_volume[ts_intercepted_volume == -9999] = np.nan
-        raw_values = np.divide(np.multiply(ts_intercepted_volume, 1000), nodes_or_lines.sumax)
+        raw_values = np.divide(ts_intercepted_volume, nodes_or_lines.sumax)
     elif aggregation.variable.short_name == 'q_sss':
         raw_values = ts.q_sss
     elif aggregation.variable.short_name == 'q_sss_mm':
         ts_q_sss = ts.q_sss
         ts_q_sss[ts_q_sss == -9999] = np.nan
-        raw_values = np.divide(np.multiply(ts_q_sss, 1000), nodes_or_lines.sumax)
+        raw_values = np.divide(ts_q_sss, nodes_or_lines.sumax)
 
     else:
         raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
@@ -243,11 +246,85 @@ def hybrid_time_aggregate(gr,
             result = flows[:, 2]
         else:
             raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
+        if '_mm' in aggregation.variable.short_name:
+            surface_area = gr.nodes.filter(id__in=ids).sumax
+            result = result/surface_area
     else:
         raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
 
     result *= aggregation.multiplier
 
+    return result
+
+
+def flow_per_node(gr: GridH5ResultAdmin, node_ids: list, start_time: int, end_time: int, out: bool, aggregation_method):
+    """
+    Calculate the aggregate of all flows per node, split in x and y directions
+
+    :param out: if True, only outgoing flows are calculated. If false, only incoming flows
+    :returns: numpy 2d array; columns: node ids, x sign flow, y sign flow
+    """
+    lines = filter_lines_by_node_ids(gr.lines, node_ids)
+
+    start_end_node_ids = lines.line_nodes.T.reshape(
+        lines.line_nodes.size)  # 1d array with first all start nodes, than all end nodes
+    # if there are any nodes without flowlinks, they will not be included in start_end_node_ids
+    # this is dealt with just before the end of this function
+
+    da = Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
+                     method=aggregation_method,
+                     sign=AggregationSign(short_name='net', long_name='Net')
+                     )
+    q_agg = time_aggregate(nodes_or_lines=lines,
+                           start_time=start_time,
+                           end_time=end_time,
+                           aggregation=da)
+    if out:
+        q_agg_start_nodes = q_agg * (q_agg > 0).astype(int)  # positive flows, to be grouped by start node
+        q_agg_end_nodes = q_agg * (q_agg < 0).astype(int)  # negative flows, to be grouped by end node
+    else:
+        q_agg_start_nodes = q_agg * (q_agg < 0).astype(int)  # positive flows, to be grouped by start node
+        q_agg_end_nodes = q_agg * (q_agg > 0).astype(int)  # negative flows, to be grouped by end node
+
+    q_agg_in_or_out = np.hstack(
+        [q_agg_start_nodes, q_agg_end_nodes])  # 1d array with first all positive flows, than all negative flows
+
+    # for both pos and neg flows, use the flowline in pos direction to calc the angle
+    angle_x = flowline_angle_x(lines)
+    angle_x_twice = np.hstack([angle_x, angle_x])
+    q_agg_in_or_out_x = np.cos(angle_x_twice) * q_agg_in_or_out  # x component of that flow
+    q_agg_in_or_out_y = np.sin(angle_x_twice) * q_agg_in_or_out  # y component of that flow
+
+    # group by met numpy: zie stack overflow "numpy array group by one column sum another"
+
+    # bind start_end_node_ids, q_x, and q_y into one 2d array / table
+    qtable = np.array([start_end_node_ids, q_agg_in_or_out_x, q_agg_in_or_out_y, q_agg_in_or_out]).T
+    # sort by node id
+    qtable = qtable[qtable[:, 0].argsort()]
+    # find the split indices
+    i = np.nonzero(np.diff(qtable[:, 0]))[0] + 1
+    i = np.insert(i, 0, 0)
+
+    # sum qx and qy, group by start node
+    start_node_ids_unique = qtable[i, 0]  # array of unique start nodes
+    sums = np.add.reduceat(qtable[:, [1, 2]], i)  # sum qx and qy, group by start node
+    q_agg_in_or_out_x_sum = sums[:, 0]
+    q_agg_in_or_out_y_sum = sums[:, 1]
+
+    in_or_out_flow = np.array([start_node_ids_unique,
+                               q_agg_in_or_out_x_sum,
+                               q_agg_in_or_out_y_sum]).T
+
+    # if there are any nodes without flowlinks, they will have been missed so far
+    linkless_node_ids = node_ids[np.logical_not(np.in1d(node_ids, start_node_ids_unique))]
+    if linkless_node_ids.ndim > 0 and linkless_node_ids.size > 0:
+        linkless_node_zeroflow = np.c_[linkless_node_ids, np.zeros(
+            [linkless_node_ids.size, 2])]  # can't use hstack here to add a (x,2)-shaped array to a (x)-shaped array
+        in_or_out_flow = np.vstack([in_or_out_flow, linkless_node_zeroflow])
+
+    in_or_out_flow = in_or_out_flow[in_or_out_flow[:, 0].argsort()]  # sort by first column, i.e., node id
+    # select only the requested nodes
+    result = select_from_2d_array_where_col_x_in(array_2d=in_or_out_flow, col_nr=0, values=node_ids)
     return result
 
 
@@ -530,77 +607,6 @@ def select_from_2d_array_where_col_x_in(array_2d, col_nr, values):
     return array_2d[np.in1d(array_2d[:, col_nr], values), :]
 
 
-def flow_per_node(gr: GridH5ResultAdmin, node_ids: list, start_time: int, end_time: int, out: bool, aggregation_method):
-    """
-    Calculate the sum of all flows per node, split in x and y directions
-
-    :param out: if True, outgoing flows are calculated. If false, incoming flows
-    :returns: numpy 2d array; columns: node ids, x sign flow, y sign flow
-    """
-    lines = filter_lines_by_node_ids(gr.lines, node_ids)
-
-    start_end_node_ids = lines.line_nodes.T.reshape(
-        lines.line_nodes.size)  # 1d array with first all start nodes, than all end nodes
-    # if there are any nodes without flowlinks, they will not be included in start_end_node_ids
-    # this is dealt with just before the end of this function
-
-    da = Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
-                     method=aggregation_method,
-                     sign=AggregationSign(short_name='net', long_name='Net')
-                     )
-    q_agg = time_aggregate(nodes_or_lines=lines,
-                           start_time=start_time,
-                           end_time=end_time,
-                           aggregation=da)
-    if out:
-        q_agg_start_nodes = q_agg * (q_agg > 0).astype(int)  # positive flows, to be grouped by start node
-        q_agg_end_nodes = q_agg * (q_agg < 0).astype(int)  # negative flows, to be grouped by end node
-    else:
-        q_agg_start_nodes = q_agg * (q_agg < 0).astype(int)  # positive flows, to be grouped by start node
-        q_agg_end_nodes = q_agg * (q_agg > 0).astype(int)  # negative flows, to be grouped by end node
-
-    q_agg_in_or_out = np.hstack(
-        [q_agg_start_nodes, q_agg_end_nodes])  # 1d array with first all positive flows, than all negative flows
-
-    # for both pos and neg flows, use the flowline in pos sign to calc the angle
-    angle_x = flowline_angle_x(lines)
-    angle_x_twice = np.hstack([angle_x, angle_x])
-    q_agg_in_or_out_x = np.cos(angle_x_twice) * q_agg_in_or_out  # x component of that flow
-    q_agg_in_or_out_y = np.sin(angle_x_twice) * q_agg_in_or_out  # y component of that flow
-
-    # group by met numpy: zie stack overflow "numpy array group by one column sum another"
-
-    # bind start_end_node_ids, q_x, and q_y into one 2d array / table
-    qtable = np.array([start_end_node_ids, q_agg_in_or_out_x, q_agg_in_or_out_y, q_agg_in_or_out]).T
-    # sort by node id
-    qtable = qtable[qtable[:, 0].argsort()]
-    # find the split indices
-    i = np.nonzero(np.diff(qtable[:, 0]))[0] + 1
-    i = np.insert(i, 0, 0)
-
-    # sum qx and qy, group by start node
-    start_node_ids_unique = qtable[i, 0]  # array of unique start nodes
-    sums = np.add.reduceat(qtable[:, [1, 2]], i)  # sum qx and qy, group by start node
-    q_agg_in_or_out_x_sum = sums[:, 0]
-    q_agg_in_or_out_y_sum = sums[:, 1]
-
-    in_or_out_flow = np.array([start_node_ids_unique,
-                               q_agg_in_or_out_x_sum,
-                               q_agg_in_or_out_y_sum]).T
-
-    # if there are any nodes without flowlinks, they will have been missed so far
-    linkless_node_ids = node_ids[np.logical_not(np.in1d(node_ids, start_node_ids_unique))]
-    if linkless_node_ids.ndim > 0 and linkless_node_ids.size > 0:
-        linkless_node_zeroflow = np.c_[linkless_node_ids, np.zeros(
-            [linkless_node_ids.size, 2])]  # can't use hstack here to add a (x,2)-shaped array to a (x)-shaped array
-        in_or_out_flow = np.vstack([in_or_out_flow, linkless_node_zeroflow])
-
-    in_or_out_flow = in_or_out_flow[in_or_out_flow[:, 0].argsort()]  # sort by first column, i.e., node id
-    # select only the requested nodes
-    result = select_from_2d_array_where_col_x_in(array_2d=in_or_out_flow, col_nr=0, values=node_ids)
-    return result
-
-
 def threedigrid_to_ogr(threedigrid_src, tgt_ds, attributes: dict, attr_data_types: dict, epsg: int = 28992):
     """
     Create a ogr layer from the coordinates of threedigrid Nodes, Cells, or Lines with custom attributes
@@ -695,7 +701,9 @@ def threedigrid_to_ogr(threedigrid_src, tgt_ds, attributes: dict, attr_data_type
 
 def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggregations: List[Aggregation],
                               bbox=None, start_time: int = None, end_time: int = None, subsets=None, epsg: int = 28992,
-                              interpolation_method: str = None, resolution: float = None):
+                              interpolation_method: str = None, resample_point_layer: bool = False,
+                              resolution: float = None, output_flowlines: bool = True, output_nodes: bool = True,
+                              output_cells: bool = True, output_rasters: bool = True):
     """
 
     :param resolution:
@@ -711,6 +719,17 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
     :return: an ogr Memory DataSource with one or more Layers: node (point), cell (polygon) or flowline (linestring) with the aggregation results
     :rtype: ogr.DataSource
     """
+
+    # make output datasource and layers
+    tgt_drv = ogr.GetDriverByName('MEMORY')
+    tgt_ds = tgt_drv.CreateDataSource('')
+    out_rasters = {}
+
+    if not (output_flowlines or output_nodes or output_cells or output_rasters):
+        return tgt_ds, out_rasters
+
+    if resample_point_layer and (not output_nodes):
+        resample_point_layer = False
 
     # perform demanded aggregations
     node_results = dict()
@@ -742,53 +761,53 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                 raise Exception('No nodes found within bounding box.')
 
         new_column_name = da.as_column_name()
+
         if da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_FLOW]):
-            if first_pass_flowlines:
-                line_results['id'] = lines.id.astype(int)
-                if gr.has_1d:
-                    line_results['content_type'] = lines.content_type
-                    line_results['spatialite_id'] = lines.content_pk
-                line_results['kcu'] = lines.kcu
-                line_results['kcu_description'] = np.vectorize(KCU_DICT.get)(lines.kcu)
-                first_pass_flowlines = False
-            line_results[new_column_name] = time_aggregate(nodes_or_lines=lines,
-                                                           start_time=start_time,
-                                                           end_time=end_time,
-                                                           aggregation=da
-                                                           )
+            if output_flowlines:
+                if first_pass_flowlines:
+                    line_results['id'] = lines.id.astype(int)
+                    if gr.has_1d:
+                        line_results['content_type'] = lines.content_type
+                        line_results['spatialite_id'] = lines.content_pk
+                    line_results['kcu'] = lines.kcu
+                    line_results['kcu_description'] = np.vectorize(KCU_DICT.get)(lines.kcu)
+                    first_pass_flowlines = False
+                line_results[new_column_name] = time_aggregate(nodes_or_lines=lines,
+                                                               start_time=start_time,
+                                                               end_time=end_time,
+                                                               aggregation=da
+                                                               )
         elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE]):
-            if first_pass_nodes:
-                node_results['id'] = nodes.id.astype(int)
-                if gr.has_1d:
-                    node_results['spatialite_id'] = nodes.content_pk
-                node_results['node_type'] = nodes.node_type
-                node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
-                first_pass_nodes = False
-            node_results[new_column_name] = time_aggregate(nodes_or_lines=nodes,
-                                                           start_time=start_time,
-                                                           end_time=end_time,
-                                                           aggregation=da
-                                                           )
+            if output_nodes or output_cells or output_rasters:
+                if first_pass_nodes:
+                    node_results['id'] = nodes.id.astype(int)
+                    if gr.has_1d:
+                        node_results['spatialite_id'] = nodes.content_pk
+                    node_results['node_type'] = nodes.node_type
+                    node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
+                    first_pass_nodes = False
+                node_results[new_column_name] = time_aggregate(nodes_or_lines=nodes,
+                                                               start_time=start_time,
+                                                               end_time=end_time,
+                                                               aggregation=da
+                                                               )
         elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE_HYBRID]):
-            if first_pass_nodes:
-                node_results['id'] = nodes.id.astype(int)
-                if gr.has_1d:
-                    node_results['spatialite_id'] = nodes.content_pk
-                node_results['node_type'] = nodes.node_type
-                node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
-                first_pass_nodes = False
-            node_results[new_column_name] = hybrid_time_aggregate(gr=gr,
-                                                                  ids=nodes.id,
-                                                                  start_time=start_time,
-                                                                  end_time=end_time,
-                                                                  aggregation=da
-                                                                  )
+            if output_nodes or output_cells or output_rasters:
+                if first_pass_nodes:
+                    node_results['id'] = nodes.id.astype(int)
+                    if gr.has_1d:
+                        node_results['spatialite_id'] = nodes.content_pk
+                    node_results['node_type'] = nodes.node_type
+                    node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
+                    first_pass_nodes = False
+                node_results[new_column_name] = hybrid_time_aggregate(gr=gr,
+                                                                      ids=nodes.id,
+                                                                      start_time=start_time,
+                                                                      end_time=end_time,
+                                                                      aggregation=da
+                                                                      )
 
-    # make output datasource and layers
-    tgt_drv = ogr.GetDriverByName('MEMORY')
-    tgt_ds = tgt_drv.CreateDataSource('')
-    out_rasters = {}
-
+    # translate results to GIS layers
     # node and cell layers
     if len(node_results) > 0:
         attributes = node_results
@@ -798,62 +817,75 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                 attr_data_types[attr] = NP_OGR_DTYPES[vals.dtype]
             except KeyError:
                 attr_data_types[attr] = ogr.OFTString
-        threedigrid_to_ogr(threedigrid_src=nodes, tgt_ds=tgt_ds, attributes=attributes, attr_data_types=attr_data_types)
-        threedigrid_to_ogr(threedigrid_src=cells, tgt_ds=tgt_ds, attributes=attributes, attr_data_types=attr_data_types)
+        if output_nodes:
+            threedigrid_to_ogr(threedigrid_src=nodes,
+                               tgt_ds=tgt_ds,
+                               attributes=attributes,
+                               attr_data_types=attr_data_types
+                               )
+        if output_cells or output_rasters or resample_point_layer:
+            threedigrid_to_ogr(threedigrid_src=cells,
+                               tgt_ds=tgt_ds,
+                               attributes=attributes,
+                               attr_data_types=attr_data_types
+                               )
 
         # rasters
-        cell_layer = tgt_ds.GetLayerByName('cell')
-        if cell_layer.GetFeatureCount() > 0:
-            first_pass_rasters = True
-            if resolution is None:
-                resolution = gr.grid.dx[0]
-            column_names = []
-            band_nr = 0
-            # for col in node_results.keys():
-            for da in demanded_aggregations:
-                if da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE, VT_NODE_HYBRID]):
-                    col = da.as_column_name()
-                    band_nr += 1
-                    out_rasters[col] = rasterize_cell_layer(cell_layer=cell_layer,
-                                                            column_name=col,
-                                                            pixel_size=resolution,
-                                                            interpolation_method=interpolation_method,
-                                                            pre_resample_method=da.variable.pre_resample_method)
-                    column_names.append(col)
-                    if first_pass_rasters:
-                        first_pass_rasters = False
-                        tmp_drv = gdal.GetDriverByName('MEM')
-                        tmp_ds = tmp_drv.CreateCopy('multiband', out_rasters[col])
+        if output_rasters or resample_point_layer:
+            cell_layer = tgt_ds.GetLayerByName('cell')
+            if cell_layer.GetFeatureCount() > 0:
+                first_pass_rasters = True
+                if (resolution is None or resolution == 0):
+                    resolution = gr.grid.dx[0]
+                column_names = []
+                band_nr = 0
+                for da in demanded_aggregations:
+                    if da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE, VT_NODE_HYBRID]):
+                        col = da.as_column_name()
+                        band_nr += 1
+                        out_rasters[col] = rasterize_cell_layer(cell_layer=cell_layer,
+                                                                column_name=col,
+                                                                pixel_size=resolution,
+                                                                interpolation_method=interpolation_method,
+                                                                pre_resample_method=da.variable.pre_resample_method)
+                        column_names.append(col)
+                        if first_pass_rasters:
+                            first_pass_rasters = False
+                            tmp_drv = gdal.GetDriverByName('MEM')
+                            tmp_ds = tmp_drv.CreateCopy('multiband', out_rasters[col])
 
-                        # create output layer
-                        srs = osr.SpatialReference()
-                        srs.ImportFromWkt(tmp_ds.GetProjection())
-                        points_resampled_lyr = tgt_ds.CreateLayer('node_resampled',
-                                                                  srs=srs,
-                                                                  geom_type=ogr.wkbPoint)
-                        field = ogr.FieldDefn(col, ogr.OFTReal)
-                        points_resampled_lyr.CreateField(field)
-                    else:
-                        tmp_ds.AddBand(datatype=gdal.GDT_Float32)
-                        src_band = out_rasters[col].GetRasterBand(1)
-                        src_arr = src_band.ReadAsArray()
-                        tmp_band = tmp_ds.GetRasterBand(band_nr)
-                        tmp_band.WriteArray(src_arr)
-                        tmp_band.SetNoDataValue(src_band.GetNoDataValue())
-                        field = ogr.FieldDefn(col, ogr.OFTReal)
-                        points_resampled_lyr.CreateField(field)
+                            # create resampled nodes output layer
+                            if resample_point_layer:
+                                srs = osr.SpatialReference()
+                                srs.ImportFromWkt(tmp_ds.GetProjection())
+                                points_resampled_lyr = tgt_ds.CreateLayer('node_resampled',
+                                                                          srs=srs,
+                                                                          geom_type=ogr.wkbPoint)
+                                field = ogr.FieldDefn(col, ogr.OFTReal)
+                                points_resampled_lyr.CreateField(field)
+                        else:
+                            tmp_ds.AddBand(datatype=gdal.GDT_Float32)
+                            src_band = out_rasters[col].GetRasterBand(1)
+                            src_arr = src_band.ReadAsArray()
+                            tmp_band = tmp_ds.GetRasterBand(band_nr)
+                            tmp_band.WriteArray(src_arr)
+                            tmp_band.SetNoDataValue(src_band.GetNoDataValue())
+                            if resample_point_layer:
+                                field = ogr.FieldDefn(col, ogr.OFTReal)
+                                points_resampled_lyr.CreateField(field)
 
-            tmp_points_resampled = pixels_to_geoms(raster=tmp_ds,
-                                                   column_names=column_names,
-                                                   output_geom_type=ogr.wkbPoint,
-                                                   output_layer_name='unimportant name')
-            tmp_points_resampled_lyr = tmp_points_resampled.GetLayer(0)
-            for feat in tmp_points_resampled_lyr:
-                points_resampled_lyr.CreateFeature(feat)
-                feat = None
+                if resample_point_layer:
+                    tmp_points_resampled = pixels_to_geoms(raster=tmp_ds,
+                                                           column_names=column_names,
+                                                           output_geom_type=ogr.wkbPoint,
+                                                           output_layer_name='unimportant name')
+                    tmp_points_resampled_lyr = tmp_points_resampled.GetLayer(0)
+                    for feat in tmp_points_resampled_lyr:
+                        points_resampled_lyr.CreateFeature(feat)
+                        feat = None
 
     # flowline layer
-    if len(line_results) > 0:
+    if len(line_results) > 0 and output_flowlines:
         attributes = line_results
         attr_data_types = {}
         for attr, vals in line_results.items():
@@ -863,6 +895,10 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                 attr_data_types[attr] = ogr.OFTString
         threedigrid_to_ogr(threedigrid_src=lines, tgt_ds=tgt_ds, attributes=attributes, attr_data_types=attr_data_types)
 
+    if not output_rasters:
+        out_rasters = {}
+    if (not output_cells) and (resample_point_layer or output_rasters):
+        tgt_ds.DeleteLayer('cell')
     return tgt_ds, out_rasters
 
 

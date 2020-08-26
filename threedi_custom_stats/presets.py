@@ -3,9 +3,11 @@ from typing import List
 try:
     from .aggregation_classes import *
     from .constants import *
+    from .style import *
 except ImportError:
     from aggregation_classes import *
     from constants import *
+    from style import *
 
 
 class Preset:
@@ -14,17 +16,23 @@ class Preset:
                  description: str = '',
                  aggregations: List[Aggregation] = [],
                  resample_point_layer: bool = False,
-                 flowlines_styling_type: str = '',
-                 cells_styling_type: str = '',
-                 nodes_styling_type: str = ''
+                 flowlines_style: Style = None,
+                 cells_style: Style = None,
+                 nodes_style: Style = None,
+                 flowlines_style_param_values: dict = None,
+                 cells_style_param_values: dict = None,
+                 nodes_style_param_values: dict = None
                  ):
         self.name = name
         self.description = description
         self.__aggregations = aggregations
         self.resample_point_layer = resample_point_layer
-        self.flowlines_styling_type = flowlines_styling_type
-        self.cells_styling_type = cells_styling_type
-        self.nodes_styling_type = nodes_styling_type
+        self.flowlines_style = flowlines_style
+        self.cells_style = cells_style
+        self.nodes_style = nodes_style
+        self.flowlines_style_param_values = flowlines_style_param_values
+        self.cells_style_param_values = cells_style_param_values
+        self.nodes_style_param_values = nodes_style_param_values
 
     def add_aggregation(self, aggregation: Aggregation):
         self.__aggregations.append(aggregation)
@@ -48,7 +56,12 @@ MAX_WL_PRESETS = Preset(name='Maximum water level',
                         description='Calculates the maximum water level for nodes and cells within the chosen '
                                     'time filter.',
                         aggregations=max_wl_aggregations,
-                        nodes_styling_type='Single column graduated')
+                        nodes_style=STYLE_SINGLE_COLUMN_GRADUATED_NODE,
+                        cells_style=STYLE_SINGLE_COLUMN_GRADUATED_CELL,
+                        nodes_style_param_values={'column': 's1_max'},
+                        cells_style_param_values={'column': 's1_max'}
+
+                        )
 
 # Flow pattern
 flow_pattern_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q_out_x'),
@@ -57,6 +70,7 @@ flow_pattern_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_s
                              Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q_out_y'),
                                          method=AGGREGATION_METHODS.get_by_short_name('sum'),
                                          )]
+
 FLOW_PATTERN_PRESETS = Preset(name='Flow pattern',
                               description='Generates a flow pattern map. The aggregation calculates total outflow per '
                                           'node in x and y directions, resampled to grid_space. In the styling that is '
@@ -68,7 +82,10 @@ FLOW_PATTERN_PRESETS = Preset(name='Flow pattern',
                                           'Default > Save default style to Datasource Database). ',
                               aggregations=flow_pattern_aggregations,
                               resample_point_layer=True,
-                              nodes_styling_type='Vector')
+                              nodes_style=STYLE_VECTOR,
+                              nodes_style_param_values={'x': 'q_out_x_sum',
+                                                        'y': 'q_out_y_sum'}
+                              )
 
 # Timestep reduction analysis
 ts_reduction_analysis_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('ts_max'),
@@ -85,17 +102,20 @@ ts_reduction_analysis_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES
                                                   )]
 TS_REDUCTION_ANALYSIS_PRESETS = Preset(name='Timestep reduction analysis',
                                        description='Timestep reduction analysis calculates the % of time that the flow '
-                                                   'through each flowline limits the calculation timestep to below 1, 3, '
+                                                   'through each flowline limits the calculation timestep to below 1, '
+                                                   '3, '
                                                    'or 5 seconds. \n\n'
                                                    'The styling highlights the flowlines that have a timestep of \n'
                                                    '    < 1 s for 10% of the time and/or\n'
                                                    '    < 3 s for 50% of the time and/or\n'
                                                    '    < 5 s for 80% of the time;'
                                                    '\n\n'
-                                                   'Replacing these flowlines with orifices may speed up the simulation '
+                                                   'Replacing these flowlines with orifices may speed up the '
+                                                   'simulation '
                                                    'without large impact on the results. Import the highlighted lines '
                                                    'from the aggregation result into your 3Di spatialite as '
-                                                   '\'ts_reducers\' and use this query to replace line elements (example '
+                                                   '\'ts_reducers\' and use this query to replace line elements ('
+                                                   'example '
                                                    'for v2_pipe):\n\n'
                                                    '-- Add orifice:\n'
                                                    'INSERT INTO v2_orifice(display_name, code, crest_level, sewerage, '
@@ -103,23 +123,51 @@ TS_REDUCTION_ANALYSIS_PRESETS = Preset(name='Timestep reduction analysis',
                                                    'discharge_coefficient_positive, discharge_coefficient_negative, '
                                                    'zoom_category, crest_type, connection_node_start_id, '
                                                    'connection_node_end_id)\n'
-                                                    'SELECT display_name, code, max(invert_level_start_point, '
+                                                   'SELECT display_name, code, max(invert_level_start_point, '
                                                    'invert_level_end_point) AS crest_level, TRUE AS sewerage, '
                                                    'cross_section_definition_id, friction_value, friction_type, '
                                                    '1 AS discharge_coefficient_positive, '
-                                                   '1 AS discharge_coefficient_negative, zoom_category, 4 AS crest_type, '
+                                                   '1 AS discharge_coefficient_negative, zoom_category, '
+                                                   '4 AS crest_type, '
                                                    'connection_node_start_id, connection_node_end_id\n'
                                                    'FROM v2_pipe\n'
                                                    'WHERE id IN (SELECT spatialite_id FROM ts_reducers WHERE '
                                                    'content_type=\'v2_pipe\');\n\n'
                                                    '-- Remove pipe\n'
                                                    'DELETE FROM v2_pipe WHERE id IN (SELECT spatialite_id FROM '
-                                                   'ts_reducers WHERE content_type=''v2_pipe'');',
+                                                   'ts_reducers WHERE content_type=\'v2_pipe\');',
                                        aggregations=ts_reduction_analysis_aggregations,
-                                       flowlines_styling_type='Timestep reduction analysis')
+                                       flowlines_style=STYLE_TIMESTEP_REDUCTION_ANALYSIS,
+                                       flowlines_style_param_values={'col1': 'ts_max_below_thres_1_0',
+                                                                     'col2': 'ts_max_below_thres_3_0',
+                                                                     'col3': 'ts_max_below_thres_5_0'
+                                                                     }
+                                       )
 
-# Water balance per node (m3)
-# Water balance per 2D cell (mm)
+# Source or sink (mm)
+# TODO: zorgen dat de niet-gebruikte parameters van deze styling leeg blijven
+source_sink_mm_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('rain_depth'),
+                                           method=AGGREGATION_METHODS.get_by_short_name('sum')
+                                           ),
+                               Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('infiltration_rate_mm'),
+                                           method=AGGREGATION_METHODS.get_by_short_name('sum')
+                                           ),
+                               Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('intercepted_volume_mm'),
+                                           method=AGGREGATION_METHODS.get_by_short_name('last')
+                                           )
+                               ]
+SOURCE_SINK_MM_PRESETS = Preset(name='Source or sink (mm)',
+                                description='Calculate by how many mm a node or cell is a net source or sink.'
+                                            'A positive results indicates a source, negative result a sink.',
+                                aggregations=source_sink_mm_aggregations,
+                                cells_style=STYLE_BALANCE,
+                                cells_style_param_values={'positive_col1': 'rain_depth_sum',
+                                                          'positive_col2': '',
+                                                          'positive_col3': '',
+                                                          'negative_col1': 'infiltration_rate_mm_sum',
+                                                          'negative_col2': 'intercepted_volume_mm_last',
+                                                          'negative_col3': '',
+                                                          }
+                                )
 
-
-PRESETS = [NO_PRESET, MAX_WL_PRESETS, FLOW_PATTERN_PRESETS, TS_REDUCTION_ANALYSIS_PRESETS]
+PRESETS = [NO_PRESET, MAX_WL_PRESETS, SOURCE_SINK_MM_PRESETS, FLOW_PATTERN_PRESETS, TS_REDUCTION_ANALYSIS_PRESETS]

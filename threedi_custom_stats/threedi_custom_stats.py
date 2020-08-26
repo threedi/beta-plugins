@@ -39,16 +39,7 @@ import os.path
 
 # TODO: cfl strictness factors instelbaar maken
 # TODO: berekening van max timestep ook op basis van volume vs. debiet
-# TODO: Presets definiëren:
-# - Maximaal waterdiepteraster
-# - Verbindingen die meer dan 80% van de tijd een tijdstap van 5 seconden onmogelijk maken
-# - Minipijltjes
-# - Waterbalans per rekennode
-# - Max peilstijging (max - first)
 # TODO: opties af laten hangen van wat er in het model aanwezig is
-# TODO: styling automatisch laten toepassen
-# - Fase 3: fancy stylings toevoegen
-
 
 class ThreeDiCustomStats:
     """QGIS Plugin Implementation."""
@@ -244,6 +235,15 @@ class ThreeDiCustomStats:
             if self.dlg.checkBoxWeirs.isChecked():
                 subsets.append('Weirs')
 
+            # Resolution
+            resolution = self.dlg.doubleSpinBoxResolution.value()
+
+            # Outputs
+            output_flowlines = self.dlg.groupBoxFlowlines.isChecked()
+            output_nodes = self.dlg.groupBoxNodes.isChecked()
+            output_cells = self.dlg.groupBoxCells.isChecked()
+            output_rasters = self.dlg.groupBoxRasters.isChecked()
+
             # Resample point layer
             resample_point_layer = self.dlg.checkBoxResample.isChecked()
             if resample_point_layer:
@@ -264,10 +264,31 @@ class ThreeDiCustomStats:
                                                           start_time=start_time,
                                                           end_time=end_time,
                                                           subsets=subsets,
-                                                          interpolation_method=interpolation_method)
+                                                          interpolation_method=interpolation_method,
+                                                          resample_point_layer=resample_point_layer,
+                                                          resolution=resolution,
+                                                          output_flowlines=output_flowlines,
+                                                          output_cells=output_cells,
+                                                          output_nodes=output_nodes,
+                                                          output_rasters=output_rasters
+
+                                                          )
 
             # Add layers to layer tree
             # They are added in order so the raster is below the polygon is below the line is below the point layer
+
+            # raster layer
+            if len(mem_rasts) > 0:
+                for rastname, rast in mem_rasts.items():
+                    raster_output_dir = self.dlg.mQgsFileWidgetRasterFolder.filePath()
+                    raster_output_fn = os.path.join(raster_output_dir, rastname + '.tif')
+                    drv = gdal.GetDriverByName('GTiff')
+                    gdal_tif = drv.CreateCopy(utf8_path=raster_output_fn, src=rast)
+                    gdal_tif = None
+                    self.iface.addRasterLayer(raster_output_fn,
+                                              "Aggregation results: raster {}".format(rastname))
+
+            # cell layer
             ogr_lyr = ogr_ds.GetLayerByName('cell')
             if ogr_lyr is not None:
                 if ogr_lyr.GetFeatureCount() > 0:
@@ -275,63 +296,42 @@ class ThreeDiCustomStats:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: cells')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    style_kwargs = self.dlg.comboBoxCellsStyleType.currentData()['kwargs_getter']()
-                    style_function = self.dlg.comboBoxCellsStyleType.currentData()['function']
-                    qml = self.dlg.comboBoxCellsStyleType.currentData()['qml']
-                    style_function(qgs_lyr,
-                                   qml,
-                                   **style_kwargs)
+                    style = self.dlg.comboBoxCellsStyleType.currentData()
+                    style_kwargs = self.dlg.get_styling_parameters(output_type=style.output_type)
+                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
 
-                    # raster layer
-                    if self.dlg.checkBoxGenerateRasters.isChecked():
-                        for rastname, rast in mem_rasts.items():
-                            raster_output_dir = self.dlg.mQgsFileWidgetRasterFolder.filePath()
-                            raster_output_fn = os.path.join(raster_output_dir, rastname + '.tif')
-                            drv = gdal.GetDriverByName('GTiff')
-                            gdal_tif = drv.CreateCopy(utf8_path=raster_output_fn, src=rast)
-                            gdal_tif = None
-                            self.iface.addRasterLayer(raster_output_fn,
-                                                      "Aggregation results: raster {}".format(rastname))
-
+            # flowline layer
             ogr_lyr = ogr_ds.GetLayerByName('flowline')
             if ogr_lyr is not None:
                 if ogr_lyr.GetFeatureCount() > 0:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: flowlines')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    style_kwargs = self.dlg.comboBoxFlowlinesStyleType.currentData()['kwargs_getter']()
-                    style_function = self.dlg.comboBoxFlowlinesStyleType.currentData()['function']
-                    qml = self.dlg.comboBoxFlowlinesStyleType.currentData()['qml']
-                    style_function(qgs_lyr,
-                                   qml,
-                                   **style_kwargs)
+                    style = self.dlg.comboBoxFlowlinesStyleType.currentData()
+                    style_kwargs = self.dlg.get_styling_parameters(output_type=style.output_type)
+                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
 
+            # node layer
             ogr_lyr = ogr_ds.GetLayerByName('node')
             if ogr_lyr is not None:
                 if ogr_lyr.GetFeatureCount() > 0:
                     qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: nodes')
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    style_kwargs = self.dlg.comboBoxNodesStyleType.currentData()['kwargs_getter']()
-                    style_function = self.dlg.comboBoxNodesStyleType.currentData()['function']
-                    qml = self.dlg.comboBoxNodesStyleType.currentData()['qml']
-                    style_function(qgs_lyr,
-                                   qml,
-                                   **style_kwargs)
+                    style = self.dlg.comboBoxNodesStyleType.currentData()
+                    style_kwargs = self.dlg.get_styling_parameters(output_type=style.output_type)
+                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
 
-            if resample_point_layer:
-                ogr_lyr = ogr_ds.GetLayerByName('node_resampled')
-                if ogr_lyr is not None:
-                    if ogr_lyr.GetFeatureCount() > 0:
-                        qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
-                        project = QgsProject.instance()
-                        project.addMapLayer(qgs_lyr)
-                        style_kwargs = self.dlg.comboBoxNodesStyleType.currentData()['kwargs_getter']()
-                        style_function = self.dlg.comboBoxNodesStyleType.currentData()['function']
-                        qml = self.dlg.comboBoxNodesStyleType.currentData()['qml']
-                        style_function(qgs_lyr,
-                                       qml,
-                                       **style_kwargs)
+            # resampled point layer
+            ogr_lyr = ogr_ds.GetLayerByName('node_resampled')
+            if ogr_lyr is not None:
+                if ogr_lyr.GetFeatureCount() > 0:
+                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
+                    project = QgsProject.instance()
+                    project.addMapLayer(qgs_lyr)
+                    style = self.dlg.comboBoxNodesStyleType.currentData()
+                    style_kwargs = self.dlg.get_styling_parameters(output_type=style.output_type)
+                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
 
             self.iface.messageBar().pushMessage("Success",
                                                 "Finished custom aggregation",

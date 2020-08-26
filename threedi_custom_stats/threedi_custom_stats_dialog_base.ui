@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>962</width>
-    <height>539</height>
+    <height>856</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,8 +19,8 @@
   <widget class="QDialogButtonBox" name="dialogButtonBoxOKCancel">
    <property name="geometry">
     <rect>
-     <x>750</x>
-     <y>500</y>
+     <x>760</x>
+     <y>820</y>
      <width>193</width>
      <height>28</height>
     </rect>
@@ -41,7 +41,7 @@
      <x>10</x>
      <y>10</y>
      <width>941</width>
-     <height>481</height>
+     <height>801</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -480,7 +480,7 @@
        <x>10</x>
        <y>30</y>
        <width>871</width>
-       <height>291</height>
+       <height>621</height>
       </rect>
      </property>
      <property name="minimumSize">
@@ -576,39 +576,13 @@
       <bool>false</bool>
      </property>
     </widget>
-    <widget class="QCheckBox" name="checkBoxGenerateRasters">
-     <property name="geometry">
-      <rect>
-       <x>12</x>
-       <y>380</y>
-       <width>241</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Generate rasters and save to folder:</string>
-     </property>
-    </widget>
-    <widget class="QgsFileWidget" name="mQgsFileWidgetRasterFolder">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>410</y>
-       <width>871</width>
-       <height>27</height>
-      </rect>
-     </property>
-    </widget>
     <widget class="QLabel" name="lineGeometryWarningLabel">
      <property name="geometry">
       <rect>
-       <x>14</x>
-       <y>330</y>
-       <width>801</width>
-       <height>16</height>
+       <x>20</x>
+       <y>660</y>
+       <width>851</width>
+       <height>101</height>
       </rect>
      </property>
      <property name="palette">
@@ -679,262 +653,468 @@
       <string/>
      </property>
     </widget>
-    <widget class="QCheckBox" name="checkBoxResample">
-     <property name="geometry">
-      <rect>
-       <x>12</x>
-       <y>354</y>
-       <width>871</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Resample point layer to smallest cell size (may take some extra time)</string>
-     </property>
-    </widget>
    </widget>
    <widget class="QWidget" name="tab_5">
     <attribute name="title">
-     <string>Styling</string>
+     <string>Outputs and styling</string>
     </attribute>
-    <widget class="QComboBox" name="comboBoxNodesStyleType">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
+    <widget class="QGroupBox" name="groupBoxRasters">
      <property name="geometry">
       <rect>
-       <x>80</x>
-       <y>130</y>
-       <width>191</width>
-       <height>22</height>
+       <x>10</x>
+       <y>650</y>
+       <width>911</width>
+       <height>111</height>
       </rect>
      </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxFlowlinesStyleType">
-     <property name="enabled">
+     <property name="title">
+      <string>Rasters</string>
+     </property>
+     <property name="checkable">
       <bool>true</bool>
      </property>
-     <property name="geometry">
-      <rect>
-       <x>80</x>
-       <y>50</y>
-       <width>191</width>
-       <height>22</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxCellsStyleType">
-     <property name="enabled">
+     <property name="checked">
       <bool>false</bool>
      </property>
-     <property name="geometry">
-      <rect>
-       <x>80</x>
-       <y>90</y>
-       <width>191</width>
-       <height>22</height>
-      </rect>
-     </property>
+     <widget class="QgsFileWidget" name="mQgsFileWidgetRasterFolder">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
+      <property name="geometry">
+       <rect>
+        <x>130</x>
+        <y>30</y>
+        <width>771</width>
+        <height>27</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QDoubleSpinBox" name="doubleSpinBoxResolution">
+      <property name="geometry">
+       <rect>
+        <x>130</x>
+        <y>70</y>
+        <width>121</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="maximum">
+       <double>9999999.000000000000000</double>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_11">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>70</y>
+        <width>121</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Resolution (m):</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_12">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>30</y>
+        <width>121</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Output folder:</string>
+      </property>
+     </widget>
     </widget>
-    <widget class="QLabel" name="label_6">
+    <widget class="QGroupBox" name="groupBoxNodes">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>130</y>
-       <width>55</width>
-       <height>16</height>
+       <y>420</y>
+       <width>911</width>
+       <height>221</height>
       </rect>
      </property>
-     <property name="text">
+     <property name="title">
       <string>Nodes</string>
      </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <widget class="QDoubleSpinBox" name="doubleSpinBoxNodesLayerResolution">
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>190</y>
+        <width>111</width>
+        <height>22</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="comboBoxNodesStyleType">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>40</y>
+        <width>191</width>
+        <height>22</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="checkBoxResample">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>190</y>
+        <width>251</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Resample node layer to resolution (m):</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_13">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>30</y>
+        <width>81</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Styling type:</string>
+      </property>
+     </widget>
+     <widget class="QTableWidget" name="tableWidgetNodesStyleParams">
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>80</y>
+        <width>601</width>
+        <height>91</height>
+       </rect>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::NoFrame</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Sunken</enum>
+      </property>
+      <property name="lineWidth">
+       <number>0</number>
+      </property>
+      <property name="alternatingRowColors">
+       <bool>false</bool>
+      </property>
+      <property name="showGrid">
+       <bool>true</bool>
+      </property>
+      <property name="cornerButtonEnabled">
+       <bool>false</bool>
+      </property>
+      <attribute name="horizontalHeaderDefaultSectionSize">
+       <number>200</number>
+      </attribute>
+      <attribute name="horizontalHeaderHighlightSections">
+       <bool>true</bool>
+      </attribute>
+      <attribute name="horizontalHeaderStretchLastSection">
+       <bool>true</bool>
+      </attribute>
+      <attribute name="verticalHeaderVisible">
+       <bool>false</bool>
+      </attribute>
+      <attribute name="verticalHeaderDefaultSectionSize">
+       <number>24</number>
+      </attribute>
+      <row>
+       <property name="text">
+        <string/>
+       </property>
+      </row>
+      <row>
+       <property name="text">
+        <string/>
+       </property>
+      </row>
+      <column>
+       <property name="text">
+        <string>Parameter</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Field</string>
+       </property>
+      </column>
+     </widget>
+     <widget class="QLabel" name="label_14">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>70</y>
+        <width>141</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Fields to use in styling:</string>
+      </property>
+     </widget>
     </widget>
-    <widget class="QLabel" name="label_7">
+    <widget class="QGroupBox" name="groupBoxCells">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>50</y>
-       <width>55</width>
-       <height>16</height>
+       <y>220</y>
+       <width>911</width>
+       <height>181</height>
       </rect>
      </property>
-     <property name="text">
-      <string>Flowlines</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_8">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>90</y>
-       <width>55</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="text">
+     <property name="title">
       <string>Cells</string>
      </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxNodesStyleCol1">
-     <property name="enabled">
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
       <bool>false</bool>
      </property>
-     <property name="geometry">
-      <rect>
-       <x>290</x>
-       <y>130</y>
-       <width>191</width>
-       <height>22</height>
-      </rect>
-     </property>
+     <widget class="QLabel" name="label_15">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>30</y>
+        <width>81</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Styling type:</string>
+      </property>
+     </widget>
+     <widget class="QTableWidget" name="tableWidgetCellsStyleParams">
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>70</y>
+        <width>601</width>
+        <height>91</height>
+       </rect>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::NoFrame</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Sunken</enum>
+      </property>
+      <property name="lineWidth">
+       <number>0</number>
+      </property>
+      <property name="alternatingRowColors">
+       <bool>false</bool>
+      </property>
+      <property name="showGrid">
+       <bool>true</bool>
+      </property>
+      <property name="cornerButtonEnabled">
+       <bool>false</bool>
+      </property>
+      <attribute name="horizontalHeaderDefaultSectionSize">
+       <number>200</number>
+      </attribute>
+      <attribute name="horizontalHeaderHighlightSections">
+       <bool>true</bool>
+      </attribute>
+      <attribute name="horizontalHeaderStretchLastSection">
+       <bool>true</bool>
+      </attribute>
+      <attribute name="verticalHeaderVisible">
+       <bool>false</bool>
+      </attribute>
+      <attribute name="verticalHeaderDefaultSectionSize">
+       <number>24</number>
+      </attribute>
+      <row>
+       <property name="text">
+        <string/>
+       </property>
+      </row>
+      <row>
+       <property name="text">
+        <string/>
+       </property>
+      </row>
+      <column>
+       <property name="text">
+        <string>Parameter</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Field</string>
+       </property>
+      </column>
+     </widget>
+     <widget class="QLabel" name="label_16">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>70</y>
+        <width>141</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Fields to use in styling:</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="comboBoxCellsStyleType">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>30</y>
+        <width>191</width>
+        <height>22</height>
+       </rect>
+      </property>
+     </widget>
     </widget>
-    <widget class="QLabel" name="label_9">
+    <widget class="QGroupBox" name="groupBoxFlowlines">
      <property name="geometry">
       <rect>
-       <x>290</x>
+       <x>10</x>
        <y>20</y>
-       <width>81</width>
-       <height>30</height>
+       <width>911</width>
+       <height>181</height>
       </rect>
      </property>
-     <property name="text">
-      <string>Column(s):</string>
+     <property name="title">
+      <string>Flowlines</string>
      </property>
-    </widget>
-    <widget class="QLabel" name="label_10">
-     <property name="geometry">
-      <rect>
-       <x>80</x>
-       <y>20</y>
-       <width>81</width>
-       <height>30</height>
-      </rect>
+     <property name="checkable">
+      <bool>true</bool>
      </property>
-     <property name="text">
-      <string>Styling type:</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pushButtonFlowlinesStyleConfig">
-     <property name="geometry">
-      <rect>
-       <x>290</x>
-       <y>50</y>
-       <width>189</width>
-       <height>28</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Choose columns...</string>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxFlowlinesStyleCol1">
-     <property name="enabled">
+     <property name="checked">
       <bool>false</bool>
      </property>
-     <property name="geometry">
-      <rect>
-       <x>290</x>
-       <y>50</y>
-       <width>191</width>
-       <height>22</height>
-      </rect>
-     </property>
+     <widget class="QLabel" name="label_17">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>30</y>
+        <width>81</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Styling type:</string>
+      </property>
+     </widget>
+     <widget class="QTableWidget" name="tableWidgetFlowlinesStyleParams">
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>70</y>
+        <width>601</width>
+        <height>91</height>
+       </rect>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::NoFrame</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Sunken</enum>
+      </property>
+      <property name="lineWidth">
+       <number>0</number>
+      </property>
+      <property name="alternatingRowColors">
+       <bool>false</bool>
+      </property>
+      <property name="showGrid">
+       <bool>true</bool>
+      </property>
+      <property name="cornerButtonEnabled">
+       <bool>false</bool>
+      </property>
+      <attribute name="horizontalHeaderDefaultSectionSize">
+       <number>200</number>
+      </attribute>
+      <attribute name="horizontalHeaderHighlightSections">
+       <bool>true</bool>
+      </attribute>
+      <attribute name="horizontalHeaderStretchLastSection">
+       <bool>true</bool>
+      </attribute>
+      <attribute name="verticalHeaderVisible">
+       <bool>false</bool>
+      </attribute>
+      <attribute name="verticalHeaderDefaultSectionSize">
+       <number>24</number>
+      </attribute>
+      <row>
+       <property name="text">
+        <string/>
+       </property>
+      </row>
+      <row>
+       <property name="text">
+        <string/>
+       </property>
+      </row>
+      <column>
+       <property name="text">
+        <string>Parameter</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Field</string>
+       </property>
+      </column>
+     </widget>
+     <widget class="QLabel" name="label_18">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>70</y>
+        <width>141</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Fields to use in styling:</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="comboBoxFlowlinesStyleType">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>30</y>
+        <width>191</width>
+        <height>22</height>
+       </rect>
+      </property>
+     </widget>
     </widget>
-    <widget class="QPushButton" name="pushButtonCellsStyleConfig">
-     <property name="geometry">
-      <rect>
-       <x>290</x>
-       <y>90</y>
-       <width>191</width>
-       <height>28</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Choose columns...</string>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxCellsStyleCol1">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-     <property name="geometry">
-      <rect>
-       <x>290</x>
-       <y>90</y>
-       <width>191</width>
-       <height>22</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxNodesStyleCol2">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-     <property name="geometry">
-      <rect>
-       <x>500</x>
-       <y>130</y>
-       <width>191</width>
-       <height>22</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pushButtonNodesStyleConfig">
-     <property name="geometry">
-      <rect>
-       <x>290</x>
-       <y>130</y>
-       <width>191</width>
-       <height>28</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Choose columns...</string>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxFlowlinesStyleCol2">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-     <property name="geometry">
-      <rect>
-       <x>500</x>
-       <y>50</y>
-       <width>191</width>
-       <height>22</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="comboBoxFlowlinesStyleCol3">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-     <property name="geometry">
-      <rect>
-       <x>710</x>
-       <y>50</y>
-       <width>191</width>
-       <height>22</height>
-      </rect>
-     </property>
-    </widget>
-    <zorder>pushButtonNodesStyleConfig</zorder>
-    <zorder>comboBoxNodesStyleType</zorder>
-    <zorder>comboBoxFlowlinesStyleType</zorder>
-    <zorder>comboBoxCellsStyleType</zorder>
-    <zorder>label_6</zorder>
-    <zorder>label_7</zorder>
-    <zorder>label_8</zorder>
-    <zorder>comboBoxNodesStyleCol1</zorder>
-    <zorder>label_9</zorder>
-    <zorder>label_10</zorder>
-    <zorder>pushButtonFlowlinesStyleConfig</zorder>
-    <zorder>comboBoxFlowlinesStyleCol1</zorder>
-    <zorder>pushButtonCellsStyleConfig</zorder>
-    <zorder>comboBoxCellsStyleCol1</zorder>
-    <zorder>comboBoxNodesStyleCol2</zorder>
-    <zorder>comboBoxFlowlinesStyleCol2</zorder>
-    <zorder>comboBoxFlowlinesStyleCol3</zorder>
    </widget>
    <widget class="QWidget" name="tab_3">
     <attribute name="title">
