@@ -63,15 +63,9 @@ res = 'C:/Users/leendert.vanwolfswin/Documents/rotterdam/resultaat/hoek van holl
 
 das = []
 
-das.append(Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q_out_x'),
+das.append(Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
                        method=AGGREGATION_METHODS.get_by_short_name('sum'),
-                       sign=AggregationSign(short_name='net', long_name='Net')
-                       )
-           )
-
-das.append(Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q_out_y'),
-                       method=AGGREGATION_METHODS.get_by_short_name('sum'),
-                       sign=AggregationSign(short_name='net', long_name='Net')
+                       sign=AggregationSign('net', 'Net')
                        )
            )
 
@@ -80,15 +74,15 @@ ca, rast = aggregate_threedi_results(gridadmin=ga,
                                      demanded_aggregations=das,
                                      interpolation_method='linear',
                                      resample_point_layer=False,
-                                     output_flowlines=False,
+                                     output_flowlines=True,
                                      output_cells=False,
-                                     output_rasters=True,
+                                     output_rasters=False,
                                      output_nodes=False
                                     )
 
-ogr_rsamplyr = ca.GetLayerByName('node_resampled')
+ogr_rsamplyr = ca.GetLayerByName('flowline')
 if ogr_rsamplyr is not None:
-    print('resampled point layer has {} features'.format(ogr_rsamplyr.GetFeatureCount()))
+    print('flowline layer has {} features'.format(ogr_rsamplyr.GetFeatureCount()))
 
 # ogr_fllyr = ca.GetLayerByName('flowline')
 # if ogr_fllyr is not None:

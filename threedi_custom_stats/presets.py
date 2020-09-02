@@ -145,11 +145,10 @@ TS_REDUCTION_ANALYSIS_PRESETS = Preset(name='Timestep reduction analysis',
                                        )
 
 # Source or sink (mm)
-# TODO: zorgen dat de niet-gebruikte parameters van deze styling leeg blijven
 source_sink_mm_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('rain_depth'),
                                            method=AGGREGATION_METHODS.get_by_short_name('sum')
                                            ),
-                               Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('infiltration_rate_mm'),
+                               Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('infiltration_rate_simple_mm'),
                                            method=AGGREGATION_METHODS.get_by_short_name('sum')
                                            ),
                                Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('intercepted_volume_mm'),
@@ -164,7 +163,7 @@ SOURCE_SINK_MM_PRESETS = Preset(name='Source or sink (mm)',
                                 cells_style_param_values={'positive_col1': 'rain_depth_sum',
                                                           'positive_col2': '',
                                                           'positive_col3': '',
-                                                          'negative_col1': 'infiltration_rate_mm_sum',
+                                                          'negative_col1': 'infiltration_rate_simple_mm_sum',
                                                           'negative_col2': 'intercepted_volume_mm_last',
                                                           'negative_col3': '',
                                                           }

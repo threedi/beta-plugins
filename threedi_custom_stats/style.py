@@ -1,11 +1,10 @@
-# TODO: 'Flowline with direction' styling ook width laten variëren afhankelijk van de klasse
-# TODO: Legenda in layer tree ook updaten na triggerRepaint
-
 import os
 import numpy as np
 from typing import List
 
-from qgis.core import QgsMarkerSymbol, QgsExpression, QgsExpressionContext, QgsExpressionContextUtils
+from qgis.core import QgsSymbolLayer, QgsMarkerSymbol, QgsProperty, QgsExpression, \
+    QgsExpressionContext, QgsExpressionContextUtils
+from qgis import utils
 
 STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
 
@@ -35,6 +34,7 @@ def style_on_single_column(layer, qml: str, column: str):
                                    mode=layer.renderer().mode(),
                                    nclasses=len(layer.renderer().ranges()))
     layer.triggerRepaint()
+    utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
 def style_balance(layer, qml: str,
@@ -51,10 +51,10 @@ def style_balance(layer, qml: str,
     negative_columns = []
     for col in [positive_col1, positive_col2, positive_col3]:
         if col != '':
-            positive_columns.append(col)
+            positive_columns.append('coalesce({col}, 0)'.format(col=col))
     for col in [negative_col1, negative_col2, negative_col3]:
         if col != '':
-            negative_columns.append(col)
+            negative_columns.append('coalesce({col}, 0)'.format(col=col))
     class_attribute_string = '({pos})-({neg})'.format(pos=' + '.join(positive_columns),
                                                       neg=' + '.join(negative_columns))
     layer.renderer().setClassAttribute(class_attribute_string)
@@ -73,6 +73,7 @@ def style_balance(layer, qml: str,
     color_ramp = layer.renderer().sourceColorRamp()
     layer.renderer().updateColorRamp(color_ramp)
     layer.triggerRepaint()
+    utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
 def style_as_vector(layer, qml: str, x: str, y: str):
@@ -90,7 +91,12 @@ def style_as_vector(layer, qml: str, x: str, y: str):
                                    mode=layer.renderer().mode(),
                                    nclasses=len(layer.renderer().ranges()))
 
+    # update size
+    layer.renderer().setSymbolSizes(0, 2)
+
+
     layer.triggerRepaint()
+    utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
 def style_flow_direction(layer, qml: str, column: str):
@@ -111,7 +117,34 @@ def style_flow_direction(layer, qml: str, column: str):
                                    mode=layer.renderer().mode(),
                                    nclasses=len(layer.renderer().ranges()))
 
+
+    # set marker size & line width
+    p10 = layer.renderer().ranges()[0].upperValue() # hacky way to get the p10 and p90 values as there is no such function available in qgis
+    p90 = layer.renderer().ranges()[-1].lowerValue()
+    marker_size_expression = 'coalesce(scale_linear(abs({column}), {p10}, {p90}, 1, 3), 0)'.format(
+        column=column,
+        p10=p10,
+        p90=p90
+    )
+    data_defined_marker_size = QgsMarkerSymbol().dataDefinedSize().fromExpression(marker_size_expression)
+    layer.renderer().sourceSymbol()[1].subSymbol().setDataDefinedSize(data_defined_marker_size)
+
+    line_width_expression = 'coalesce(scale_linear(abs({column}), {p10}, {p90}, 0.1, 1), 0)'.format(
+        column=column,
+        p10=p10,
+        p90=p90
+    )
+    data_defined_line_width = QgsProperty.fromExpression(line_width_expression)
+    layer.renderer().sourceSymbol()[0].setDataDefinedProperty(QgsSymbolLayer.PropertyStrokeWidth, data_defined_line_width)
+
+    # update classes because triggerRepaint alone doesn't do the trick
+    layer.renderer().updateClasses(vlayer=layer,
+                                   mode=layer.renderer().mode(),
+                                   nclasses=len(layer.renderer().ranges()))
     layer.triggerRepaint()
+
+    # update legend for layer
+    utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
 def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str):
@@ -119,6 +152,7 @@ def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str
     filter_expression = '{col1} >10 or {col2} > 50 or {col3} > 80'.format(col1=col1, col2=col2, col3=col3)
     layer.renderer().rootRule().children()[0].setFilterExpression(filterExp=filter_expression)
     layer.triggerRepaint()
+    utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
 STYLE_FLOW_DIRECTION = Style(name='Flow direction',

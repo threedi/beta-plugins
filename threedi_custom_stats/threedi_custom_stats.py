@@ -39,7 +39,7 @@ import os.path
 
 # TODO: cfl strictness factors instelbaar maken
 # TODO: berekening van max timestep ook op basis van volume vs. debiet
-# TODO: opties af laten hangen van wat er in het model aanwezig is
+# TODO: opties af laten hangen van wat er in het model aanwezig is; is wel tricky ivm presets
 
 class ThreeDiCustomStats:
     """QGIS Plugin Implementation."""

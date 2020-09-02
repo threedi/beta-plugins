@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """ Calculate the resultant of the total outflow per node, resampled to grid_space """
-# TODO: zorgen dat de content_type zonder 'b prefix wordt gegeven
+#TODO: aggregatie-NetCDF ook gebruiken
+
 import argparse
 import warnings
 from typing import List
@@ -100,12 +101,8 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
     raw_values = np.ndarray((0, 0))
 
     # Line variables
-    if aggregation.variable.short_name == 'q':
-        raw_values = ts.q
-    elif aggregation.variable.short_name == 'u':
-        raw_values = ts.u1
-    elif aggregation.variable.short_name == 'au':
-        raw_values = ts.au
+    if aggregation.variable.short_name in ['q', 'u', 'au']:
+        raw_values = getattr(ts, aggregation.variable.short_name)
     elif aggregation.variable.short_name == 'ts_max':
         if hasattr(nodes_or_lines, 'line_geometries'):
             if nodes_or_lines.line_geometries.ndim == 0:
@@ -128,50 +125,31 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
         raw_values[:, np.in1d(kcu_types, np.array(NON_TS_REDUCING_KCU))] = 9999
 
     # Node variables
-    elif aggregation.variable.short_name == 's1':
-        raw_values = ts.s1
-    elif aggregation.variable.short_name == 'vol':
-        raw_values = ts.vol
-    elif aggregation.variable.short_name == 'rain':
-        raw_values = ts.rain
+    elif aggregation.variable.short_name in ['s1', 'vol', 'rain', 'su', 'ucx', 'ucy', 'infiltration_rate_simple',
+                                             'q_lat', 'intercepted_volume', 'q_sss']:
+        raw_values = getattr(ts, aggregation.variable.short_name)
     elif aggregation.variable.short_name == 'rain_depth':
         ts_rain = ts.rain
         ts_rain[ts_rain == -9999] = np.nan
         raw_values = np.divide(ts_rain, nodes_or_lines.sumax)
-    elif aggregation.variable.short_name == 'su':
-        raw_values = ts.su
-    elif aggregation.variable.short_name == 'ucx':
-        raw_values = ts.ucx
-    elif aggregation.variable.short_name == 'ucy':
-        raw_values = ts.ucy
     elif aggregation.variable.short_name == 'uc':
         ucx = ts.ucx
         ucx[ucx == -9999] = np.nan
         ucy = ts.ucy
         ucy[ucy == -9999] = np.nan
         raw_values = np.sqrt(np.square(ucx), np.square(ucy))
-    elif aggregation.variable.short_name == 'infiltration_rate':
-        raw_values = ts.infiltration_rate_simple
-    elif aggregation.variable.short_name == 'infiltration_rate_mm':
+    elif aggregation.variable.short_name == 'infiltration_rate_simple_mm':
         ts_infiltration_rate_simple = ts.infiltration_rate_simple
         ts_infiltration_rate_simple[ts_infiltration_rate_simple == -9999] = np.nan
         raw_values = np.divide(ts_infiltration_rate_simple, ts.sumax)
-    elif aggregation.variable.short_name == 'q_lat':
-        raw_values = ts.q_lat
     elif aggregation.variable.short_name == 'q_lat_mm':
         ts_q_lat = ts.q_lat
         ts_q_lat[ts_q_lat == -9999] = np.nan
         raw_values = np.divide(ts_q_lat, nodes_or_lines.sumax)
-    # TODO: FIX: code below raises error 'AttributeError: 'Nodes' object has no attribute 'intercepted_volume'
-    # Cause could be that model does not have interception?
-    elif aggregation.variable.short_name == 'intercepted_volume':
-        raw_values = ts.intercepted_volume
     elif aggregation.variable.short_name == 'intercepted_volume_mm':
         ts_intercepted_volume = ts.intercepted_volume
         ts_intercepted_volume[ts_intercepted_volume == -9999] = np.nan
         raw_values = np.divide(ts_intercepted_volume, nodes_or_lines.sumax)
-    elif aggregation.variable.short_name == 'q_sss':
-        raw_values = ts.q_sss
     elif aggregation.variable.short_name == 'q_sss_mm':
         ts_q_sss = ts.q_sss
         ts_q_sss[ts_q_sss == -9999] = np.nan
@@ -248,7 +226,7 @@ def hybrid_time_aggregate(gr,
             raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
         if '_mm' in aggregation.variable.short_name:
             surface_area = gr.nodes.filter(id__in=ids).sumax
-            result = result/surface_area
+            result = result / surface_area
     else:
         raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
 
@@ -685,12 +663,16 @@ def threedigrid_to_ogr(threedigrid_src, tgt_ds, attributes: dict, attr_data_type
                 val = attributes[attr][i]
                 if attr_data_types[attr] in [ogr.OFTInteger]:
                     val = int(val)
-                if attr_data_types[attr] in [ogr.OFTString]:
-                    if type(val) == bytes:
+                elif attr_data_types[attr] in [ogr.OFTString]:
+                    if isinstance(val, bytes):
                         val = val.decode('utf-8')
                     else:
                         val = str(val)
-                feature.SetField(attr, val)
+                elif attr_data_types[attr] in [ogr.OFTReal]:
+                    if np.isnan(val):
+                        val = None
+                if val is not None:
+                    feature.SetField(attr, val)
 
             # create the actual feature
             out_layer.CreateFeature(feature)
@@ -772,11 +754,16 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                     line_results['kcu'] = lines.kcu
                     line_results['kcu_description'] = np.vectorize(KCU_DICT.get)(lines.kcu)
                     first_pass_flowlines = False
-                line_results[new_column_name] = time_aggregate(nodes_or_lines=lines,
-                                                               start_time=start_time,
-                                                               end_time=end_time,
-                                                               aggregation=da
-                                                               )
+                try:
+                    line_results[new_column_name] = time_aggregate(nodes_or_lines=lines,
+                                                                   start_time=start_time,
+                                                                   end_time=end_time,
+                                                                   aggregation=da
+                                                                   )
+                except AttributeError:
+                    warnings.warn('Demanded aggregation of variable that is not included in these 3Di results')
+                    line_results[new_column_name] = np.full(len(line_results['id']), fill_value=None, dtype=np.float)
+
         elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE]):
             if output_nodes or output_cells or output_rasters:
                 if first_pass_nodes:
@@ -786,11 +773,16 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                     node_results['node_type'] = nodes.node_type
                     node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
                     first_pass_nodes = False
-                node_results[new_column_name] = time_aggregate(nodes_or_lines=nodes,
-                                                               start_time=start_time,
-                                                               end_time=end_time,
-                                                               aggregation=da
-                                                               )
+                try:
+                    node_results[new_column_name] = time_aggregate(nodes_or_lines=nodes,
+                                                                   start_time=start_time,
+                                                                   end_time=end_time,
+                                                                   aggregation=da
+                                                                   )
+                except AttributeError:
+                    warnings.warn('Demanded aggregation of variable that is not included in these 3Di results')
+                    node_results[new_column_name] = np.full(len(node_results['id']), fill_value=None, dtype=np.float)
+
         elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE_HYBRID]):
             if output_nodes or output_cells or output_rasters:
                 if first_pass_nodes:
@@ -800,12 +792,16 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                     node_results['node_type'] = nodes.node_type
                     node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
                     first_pass_nodes = False
-                node_results[new_column_name] = hybrid_time_aggregate(gr=gr,
-                                                                      ids=nodes.id,
-                                                                      start_time=start_time,
-                                                                      end_time=end_time,
-                                                                      aggregation=da
-                                                                      )
+                try:
+                    node_results[new_column_name] = hybrid_time_aggregate(gr=gr,
+                                                                          ids=nodes.id,
+                                                                          start_time=start_time,
+                                                                          end_time=end_time,
+                                                                          aggregation=da
+                                                                          )
+                except AttributeError:
+                    warnings.warn('Demanded aggregation of variable that is not included in these 3Di results')
+                    node_results[new_column_name] = np.full(len(node_results['id']), fill_value=None, dtype=np.float)
 
     # translate results to GIS layers
     # node and cell layers

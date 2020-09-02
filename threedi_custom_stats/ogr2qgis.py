@@ -75,7 +75,7 @@ def layer_as_uri(layer, index=True):
     other_params += field_uris
 
     # index
-    if index == True:
+    if index:
         index_param = 'index=yes'
         other_params.append(index_param)
 
