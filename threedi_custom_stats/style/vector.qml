@@ -1,49 +1,49 @@
 <!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
-<qgis simplifyMaxScale="1" simplifyLocal="1" simplifyDrawingTol="1" simplifyDrawingHints="0" labelsEnabled="0" version="3.14.0-Pi" maxScale="0" readOnly="0" hasScaleBasedVisibilityFlag="0" minScale="100000000" simplifyAlgorithm="0" styleCategories="AllStyleCategories">
+<qgis version="3.14.0-Pi" labelsEnabled="0" simplifyAlgorithm="0" minScale="100000000" simplifyDrawingHints="0" hasScaleBasedVisibilityFlag="0" readOnly="0" simplifyDrawingTol="1" simplifyMaxScale="1" styleCategories="AllStyleCategories" simplifyLocal="1" maxScale="0">
   <flags>
     <Identifiable>1</Identifiable>
     <Removable>1</Removable>
     <Searchable>1</Searchable>
   </flags>
-  <temporal durationField="" accumulate="0" startField="" endExpression="" mode="0" enabled="0" startExpression="" endField="" durationUnit="min" fixedDuration="0">
+  <temporal endExpression="" accumulate="0" enabled="0" mode="0" durationField="" endField="" startExpression="" startField="" fixedDuration="0" durationUnit="min">
     <fixedRange>
       <start></start>
       <end></end>
     </fixedRange>
   </temporal>
-  <renderer-v2 type="graduatedSymbol" enableorderby="0" forceraster="0" symbollevels="0" attr="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" graduatedMethod="GraduatedColor">
+  <renderer-v2 type="graduatedSymbol" forceraster="0" attr="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" enableorderby="0" symbollevels="0" graduatedMethod="GraduatedColor">
     <ranges>
-      <range symbol="0" render="true" lower="0.000000000000000" upper="4.132510710368467" label="0 - 4.1"/>
-      <range symbol="1" render="true" lower="4.132510710368467" upper="13.002197735127176" label="4.1 - 13"/>
-      <range symbol="2" render="true" lower="13.002197735127176" upper="27.951982401709977" label="13 - 28"/>
-      <range symbol="3" render="true" lower="27.951982401709977" upper="53.153704979597173" label="28 - 53.2"/>
-      <range symbol="4" render="true" lower="53.153704979597173" upper="96.509018524428484" label="53.2 - 96.5"/>
-      <range symbol="5" render="true" lower="96.509018524428484" upper="181.956647328349106" label="96.5 - 182"/>
-      <range symbol="6" render="true" lower="181.956647328349106" upper="366.815852146013583" label="182 - 366.8"/>
-      <range symbol="7" render="true" lower="366.815852146013583" upper="820.149457974956249" label="366.8 - 820.1"/>
-      <range symbol="8" render="true" lower="820.149457974956249" upper="2184.838451207896924" label="820.1 - 2184.8"/>
-      <range symbol="9" render="true" lower="2184.838451207896924" upper="99272.573036079265876" label="2184.8 - 99272.6"/>
+      <range render="true" upper="0.991020438114674" label="0 - 0.991" lower="0.000000000000000" symbol="0"/>
+      <range render="true" upper="1.412345719337464" label="0.991 - 1.4123" lower="0.991020438114674" symbol="1"/>
+      <range render="true" upper="1.854538999729660" label="1.4123 - 1.8545" lower="1.412345719337464" symbol="2"/>
+      <range render="true" upper="2.676778713089883" label="1.8545 - 2.6768" lower="1.854538999729660" symbol="3"/>
+      <range render="true" upper="3.648641277950022" label="2.6768 - 3.6486" lower="2.676778713089883" symbol="4"/>
+      <range render="true" upper="5.330184051641331" label="3.6486 - 5.3302" lower="3.648641277950022" symbol="5"/>
+      <range render="true" upper="8.287233827564663" label="5.3302 - 8.2872" lower="5.330184051641331" symbol="6"/>
+      <range render="true" upper="13.991849153165457" label="8.2872 - 13.9918" lower="8.287233827564663" symbol="7"/>
+      <range render="true" upper="29.024281531013909" label="13.9918 - 29.0243" lower="13.991849153165457" symbol="8"/>
+      <range render="true" upper="316.541482593017065" label="29.0243 - 316.5415" lower="29.024281531013909" symbol="9"/>
     </ranges>
     <symbols>
-      <symbol type="marker" name="0" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="247,251,255,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="0">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="247,251,255,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -54,21 +54,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -76,25 +64,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="1" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="226,238,249,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="1">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="226,238,249,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -105,21 +93,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -127,25 +103,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="2" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="205,224,242,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="2">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="205,224,242,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -156,21 +132,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -178,25 +142,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="3" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="176,210,232,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="3">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="176,210,232,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -207,21 +171,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -229,25 +181,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="4" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="137,191,221,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="4">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="137,191,221,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -258,21 +210,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -280,25 +220,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="5" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="96,166,210,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="5">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="96,166,210,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -309,21 +249,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -331,25 +259,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="6" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="62,142,196,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="6">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="62,142,196,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -360,21 +288,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -382,25 +298,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="7" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="33,114,182,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="7">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="33,114,182,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -411,21 +327,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -433,25 +337,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="8" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="10,84,158,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="8">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="10,84,158,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -462,21 +366,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -484,25 +376,25 @@
           </data_defined_properties>
         </layer>
       </symbol>
-      <symbol type="marker" name="9" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="8,48,107,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="9">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="8,48,107,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -513,21 +405,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -537,25 +417,25 @@
       </symbol>
     </symbols>
     <source-symbol>
-      <symbol type="marker" name="0" clip_to_extent="1" alpha="1" force_rhr="0">
-        <layer pass="0" locked="0" enabled="1" class="SvgMarker">
-          <prop v="0" k="angle"/>
-          <prop v="0,0,0,255" k="color"/>
-          <prop v="2" k="fixedAspectRatio"/>
-          <prop v="1" k="horizontal_anchor_point"/>
-          <prop v="arrows/Arrow_05.svg" k="name"/>
-          <prop v="0,0" k="offset"/>
-          <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-          <prop v="MM" k="offset_unit"/>
-          <prop v="35,35,35,255" k="outline_color"/>
-          <prop v="0" k="outline_width"/>
-          <prop v="3x:0,0,0,0,0,0" k="outline_width_map_unit_scale"/>
-          <prop v="MM" k="outline_width_unit"/>
-          <prop v="diameter" k="scale_method"/>
-          <prop v="2" k="size"/>
-          <prop v="3x:0,0,0,0,0,0" k="size_map_unit_scale"/>
-          <prop v="MM" k="size_unit"/>
-          <prop v="1" k="vertical_anchor_point"/>
+      <symbol type="marker" alpha="1" clip_to_extent="1" force_rhr="0" name="0">
+        <layer enabled="1" class="SvgMarker" pass="0" locked="0">
+          <prop k="angle" v="0"/>
+          <prop k="color" v="0,0,0,255"/>
+          <prop k="fixedAspectRatio" v="2"/>
+          <prop k="horizontal_anchor_point" v="1"/>
+          <prop k="name" v="arrows/Arrow_05.svg"/>
+          <prop k="offset" v="0,0"/>
+          <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="offset_unit" v="MM"/>
+          <prop k="outline_color" v="35,35,35,255"/>
+          <prop k="outline_width" v="0"/>
+          <prop k="outline_width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="outline_width_unit" v="MM"/>
+          <prop k="scale_method" v="diameter"/>
+          <prop k="size" v="2"/>
+          <prop k="size_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+          <prop k="size_unit" v="MM"/>
+          <prop k="vertical_anchor_point" v="1"/>
           <data_defined_properties>
             <Option type="Map">
               <Option type="QString" value="" name="name"/>
@@ -566,21 +446,9 @@
                   <Option type="int" value="3" name="type"/>
                 </Option>
                 <Option type="Map" name="size">
-                  <Option type="bool" value="true" name="active"/>
-                  <Option type="QString" value="sqrt(&quot;q_out_x_sum&quot; * &quot;q_out_x_sum&quot; + &quot;q_out_y_sum&quot; * &quot;q_out_y_sum&quot;)" name="expression"/>
-                  <Option type="Map" name="transformer">
-                    <Option type="Map" name="d">
-                      <Option type="double" value="0.57" name="exponent"/>
-                      <Option type="double" value="2" name="maxSize"/>
-                      <Option type="double" value="750" name="maxValue"/>
-                      <Option type="double" value="0" name="minSize"/>
-                      <Option type="double" value="0" name="minValue"/>
-                      <Option type="double" value="0" name="nullSize"/>
-                      <Option type="int" value="2" name="scaleType"/>
-                    </Option>
-                    <Option type="int" value="1" name="t"/>
-                  </Option>
-                  <Option type="int" value="3" name="type"/>
+                  <Option type="bool" value="false" name="active"/>
+                  <Option type="int" value="1" name="type"/>
+                  <Option type="QString" value="" name="val"/>
                 </Option>
               </Option>
               <Option type="QString" value="collection" name="type"/>
@@ -590,15 +458,15 @@
       </symbol>
     </source-symbol>
     <colorramp type="gradient" name="[source]">
-      <prop v="247,251,255,255" k="color1"/>
-      <prop v="8,48,107,255" k="color2"/>
-      <prop v="0" k="discrete"/>
-      <prop v="gradient" k="rampType"/>
-      <prop v="0.13;222,235,247,255:0.26;198,219,239,255:0.39;158,202,225,255:0.52;107,174,214,255:0.65;66,146,198,255:0.78;33,113,181,255:0.9;8,81,156,255" k="stops"/>
+      <prop k="color1" v="247,251,255,255"/>
+      <prop k="color2" v="8,48,107,255"/>
+      <prop k="discrete" v="0"/>
+      <prop k="rampType" v="gradient"/>
+      <prop k="stops" v="0.13;222,235,247,255:0.26;198,219,239,255:0.39;158,202,225,255:0.52;107,174,214,255:0.65;66,146,198,255:0.78;33,113,181,255:0.9;8,81,156,255"/>
     </colorramp>
     <classificationMethod id="Quantile">
-      <symmetricMode enabled="0" symmetrypoint="0" astride="0"/>
-      <labelFormat trimtrailingzeroes="1" format="%1 - %2" labelprecision="1"/>
+      <symmetricMode enabled="0" astride="0" symmetrypoint="0"/>
+      <labelFormat format="%1 - %2" trimtrailingzeroes="1" labelprecision="4"/>
       <parameters>
         <Option/>
       </parameters>
@@ -624,29 +492,29 @@
   <blendMode>0</blendMode>
   <featureBlendMode>0</featureBlendMode>
   <layerOpacity>1</layerOpacity>
-  <SingleCategoryDiagramRenderer attributeLegend="1" diagramType="Histogram">
-    <DiagramCategory sizeType="MM" penWidth="0" backgroundAlpha="255" scaleBasedVisibility="0" penColor="#000000" backgroundColor="#ffffff" labelPlacementMethod="XHeight" height="15" opacity="1" spacingUnit="MM" maxScaleDenominator="1e+08" spacing="0" barWidth="5" lineSizeScale="3x:0,0,0,0,0,0" minimumSize="0" sizeScale="3x:0,0,0,0,0,0" showAxis="0" direction="1" diagramOrientation="Up" enabled="0" penAlpha="255" width="15" spacingUnitScale="3x:0,0,0,0,0,0" lineSizeType="MM" minScaleDenominator="0" rotationOffset="270" scaleDependency="Area">
+  <SingleCategoryDiagramRenderer diagramType="Histogram" attributeLegend="1">
+    <DiagramCategory backgroundAlpha="255" backgroundColor="#ffffff" minScaleDenominator="0" rotationOffset="270" enabled="0" sizeType="MM" labelPlacementMethod="XHeight" width="15" direction="1" lineSizeScale="3x:0,0,0,0,0,0" minimumSize="0" sizeScale="3x:0,0,0,0,0,0" penWidth="0" scaleBasedVisibility="0" lineSizeType="MM" showAxis="0" opacity="1" maxScaleDenominator="1e+08" barWidth="5" penAlpha="255" diagramOrientation="Up" spacing="0" penColor="#000000" spacingUnit="MM" spacingUnitScale="3x:0,0,0,0,0,0" scaleDependency="Area" height="15">
       <fontProperties description="MS Shell Dlg 2,7.8,-1,5,50,0,0,0,0,0" style=""/>
-      <attribute color="#000000" field="" label=""/>
+      <attribute field="" label="" color="#000000"/>
       <axisSymbol>
-        <symbol type="line" name="" clip_to_extent="1" alpha="1" force_rhr="0">
-          <layer pass="0" locked="0" enabled="1" class="SimpleLine">
-            <prop v="square" k="capstyle"/>
-            <prop v="5;2" k="customdash"/>
-            <prop v="3x:0,0,0,0,0,0" k="customdash_map_unit_scale"/>
-            <prop v="MM" k="customdash_unit"/>
-            <prop v="0" k="draw_inside_polygon"/>
-            <prop v="bevel" k="joinstyle"/>
-            <prop v="35,35,35,255" k="line_color"/>
-            <prop v="solid" k="line_style"/>
-            <prop v="0.26" k="line_width"/>
-            <prop v="MM" k="line_width_unit"/>
-            <prop v="0" k="offset"/>
-            <prop v="3x:0,0,0,0,0,0" k="offset_map_unit_scale"/>
-            <prop v="MM" k="offset_unit"/>
-            <prop v="0" k="ring_filter"/>
-            <prop v="0" k="use_custom_dash"/>
-            <prop v="3x:0,0,0,0,0,0" k="width_map_unit_scale"/>
+        <symbol type="line" alpha="1" clip_to_extent="1" force_rhr="0" name="">
+          <layer enabled="1" class="SimpleLine" pass="0" locked="0">
+            <prop k="capstyle" v="square"/>
+            <prop k="customdash" v="5;2"/>
+            <prop k="customdash_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+            <prop k="customdash_unit" v="MM"/>
+            <prop k="draw_inside_polygon" v="0"/>
+            <prop k="joinstyle" v="bevel"/>
+            <prop k="line_color" v="35,35,35,255"/>
+            <prop k="line_style" v="solid"/>
+            <prop k="line_width" v="0.26"/>
+            <prop k="line_width_unit" v="MM"/>
+            <prop k="offset" v="0"/>
+            <prop k="offset_map_unit_scale" v="3x:0,0,0,0,0,0"/>
+            <prop k="offset_unit" v="MM"/>
+            <prop k="ring_filter" v="0"/>
+            <prop k="use_custom_dash" v="0"/>
+            <prop k="width_map_unit_scale" v="3x:0,0,0,0,0,0"/>
             <data_defined_properties>
               <Option type="Map">
                 <Option type="QString" value="" name="name"/>
@@ -659,7 +527,7 @@
       </axisSymbol>
     </DiagramCategory>
   </SingleCategoryDiagramRenderer>
-  <DiagramLayerSettings placement="0" showAll="1" obstacle="0" priority="0" zIndex="0" linePlacementFlags="18" dist="0">
+  <DiagramLayerSettings zIndex="0" priority="0" placement="0" dist="0" showAll="1" obstacle="0" linePlacementFlags="18">
     <properties>
       <Option type="Map">
         <Option type="QString" value="" name="name"/>
@@ -668,41 +536,13 @@
       </Option>
     </properties>
   </DiagramLayerSettings>
-  <geometryOptions removeDuplicateNodes="0" geometryPrecision="0">
+  <geometryOptions geometryPrecision="0" removeDuplicateNodes="0">
     <activeChecks/>
     <checkConfiguration/>
   </geometryOptions>
   <referencedLayers/>
   <referencingLayers/>
   <fieldConfiguration>
-    <field name="id">
-      <editWidget type="Range">
-        <config>
-          <Option/>
-        </config>
-      </editWidget>
-    </field>
-    <field name="spatialite_id">
-      <editWidget type="Range">
-        <config>
-          <Option/>
-        </config>
-      </editWidget>
-    </field>
-    <field name="node_type">
-      <editWidget type="Range">
-        <config>
-          <Option/>
-        </config>
-      </editWidget>
-    </field>
-    <field name="node_type_description">
-      <editWidget type="TextEdit">
-        <config>
-          <Option/>
-        </config>
-      </editWidget>
-    </field>
     <field name="q_out_x_sum">
       <editWidget type="TextEdit">
         <config>
@@ -719,52 +559,32 @@
     </field>
   </fieldConfiguration>
   <aliases>
-    <alias index="0" name="" field="id"/>
-    <alias index="1" name="" field="spatialite_id"/>
-    <alias index="2" name="" field="node_type"/>
-    <alias index="3" name="" field="node_type_description"/>
-    <alias index="4" name="" field="q_out_x_sum"/>
-    <alias index="5" name="" field="q_out_y_sum"/>
+    <alias index="0" field="q_out_x_sum" name=""/>
+    <alias index="1" field="q_out_y_sum" name=""/>
   </aliases>
   <excludeAttributesWMS/>
   <excludeAttributesWFS/>
   <defaults>
-    <default expression="" applyOnUpdate="0" field="id"/>
-    <default expression="" applyOnUpdate="0" field="spatialite_id"/>
-    <default expression="" applyOnUpdate="0" field="node_type"/>
-    <default expression="" applyOnUpdate="0" field="node_type_description"/>
-    <default expression="" applyOnUpdate="0" field="q_out_x_sum"/>
-    <default expression="" applyOnUpdate="0" field="q_out_y_sum"/>
+    <default applyOnUpdate="0" expression="" field="q_out_x_sum"/>
+    <default applyOnUpdate="0" expression="" field="q_out_y_sum"/>
   </defaults>
   <constraints>
-    <constraint constraints="0" notnull_strength="0" exp_strength="0" field="id" unique_strength="0"/>
-    <constraint constraints="0" notnull_strength="0" exp_strength="0" field="spatialite_id" unique_strength="0"/>
-    <constraint constraints="0" notnull_strength="0" exp_strength="0" field="node_type" unique_strength="0"/>
-    <constraint constraints="0" notnull_strength="0" exp_strength="0" field="node_type_description" unique_strength="0"/>
-    <constraint constraints="0" notnull_strength="0" exp_strength="0" field="q_out_x_sum" unique_strength="0"/>
-    <constraint constraints="0" notnull_strength="0" exp_strength="0" field="q_out_y_sum" unique_strength="0"/>
+    <constraint constraints="0" exp_strength="0" unique_strength="0" field="q_out_x_sum" notnull_strength="0"/>
+    <constraint constraints="0" exp_strength="0" unique_strength="0" field="q_out_y_sum" notnull_strength="0"/>
   </constraints>
   <constraintExpressions>
-    <constraint desc="" field="id" exp=""/>
-    <constraint desc="" field="spatialite_id" exp=""/>
-    <constraint desc="" field="node_type" exp=""/>
-    <constraint desc="" field="node_type_description" exp=""/>
-    <constraint desc="" field="q_out_x_sum" exp=""/>
-    <constraint desc="" field="q_out_y_sum" exp=""/>
+    <constraint field="q_out_x_sum" desc="" exp=""/>
+    <constraint field="q_out_y_sum" desc="" exp=""/>
   </constraintExpressions>
   <expressionfields/>
   <attributeactions>
     <defaultAction value="{00000000-0000-0000-0000-000000000000}" key="Canvas"/>
   </attributeactions>
-  <attributetableconfig sortOrder="0" actionWidgetStyle="dropDown" sortExpression="">
+  <attributetableconfig sortOrder="0" sortExpression="" actionWidgetStyle="dropDown">
     <columns>
-      <column type="field" name="q_out_x_sum" hidden="0" width="-1"/>
-      <column type="field" name="q_out_y_sum" hidden="0" width="-1"/>
+      <column type="field" hidden="0" width="-1" name="q_out_x_sum"/>
+      <column type="field" hidden="0" width="-1" name="q_out_y_sum"/>
       <column type="actions" hidden="1" width="-1"/>
-      <column type="field" name="id" hidden="0" width="-1"/>
-      <column type="field" name="spatialite_id" hidden="0" width="-1"/>
-      <column type="field" name="node_type" hidden="0" width="-1"/>
-      <column type="field" name="node_type_description" hidden="0" width="-1"/>
     </columns>
   </attributetableconfig>
   <conditionalstyles>
@@ -804,12 +624,12 @@ def my_form_open(dialog, layer, feature):
     <field name="spatialite_id" editable="1"/>
   </editable>
   <labelOnTop>
-    <field name="id" labelOnTop="0"/>
-    <field name="node_type" labelOnTop="0"/>
-    <field name="node_type_description" labelOnTop="0"/>
-    <field name="q_out_x_sum" labelOnTop="0"/>
-    <field name="q_out_y_sum" labelOnTop="0"/>
-    <field name="spatialite_id" labelOnTop="0"/>
+    <field labelOnTop="0" name="id"/>
+    <field labelOnTop="0" name="node_type"/>
+    <field labelOnTop="0" name="node_type_description"/>
+    <field labelOnTop="0" name="q_out_x_sum"/>
+    <field labelOnTop="0" name="q_out_y_sum"/>
+    <field labelOnTop="0" name="spatialite_id"/>
   </labelOnTop>
   <dataDefinedFieldProperties/>
   <widgets/>
