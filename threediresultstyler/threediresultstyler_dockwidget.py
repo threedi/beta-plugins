@@ -343,4 +343,6 @@ class threediresultstylerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
     def remove_highlights(self):
         """remove highlights of flowline layer"""
-        self.highlights = []
+        while len(self.highlights) > 0:
+            highlight_to_remove = self.highlights.pop()
+            self.iface.mapCanvas().scene().removeItem(highlight_to_remove)
