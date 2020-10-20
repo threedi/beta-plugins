@@ -1369,5 +1369,22 @@ class ViewTriggers(object):
         END;
         """)
 
+       conn.execute(
+        """
+        DROP TRIGGER IF EXISTS v2_impervious_surface_delete;
+        """)
+
+        conn.execute(
+            """
+        CREATE TRIGGER v2_impervious_surface_delete 
+        AFTER DELETE 
+        ON v2_impervious_surface 
+        BEGIN 
+        DELETE FROM v2_impervious_surface_map
+        WHERE impervious_surface_id not in (SELECT id FROM v2_impervious_surface)
+        ;
+        END; 
+        """)
+
         conn.commit()
         conn.close()
