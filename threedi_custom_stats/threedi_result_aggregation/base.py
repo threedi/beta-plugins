@@ -18,8 +18,10 @@ import osr
 
 try:
     from constants import *
+    from threedigrid_ogr import *
 except ImportError:
     from .constants import *
+    from .threedigrid_ogr import *
 
 warnings.filterwarnings('ignore')
 ogr.UseExceptions()
@@ -77,6 +79,19 @@ def line_geometry_length(line_geometry: np.ndarray):
 
 
 line_geometries_to_lengths = np.vectorize(line_geometry_length)
+
+
+def find_finite_1d(x: np.array, index: int):
+    """ Find the a finite (non-nan) value in a numpy 1d array,
+    returning np.nan if the array contains no valid value
+
+    :param x: numpy 1d array
+    :param index: which finite value to return, e.g. 0 for first finite value, -1 for last finite value
+    """
+    try:
+        return x[np.isfinite(x)][index]
+    except IndexError:
+        return np.nan
 
 
 def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregation,
@@ -161,6 +176,12 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
     # replace -9999 in raw values by NaN
     raw_values[raw_values == -9999] = np.nan
 
+    # reverse flow direction in 1d-2d links
+    # threedigrid reads these flowlines from the netcdf in reversed order (known inconsistency)
+    if isinstance(nodes_or_lines, Lines):
+        kcu_types_1d2d = np.array([51, 52, 53, 54, 54, 55, 56, 57, 58])
+        raw_values[:, np.in1d(nodes_or_lines.kcu, kcu_types_1d2d)] *= -1
+
     if aggregation.sign.short_name == 'pos':
         raw_values_signed = raw_values * (raw_values >= 0).astype(int)
     elif aggregation.sign.short_name == 'neg':
@@ -186,8 +207,12 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
         result = np.nanmedian(raw_values_signed, axis=0)
     elif aggregation.method.short_name == 'first':
         result = raw_values_signed[0, :]
+    elif aggregation.method.short_name == 'first_non_empty':
+        result = np.array([find_finite_1d(col, index=0) for col in raw_values_signed.T])
     elif aggregation.method.short_name == 'last':
         result = raw_values_signed[-1, :]
+    elif aggregation.method.short_name == 'last_non_empty':
+        result = np.array([find_finite_1d(col, index=-1) for col in raw_values_signed.T])
     elif aggregation.method.short_name == 'above_thres':
         raw_values_above_threshold = np.greater(raw_values_signed, aggregation.threshold)
         time_above_treshold = np.sum(np.multiply(raw_values_above_threshold.T, tintervals).T, axis=0)
@@ -307,7 +332,7 @@ def flow_per_node(gr: GridH5ResultAdmin, node_ids: list, start_time: int, end_ti
 
 
 def empty_raster_from_vector_layer(layer, pixel_size_x, pixel_size_y, bands=1, nodatavalue=-9999):
-    """ Create in-memory gdal dataset of the same size as the input layer, filled with nodatavalue. """
+    """ Create in-memory gdal dataset of the same size as the input target_node_layer, filled with nodatavalue. """
     xmin, xmax, ymin, ymax = layer.GetExtent()
     width = int((xmax - xmin) / pixel_size_x)
     height = int((ymax - ymin) / pixel_size_y)
@@ -433,15 +458,15 @@ def rasterize_cell_layer(cell_layer, column_name, pixel_size, interpolation_meth
 
 def pixels_to_geoms(raster: gdal.Dataset, column_names, output_geom_type, output_layer_name: str):
     """
-    Convert a single or multiband raster to a point or polygon layer.
+    Convert a single or multiband raster to a point or polygon target_node_layer.
 
-    Each feature represents one pixel. The raster values are stored in the output layer attributes.
+    Each feature represents one pixel. The raster values are stored in the output target_node_layer attributes.
     Raster bands are mapped to column names by mapping column_names list order to the raster bands order.
 
     :param raster: gdal Dataset
     :param column_names: list of column names for the output layers, or str for singleband raster
     :param output_geom_type: ogr wkpPoint or wkbPolygon
-    :param output_layer_name: name of the output layer
+    :param output_layer_name: name of the output target_node_layer
     :return: ogr.Layer
     """
 
@@ -585,109 +610,13 @@ def select_from_2d_array_where_col_x_in(array_2d, col_nr, values):
     return array_2d[np.in1d(array_2d[:, col_nr], values), :]
 
 
-def threedigrid_to_ogr(threedigrid_src, tgt_ds, attributes: dict, attr_data_types: dict, epsg: int = 28992):
-    """
-    Create a ogr layer from the coordinates of threedigrid Nodes, Cells, or Lines with custom attributes
-
-    :param threedigrid_src: threedigrid Nodes, Cells, or Lines object
-    :param tgt_ds: ogr Datasource
-    :param attributes: {attribute name: list of values}
-    :param attr_data_types: {attribute name: ogr data type}
-    :param epsg: EPSG code
-    :return: ogr Datasource
-    """
-    if isinstance(threedigrid_src, Nodes):
-        src_type = Nodes
-        coords = threedigrid_src.coordinates
-        invalid_coords = np.array([-9999, -9999])
-        out_layer_name = 'node'
-        out_geom_type = ogr.wkbPoint
-    if isinstance(threedigrid_src, Cells):
-        src_type = Cells
-        coords = threedigrid_src.cell_coords
-        invalid_coords = np.array([-9999, -9999, -9999, -9999])
-        out_layer_name = 'cell'
-        out_geom_type = ogr.wkbPolygon
-    if isinstance(threedigrid_src, Lines):
-        src_type = Lines
-        coords = threedigrid_src.line_coords
-        invalid_coords = np.array([-9999, -9999, -9999, -9999])
-        out_layer_name = 'flowline'
-        out_geom_type = ogr.wkbLineString
-
-    # create layer
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(epsg)
-    out_layer = tgt_ds.CreateLayer(out_layer_name, srs, geom_type=out_geom_type)
-
-    # create fields
-    for attr in attributes.keys():
-        field = ogr.FieldDefn(attr, attr_data_types[attr])
-        out_layer.CreateField(field)
-
-    feature_defn = out_layer.GetLayerDefn()
-
-    # create features
-    for i in range(threedigrid_src.count):
-        if np.all(np.equal(coords[:, i], invalid_coords)):  # skip if coordinates are invalid
-            continue
-        else:
-            # create feature geometry
-            feature = ogr.Feature(feature_defn)
-            geom = ogr.Geometry(out_geom_type)
-            if src_type == Nodes:
-                x, y = coords[:, i]
-                geom.SetPoint(0, x, y)
-                feature.SetGeometry(geom)
-            elif src_type == Lines:
-                x0, y0, x1, y1 = coords[:, i]
-                geom.AddPoint(float(x0), float(y0))
-                geom.AddPoint(float(x1), float(y1))
-                feature.SetGeometry(geom)
-            elif src_type == Cells:
-                xmin, ymin, xmax, ymax = coords[:, i]
-                geom_ring = ogr.Geometry(ogr.wkbLinearRing)
-                geom_ring.AddPoint(xmin, ymin)
-                geom_ring.AddPoint(xmin, ymax)
-                geom_ring.AddPoint(xmax, ymax)
-                geom_ring.AddPoint(xmax, ymin)
-                geom_ring.AddPoint(xmin, ymin)
-                geom.AddGeometry(geom_ring)
-                if (not geom.IsValid()) or geom.IsEmpty():
-                    continue
-                else:
-                    feature.SetGeometry(geom)
-
-            # create feature attributes
-            for attr in attributes.keys():
-                val = attributes[attr][i]
-                if attr_data_types[attr] in [ogr.OFTInteger]:
-                    val = int(val)
-                elif attr_data_types[attr] in [ogr.OFTString]:
-                    if isinstance(val, bytes):
-                        val = val.decode('utf-8')
-                    else:
-                        val = str(val)
-                elif attr_data_types[attr] in [ogr.OFTReal]:
-                    if np.isnan(val):
-                        val = None
-                if val is not None:
-                    feature.SetField(attr, val)
-
-            # create the actual feature
-            out_layer.CreateFeature(feature)
-            feature = None
-
-    return
-
-
 def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggregations: List[Aggregation],
                               bbox=None, start_time: int = None, end_time: int = None, subsets=None, epsg: int = 28992,
                               interpolation_method: str = None, resample_point_layer: bool = False,
                               resolution: float = None, output_flowlines: bool = True, output_nodes: bool = True,
                               output_cells: bool = True, output_rasters: bool = True):
     """
-
+    # TODO: use new version of threedi_ogr that inludes adding default attributes to nodes, cells and flowline layers
     :param resolution:
     :param interpolation_method:
     :param gridadmin: path to gridadmin.h5
@@ -747,12 +676,6 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
         if da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_FLOW]):
             if output_flowlines:
                 if first_pass_flowlines:
-                    line_results['id'] = lines.id.astype(int)
-                    if gr.has_1d:
-                        line_results['content_type'] = lines.content_type
-                        line_results['spatialite_id'] = lines.content_pk
-                    line_results['kcu'] = lines.kcu
-                    line_results['kcu_description'] = np.vectorize(KCU_DICT.get)(lines.kcu)
                     first_pass_flowlines = False
                 try:
                     line_results[new_column_name] = time_aggregate(nodes_or_lines=lines,
@@ -767,11 +690,6 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
         elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE]):
             if output_nodes or output_cells or output_rasters:
                 if first_pass_nodes:
-                    node_results['id'] = nodes.id.astype(int)
-                    if gr.has_1d:
-                        node_results['spatialite_id'] = nodes.content_pk
-                    node_results['node_type'] = nodes.node_type
-                    node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
                     first_pass_nodes = False
                 try:
                     node_results[new_column_name] = time_aggregate(nodes_or_lines=nodes,
@@ -786,11 +704,6 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
         elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE_HYBRID]):
             if output_nodes or output_cells or output_rasters:
                 if first_pass_nodes:
-                    node_results['id'] = nodes.id.astype(int)
-                    if gr.has_1d:
-                        node_results['spatialite_id'] = nodes.content_pk
-                    node_results['node_type'] = nodes.node_type
-                    node_results['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get)(nodes.node_type)
                     first_pass_nodes = False
                 try:
                     node_results[new_column_name] = hybrid_time_aggregate(gr=gr,
@@ -850,7 +763,7 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                             tmp_drv = gdal.GetDriverByName('MEM')
                             tmp_ds = tmp_drv.CreateCopy('multiband', out_rasters[col])
 
-                            # create resampled nodes output layer
+                            # create resampled nodes output target_node_layer
                             if resample_point_layer:
                                 srs = osr.SpatialReference()
                                 srs.ImportFromWkt(tmp_ds.GetProjection())
@@ -880,7 +793,7 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
                         points_resampled_lyr.CreateFeature(feat)
                         feat = None
 
-    # flowline layer
+    # flowline target_node_layer
     if len(line_results) > 0 and output_flowlines:
         attributes = line_results
         attr_data_types = {}
@@ -905,7 +818,7 @@ def get_parser():
     )
     parser.add_argument(metavar='GRIDADMIN', dest='GridAdminH5', help='gridadmin.h5 file name')
     parser.add_argument(metavar='RESULTSNETCDF', dest='Results3DiNetCDF', help='results_3di.nc file name')
-    parser.add_argument(metavar='OUTPUT_LAYER', dest='tgtLayer', help='Output layer name')
+    parser.add_argument(metavar='OUTPUT_LAYER', dest='tgtLayer', help='Output target_node_layer name')
     parser.add_argument('-fn', dest='tgtFileName',
                         help='Target file name. If specified, database parameters are ignored.')
     parser.add_argument('-ho', dest='host', help='PG host name.')

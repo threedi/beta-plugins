@@ -58,14 +58,19 @@
 
 from threedi_result_aggregation import *
 
-ga = 'C:/Users/leendert.vanwolfswin/Documents/rotterdam/resultaat/hoek van holland/u0262_hoek_van_holland_rev5_100mm2u_droog1u/gridadmin.h5'
-res = 'C:/Users/leendert.vanwolfswin/Documents/rotterdam/resultaat/hoek van holland/u0262_hoek_van_holland_rev5_100mm2u_droog1u/results_3di.nc'
+ga = 'C:/Users/leendert.vanwolfswin/Documents/mead/rev6 45 mm 40mm per uur/gridadmin.h5'
+res = 'C:/Users/leendert.vanwolfswin/Documents/mead/rev6 45 mm 40mm per uur/results_3di.nc'
 
 das = []
 
-das.append(Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
-                       method=AGGREGATION_METHODS.get_by_short_name('sum'),
-                       sign=AggregationSign('net', 'Net')
+# das.append(Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
+#                        method=AGGREGATION_METHODS.get_by_short_name('sum'),
+#                        sign=AggregationSign('net', 'Net')
+#                        )
+#            )
+
+das.append(Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+                       method=AGGREGATION_METHODS.get_by_short_name('first_non_empty')
                        )
            )
 
@@ -74,10 +79,10 @@ ca, rast = aggregate_threedi_results(gridadmin=ga,
                                      demanded_aggregations=das,
                                      interpolation_method='linear',
                                      resample_point_layer=False,
-                                     output_flowlines=True,
+                                     output_flowlines=False,
                                      output_cells=False,
                                      output_rasters=False,
-                                     output_nodes=False
+                                     output_nodes=True
                                     )
 
 ogr_rsamplyr = ca.GetLayerByName('flowline')
@@ -87,9 +92,10 @@ if ogr_rsamplyr is not None:
 # ogr_fllyr = ca.GetLayerByName('flowline')
 # if ogr_fllyr is not None:
 #     print('flowline layer has {} features'.format(ogr_fllyr.GetFeatureCount()))
-# ogr_nlyr = ca.GetLayerByName('node')
-# if ogr_nlyr is not None:
-#     print('node layer has {} features'.format(ogr_nlyr.GetFeatureCount()))
+ogr_nlyr = ca.GetLayerByName('node')
+if ogr_nlyr is not None:
+    print('node layer has {} features'.format(ogr_nlyr.GetFeatureCount()))
+
 # ogr_clyr = ca.GetLayerByName('cell')
 # if ogr_clyr is not None:
 #     print('cell layer has {} features'.format(ogr_clyr.GetFeatureCount()))

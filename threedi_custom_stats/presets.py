@@ -1,12 +1,13 @@
 from typing import List
 
 try:
-    from .aggregation_classes import *
-    from .constants import *
+    from .threedi_result_aggregation import *
+    # from .aggregation_classes import *
+    # from .constants import *
     from .style import *
 except ImportError:
-    from aggregation_classes import *
-    from constants import *
+    from threedi_result_aggregation import *
+    # from constants import *
     from style import *
 
 
@@ -62,6 +63,30 @@ MAX_WL_PRESETS = Preset(name='Maximum water level',
                         cells_style_param_values={'column': 's1_max'}
 
                         )
+
+# Change in water level
+change_wl_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+                                      method=AGGREGATION_METHODS.get_by_short_name('first'),
+                                      ),
+                          Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+                                      method=AGGREGATION_METHODS.get_by_short_name('last'),
+                                      ),
+                          Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+                                      method=AGGREGATION_METHODS.get_by_short_name('min'),
+                                      ),
+                          Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+                                      method=AGGREGATION_METHODS.get_by_short_name('max'),
+                                      )
+                          ]
+
+CHANGE_WL_PRESETS = Preset(name='Change in water level',
+                           description='Calculates the difference in water level (last - first). In the styling '
+                                       'NULL values (when the cell is dry) are replaced by the cells lowest '
+                                       'pixel elevation (z_coordinate).',
+                           aggregations=change_wl_aggregations,
+                           cells_style=STYLE_CHANGE_WL,
+                           cells_style_param_values={'first': 's1_first', 'last': 's1_last'}
+                           )
 
 # Flow pattern
 flow_pattern_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q_out_x'),
@@ -148,9 +173,10 @@ TS_REDUCTION_ANALYSIS_PRESETS = Preset(name='Timestep reduction analysis',
 source_sink_mm_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('rain_depth'),
                                            method=AGGREGATION_METHODS.get_by_short_name('sum')
                                            ),
-                               Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('infiltration_rate_simple_mm'),
-                                           method=AGGREGATION_METHODS.get_by_short_name('sum')
-                                           ),
+                               Aggregation(
+                                   variable=AGGREGATION_VARIABLES.get_by_short_name('infiltration_rate_simple_mm'),
+                                   method=AGGREGATION_METHODS.get_by_short_name('sum')
+                                   ),
                                Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('intercepted_volume_mm'),
                                            method=AGGREGATION_METHODS.get_by_short_name('last')
                                            )
@@ -169,4 +195,5 @@ SOURCE_SINK_MM_PRESETS = Preset(name='Source or sink (mm)',
                                                           }
                                 )
 
-PRESETS = [NO_PRESET, MAX_WL_PRESETS, SOURCE_SINK_MM_PRESETS, FLOW_PATTERN_PRESETS, TS_REDUCTION_ANALYSIS_PRESETS]
+PRESETS = [NO_PRESET, MAX_WL_PRESETS, CHANGE_WL_PRESETS, SOURCE_SINK_MM_PRESETS, FLOW_PATTERN_PRESETS,
+           TS_REDUCTION_ANALYSIS_PRESETS]

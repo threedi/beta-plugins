@@ -8,7 +8,6 @@ from qgis import utils
 
 STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
 
-
 class Style:
     def __init__(self, name: str, output_type: str, params: dict, qml: str, styling_method):
         self.name = name
@@ -76,6 +75,32 @@ def style_balance(layer, qml: str,
     utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
+def style_change_water_level(layer, qml: str,
+                             first: str,
+                             last: str
+                             ):
+
+    layer.loadNamedStyle(qml)
+    class_attribute_string = f'((coalesce({last}, z_coordinate))-(coalesce({first}, z_coordinate)))'
+    layer.renderer().setClassAttribute(class_attribute_string)
+    # layer.renderer().deleteAllClasses()
+    # min_expression = QgsExpression('minimum({})'.format(class_attribute_string))
+    # max_expression = QgsExpression('maximum({})'.format(class_attribute_string))
+    # context = QgsExpressionContext()
+    # context.appendScopes(QgsExpressionContextUtils.globalProjectLayerScopes(layer))
+    # min_val = min_expression.evaluate(context)
+    # max_val = max_expression.evaluate(context)
+    # abs_max = max(abs(min_val), abs(max_val))
+    # class_bounds = list(np.arange(abs_max * -1, abs_max, ((abs_max - abs_max * -1) / 10.0)))
+    # class_bounds.append(abs_max)
+    # for i in range(len(class_bounds) - 1):
+    #     layer.renderer().addClassLowerUpper(lower=class_bounds[i], upper=class_bounds[i + 1])
+    # color_ramp = layer.renderer().sourceColorRamp()
+    # layer.renderer().updateColorRamp(color_ramp)
+    layer.triggerRepaint()
+    utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
+
+
 def style_as_vector(layer, qml: str, x: str, y: str):
     layer.loadNamedStyle(qml)
 
@@ -93,7 +118,6 @@ def style_as_vector(layer, qml: str, x: str, y: str):
 
     # update size
     layer.renderer().setSymbolSizes(0, 2)
-
 
     layer.triggerRepaint()
     utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
@@ -117,9 +141,9 @@ def style_flow_direction(layer, qml: str, column: str):
                                    mode=layer.renderer().mode(),
                                    nclasses=len(layer.renderer().ranges()))
 
-
     # set marker size & line width
-    p10 = layer.renderer().ranges()[0].upperValue() # hacky way to get the p10 and p90 values as there is no such function available in qgis
+    p10 = layer.renderer().ranges()[
+        0].upperValue()  # hacky way to get the p10 and p90 values as there is no such function available in qgis
     p90 = layer.renderer().ranges()[-1].lowerValue()
     marker_size_expression = 'coalesce(scale_linear(abs({column}), {p10}, {p90}, 1, 3), 0)'.format(
         column=column,
@@ -135,7 +159,8 @@ def style_flow_direction(layer, qml: str, column: str):
         p90=p90
     )
     data_defined_line_width = QgsProperty.fromExpression(line_width_expression)
-    layer.renderer().sourceSymbol()[0].setDataDefinedProperty(QgsSymbolLayer.PropertyStrokeWidth, data_defined_line_width)
+    layer.renderer().sourceSymbol()[0].setDataDefinedProperty(QgsSymbolLayer.PropertyStrokeWidth,
+                                                              data_defined_line_width)
 
     # update classes because triggerRepaint alone doesn't do the trick
     layer.renderer().updateClasses(vlayer=layer,
@@ -180,6 +205,13 @@ STYLE_SINGLE_COLUMN_GRADUATED_NODE = Style(name='Single column graduated',
                                            qml='node.qml',
                                            styling_method=style_on_single_column)
 
+STYLE_CHANGE_WL = Style(name='Change in water level',
+                        output_type='cell',
+                        params={'first': 'column',
+                                'last': 'column'},
+                        qml='change_water_level.qml',
+                        styling_method=style_change_water_level)
+
 STYLE_VECTOR = Style(name='Vector',
                      output_type='node',
                      params={'x': 'column', 'y': 'column'},
@@ -211,5 +243,6 @@ STYLES = [
     STYLE_SINGLE_COLUMN_GRADUATED_NODE,
     STYLE_VECTOR,
     STYLE_SINGLE_COLUMN_GRADUATED_CELL,
+    STYLE_CHANGE_WL,
     STYLE_BALANCE
 ]
