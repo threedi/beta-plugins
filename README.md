@@ -11,12 +11,14 @@ https://github.com/threedi/beta-plugins/archive/master.zip
 Extract the zip file and paste the plugin folder (i.e. apiconsole3di) in:
 C:\Users\YOUR_USER_NAME\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins
 
+For some of the plugins, a separate ZIP is available under 'Releases'. To install using this ZIP file in QGIS: Plugins > Manage and Install Plugins > Install From ZIP
+
 Afterwards you should open QGIS, go to plugin manager, installed plugins, and activate the new plugins.
 
-- apiconsole3di: starts a 3Di simulation through the API.
 - build2dmodel: Extracts elevation, landuse and soil rasters from lizard and converts them to proper 3Di rasters
+- custom statistics: calculate custom aggregations (e.g. sum, max, min, first, last, etc) for flow variables (waterlevel, volume, velocity, discharge, etc.)
 - edit3dischematisation: alters 1D views to make them editable. Requires loading the model through the threediPlugin
 - import_hydx: imports a GWSW Hydx dataset to a 3Di model.
+- pipelevelcalculator: Calculate pipe levels based on a design and DEM.
 - resultsdownloader: Searches for 3Di simulation results and facilitates downloading/visualising these
 - threediresultstyler: Adds functionality like adding a styled DEM, areal photo's, saving/loading settings in the Layer menu (visibility, expanded groups and filters) and showing Courant numbers of the calculated results.
-- pipelevelcalculator: Calculate pipe levels based on a design and DEM.
