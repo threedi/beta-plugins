@@ -1369,7 +1369,7 @@ class ViewTriggers(object):
         END;
         """)
 
-       conn.execute(
+        conn.execute(
         """
         DROP TRIGGER IF EXISTS v2_impervious_surface_delete;
         """)
