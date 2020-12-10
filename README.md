@@ -8,8 +8,9 @@ The plugins are developed for QGIS to aid in the modelling with 3Di. They are te
 To use the plugin you can download the zip:
 https://github.com/threedi/beta-plugins/archive/master.zip
 
-Extract the zip file and paste the plugin folder (i.e. apiconsole3di) in:
-C:\Users\YOUR_USER_NAME\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins
+Extract the zip file and copy the *contents of* the folder beta-plugins-master to the QGIS plugins folder. You can find this from the QGIS Main Menu > Settings > User Profiles > Open Active Profile Folder > browse further to \python\plugins. A common location of this folder is C:\Users\YOUR_USER_NAME\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins. 
+
+If you are only interested in one specific plugin (e.g. the Import HydX plugin), you can also copy just that folder (e.g. the folder 'import_hydx') to the the plugins folder.
 
 For some of the plugins, a separate ZIP is available under 'Releases'. To install using this ZIP file in QGIS: Plugins > Manage and Install Plugins > Install From ZIP
 
