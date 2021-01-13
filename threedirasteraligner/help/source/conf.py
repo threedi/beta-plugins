@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# RasterAligner documentation build configuration file, created by
+# ThreeDiRasterAligner documentation build configuration file, created by
 # sphinx-quickstart on Sun Feb 12 17:11:03 2012.
 #
 # This file is execfile()d with the current directory set to its containing dir.
@@ -40,8 +40,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'RasterAligner'
-copyright = u'2013, Chris Kerklaan'
+project = u'ThreeDiRasterAligner'
+copyright = u'2013, Chris Kerklaan | Nelen & Schuurmans'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -178,8 +178,8 @@ htmlhelp_basename = 'TemplateClassdoc'
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'RasterAligner.tex', u'RasterAligner Documentation',
-   u'Chris Kerklaan', 'manual'),
+  ('index', 'ThreeDiRasterAligner.tex', u'ThreeDiRasterAligner Documentation',
+   u'Chris Kerklaan | Nelen & Schuurmans', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -211,6 +211,6 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'TemplateClass', u'RasterAligner Documentation',
-     [u'Chris Kerklaan'], 1)
+    ('index', 'TemplateClass', u'ThreeDiRasterAligner Documentation',
+     [u'Chris Kerklaan | Nelen & Schuurmans'], 1)
 ]

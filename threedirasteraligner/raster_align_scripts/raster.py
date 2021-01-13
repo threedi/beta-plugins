@@ -16,18 +16,6 @@ DRIVER_GDAL_MEM = gdal.GetDriverByName('MEM')
 WRITE_OPTIONS = ["COMPRESS=DEFLATE",
                  "NUM_THREADS=4"
                  "ZLEVEL=9"]
-
-type_mapping = {gdal.GDT_Byte: ogr.OFTInteger,
-                    gdal.GDT_UInt16: ogr.OFTInteger,
-                    gdal.GDT_Int16: ogr.OFTInteger,
-                    gdal.GDT_UInt32: ogr.OFTInteger,
-                    gdal.GDT_Int32: ogr.OFTInteger,
-                    gdal.GDT_Float32: ogr.OFTReal,
-                    gdal.GDT_Float64: ogr.OFTReal,
-                    gdal.GDT_CInt16: ogr.OFTInteger,
-                    gdal.GDT_CInt32: ogr.OFTInteger,
-                    gdal.GDT_CFloat32: ogr.OFTReal,
-                    gdal.GDT_CFloat64: ogr.OFTReal}
 _loc_ras = 0
 
 class Raster(object):
@@ -168,8 +156,8 @@ class Raster(object):
         array = None
 
 
-    def align(self, template=None, fill_value=None, nodata_align=True, quiet=True):
-        return align(self, template, fill_value, nodata_align, quiet)
+    def align(self, template=None, fill_value=None, nodata_align=True, quiet=True, qgs_feedback=None):
+        return align(self, template, fill_value, nodata_align, quiet, qgs_feedback)
                
               
     def write(self, filename, array=None, geotransform=None, epsg=28992, nodata=-9999, 
@@ -301,7 +289,7 @@ def get_extent(transform, cols, rows):
 
     
 def align(raster, template=None, fill_value=None, nodata_align=True,
-          quiet=True):
+          quiet=True, qgs_feedback=None):
     """ 
         Assumes the current location of the rasters is correct 
         and a similar pixel size
@@ -322,7 +310,9 @@ def align(raster, template=None, fill_value=None, nodata_align=True,
     
     
     if not quiet:
-        print("Padding and deleting raster pixels where needed")
+        qgs_feedback.setProgress(10)
+
+        qgs_feedback.pushInfo("Padding and deleting raster pixels where needed")
     
     raster_array = raster.array
     raster_sum = np.nansum(np.round(raster_array,2))
@@ -392,10 +382,12 @@ def align(raster, template=None, fill_value=None, nodata_align=True,
         # raster is too large in height
         raster_array = raster_array[0 : raster_array.shape[0] - abs(int(row_dif)) :, :]
 
-    
+    if not quiet:
+        qgs_feedback.setProgress(25)
+
     if nodata_align:
         if not quiet:
-            print("Padding nodata values onto the to be aligned array")
+            qgs_feedback.pushInfo("Padding nodata values onto the to be aligned array")
         
         nodata_index = np.isnan(template.array)
         raster_array[nodata_index] = raster.nodata_value
@@ -409,14 +401,17 @@ def align(raster, template=None, fill_value=None, nodata_align=True,
                     fill_value = values[np.argmax(counts)-1]
                 
             if not quiet:
-                print(f"Padding fill value {fill_value} onto the to be aligned array")
+                qgs_feedback.pushInfo(f"Padding fill value {fill_value} onto the to be aligned array")
             raster_array[~nodata_index & (raster_array == raster.nodata_value)] = fill_value
 
     raster_array[raster_array == raster.nodata_value] = np.nan
     if raster_sum != np.nansum(raster_array):
         #print('Raster sum input and output not the same, difference is', raster_sum - np.nansum(np.round(raster_array,2)))
-        print('Note sum maybe different in numpy, please check qgis raster statistics')
+        qgs_feedback.pushInfo('Note sum maybe different in numpy, please check qgis raster statistics')
     
+    
+    qgs_feedback.setProgress(50)
+
     
     output = template.empty_copy()    
     output.update_band(raster_array)   

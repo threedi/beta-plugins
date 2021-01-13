@@ -1,11 +1,11 @@
 #/***************************************************************************
-# RasterAligner
+# ThreeDiRasterAligner
 #
-# Aligns multiple rasters
+# later added
 #							 -------------------
-#		begin				: 2021-01-06
+#		begin				: 2021-01-13
 #		git sha				: $Format:%H$
-#		copyright			: (C) 2021 by Chris Kerklaan
+#		copyright			: (C) 2021 by Chris Kerklaan | Nelen & Schuurmans
 #		email				: chris.kerklaan@nelen-schuurmans.nl
 # ***************************************************************************/
 #
@@ -38,21 +38,21 @@ LOCALES =
 # translation
 SOURCES = \
 	__init__.py \
-	raster_align.py raster_align_dialog.py
+	ThreeDiRasterAligner.py 
 
-PLUGINNAME = raster_align
+PLUGINNAME = ThreeDiRasterAligner
 
 PY_FILES = \
 	__init__.py \
-	raster_align.py raster_align_dialog.py
+	ThreeDiRasterAligner.py 
 
-UI_FILES = raster_align_dialog_base.ui
+UI_FILES = 
 
-EXTRAS = metadata.txt icon.png
+EXTRAS = metadata.txt 
 
 EXTRA_DIRS =
 
-COMPILED_RESOURCE_FILES = resources.py
+COMPILED_RESOURCE_FILES = 
 
 PEP8EXCLUDE=pydev,resources.py,conf.py,third_party,ui
 
@@ -75,7 +75,7 @@ HELP = help/build/html
 
 PLUGIN_UPLOAD = $(c)/plugin_upload.py
 
-RESOURCE_SRC=$(shell grep '^ *<file' resources.qrc | sed 's@</file>@@g;s/.*>//g' | tr '\n' ' ')
+RESOURCE_SRC=$(shell grep '^ *<file'  | sed 's@</file>@@g;s/.*>//g' | tr '\n' ' ')
 
 .PHONY: default
 default:

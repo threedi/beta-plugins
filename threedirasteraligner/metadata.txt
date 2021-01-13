@@ -3,14 +3,14 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=3Di Raster Aligner
+name=ThreeDiRasterAligner
 qgisMinimumVersion=3.0
-description=Aligns rasters for use in 3Di
+description=later added
 version=0.1
-author=Chris Kerklaan, Nelen & Schuurmans
+author=Chris Kerklaan | Nelen & Schuurmans
 email=chris.kerklaan@nelen-schuurmans.nl
 
-about=This plugin is used for aligning (pixel size and and same extent and data/nodata location) rasters to be able to use them for tools as 3Di and other raster related GIS tools. Note that the only assumptions is that the rasters in the input have the correct projection and location.
+about=Provide a brief description of the plugin and its purpose.
 
 tracker=http://bugs
 repository=http://repo
@@ -18,7 +18,7 @@ repository=http://repo
 
 # Recommended items:
 
-hasProcessingProvider=no
+hasProcessingProvider=yes
 # Uncomment the following line and add your changelog:
 # changelog=
 
@@ -26,7 +26,7 @@ hasProcessingProvider=no
 tags=python
 
 homepage=http://homepage
-category=Raster
+category=Analysis
 icon=icon.png
 # experimental flag
 experimental=False

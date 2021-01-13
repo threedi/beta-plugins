@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/plugins/raster_align" >
-        <file>icon.png</file>
-    </qresource>
-</RCC>
