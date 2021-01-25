@@ -22,6 +22,7 @@ from import_hydx.hydxlib.sql_models.model_schematisation import (
 
 logger = logging.getLogger(__name__)
 
+
 def transform(wkt, srid_source, srid_dest):
     source_crs = osr.SpatialReference()
     source_crs.ImportFromEPSG(srid_source)
@@ -32,6 +33,13 @@ def transform(wkt, srid_source, srid_dest):
     point = ogr.CreateGeometryFromWkt(wkt)
     point.Transform(transformation)
     return point.ExportToWkt()
+
+
+def quote_nullable(x):
+    if x is None:
+        return "NULL"
+    else:
+        return f"'{x}'"
 
 
 def export_threedi(hydx, threedi_db_settings):
@@ -57,8 +65,8 @@ def write_threedi_to_db(threedi, threedi_db_settings):
 
     if threedi_db_settings["type"] == 'Spatialite':
         db = ThreediDatabase(
-            { "db_file": threedi_db_settings["db_file"],
-              "db_path": threedi_db_settings["db_file"]})
+            {"db_file": threedi_db_settings["db_file"],
+             "db_path": threedi_db_settings["db_file"]})
 
     elif threedi_db_settings["type"] == 'Postgresql':
         db = ThreediDatabase(
@@ -77,18 +85,17 @@ def write_threedi_to_db(threedi, threedi_db_settings):
     # set all autoincrement counters to max ids
     if db.db_type == "postgres":
         for table in (
-            ConnectionNode,
-            Manhole,
-            BoundaryCondition1D,
-            Pipe,
-            CrossSectionDefinition,
-            Orifice,
-            Weir,
-            Pumpstation,
-            ImperviousSurface,
-            ImperviousSurfaceMap,
+                ConnectionNode,
+                Manhole,
+                BoundaryCondition1D,
+                Pipe,
+                CrossSectionDefinition,
+                Orifice,
+                Weir,
+                Pumpstation,
+                ImperviousSurface,
+                ImperviousSurfaceMap,
         ):
-
             session.execute(
                 "SELECT setval('{table}_id_seq', max(id)) "
                 "FROM {table}".format(table=table.__tablename__)
@@ -99,31 +106,38 @@ def write_threedi_to_db(threedi, threedi_db_settings):
     for cross_section in threedi.cross_sections.values():
         cross_section_list.append(CrossSectionDefinition(**cross_section))
     commit_counts["cross_sections"] = len(cross_section_list)
-    #session.bulk_save_objects(cross_section_list)
-    #session.commit()
+    # session.bulk_save_objects(cross_section_list)
+    # session.commit()
     for xsec in cross_section_list:
-        session.execute("INSERT INTO v2_cross_section_definition(shape,width,height,code) VALUES({0}, '{1}', '{2}', '{3}')".format(xsec.shape,xsec.width,xsec.height,xsec.code))
+        session.execute("INSERT INTO v2_cross_section_definition(shape,width,height,code) VALUES({0}, {1}, {2}, {3})"
+            .format(
+                quote_nullable(xsec.shape),
+                quote_nullable(xsec.width),
+                quote_nullable(xsec.height),
+                quote_nullable(xsec.code)
+            )
+        )
 
     cross_section_list = (
         session.query(CrossSectionDefinition)
-        .options(load_only("id", "code"))
-        .order_by(CrossSectionDefinition.id)
-        .all()
+            .options(load_only("id", "code"))
+            .order_by(CrossSectionDefinition.id)
+            .all()
     )
     cross_section_dict = {m.code: m.id for m in cross_section_list}
 
     connection_node_list = []
     srid = 4326
     if db.db_type == "postgres":
-            geom_col = session.execute(
-                "SELECT srid FROM geometry_columns "
-                "WHERE f_table_name = 'v2_connection_nodes' AND "
-                "f_geometry_column = 'the_geom'"
-            )
-            srid = geom_col.fetchone()[0]
+        geom_col = session.execute(
+            "SELECT srid FROM geometry_columns "
+            "WHERE f_table_name = 'v2_connection_nodes' AND "
+            "f_geometry_column = 'the_geom'"
+        )
+        srid = geom_col.fetchone()[0]
 
     for connection_node in threedi.connection_nodes:
-        wkt = transform("POINT({0} {1})".format(*connection_node["geom"]),28992,srid)
+        wkt = transform("POINT({0} {1})".format(*connection_node["geom"]), 28992, srid)
         connection_node_list.append(
             ConnectionNode(
                 code=connection_node["code"],
@@ -137,9 +151,9 @@ def write_threedi_to_db(threedi, threedi_db_settings):
 
     connection_node_list = (
         session.query(ConnectionNode)
-        .options(load_only("id", "code"))
-        .order_by(ConnectionNode.id)
-        .all()
+            .options(load_only("id", "code"))
+            .order_by(ConnectionNode.id)
+            .all()
     )
     connection_node_dict = {m.code: m.id for m in connection_node_list}
 
@@ -256,9 +270,9 @@ def write_threedi_to_db(threedi, threedi_db_settings):
 
     imp_list = (
         session.query(ImperviousSurface)
-        .options(load_only("id", "code"))
-        .order_by(ImperviousSurface.id)
-        .all()
+            .options(load_only("id", "code"))
+            .order_by(ImperviousSurface.id)
+            .all()
     )
     imp_dict = {m.code: m.id for m in imp_list}
 
