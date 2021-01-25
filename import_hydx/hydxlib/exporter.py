@@ -4,6 +4,7 @@ from sqlalchemy.orm import load_only
 from copy import copy
 from osgeo import ogr
 from osgeo import osr
+from osgeo import __version__ as osgeo_version
 
 from import_hydx.hydxlib.threedi import Threedi
 from import_hydx.hydxlib.sql_models.threedi_database import ThreediDatabase
@@ -28,6 +29,9 @@ def transform(wkt, srid_source, srid_dest):
     source_crs.ImportFromEPSG(srid_source)
     dest_crs = osr.SpatialReference()
     dest_crs.ImportFromEPSG(srid_dest)
+    if int(osgeo_version[0]) >= 3:
+        source_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        dest_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
     transformation = osr.CoordinateTransformation(source_crs, dest_crs)
 
     point = ogr.CreateGeometryFromWkt(wkt)
