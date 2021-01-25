@@ -500,7 +500,7 @@ class Threedi:
     def add_1d_boundary(self, hydx_structure):
         waterlevel_boundary = getattr(hydx_structure, "buitenwaterstand", None)
         if waterlevel_boundary is not None:
-            timeseries = "0,{0}\n9999,{0} ".format(waterlevel_boundary)
+            timeseries = "0,{0}\n9999,{0}".format(waterlevel_boundary)
             boundary = {
                 "node.code": hydx_structure.identificatieknooppuntofverbinding,
                 "timeseries": timeseries,
