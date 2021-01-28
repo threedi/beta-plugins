@@ -3,14 +3,21 @@
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
-from PyQt5.QtWidgets import QAction,QFileDialog,QMessageBox
+from PyQt5.QtWidgets import QAction, QFileDialog, QMessageBox
 from import_hydx.hydxlib.scripts import *
 from qgis.core import QgsApplication, QgsTask, QgsMessageLog
+
 # Initialize Qt resources from file resources.py
 from .resources import *
+
 # Import the code for the dialog
 from .import_hydx_dialog import importHydxDialog
 import os.path
+import logging
+
+logger = logging.getLogger(__name__)
+log_level = logging.INFO
+logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
 
 class importHydx:
@@ -29,22 +36,21 @@ class importHydx:
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale = QSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
-            self.plugin_dir,
-            'i18n',
-            'importHydx_{}.qm'.format(locale))
+            self.plugin_dir, "i18n", "importHydx_{}.qm".format(locale)
+        )
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
 
-            if qVersion() > '4.3.3':
+            if qVersion() > "4.3.3":
                 QCoreApplication.installTranslator(self.translator)
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&Import Hydx')
+        self.menu = self.tr(u"&Import Hydx")
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -63,8 +69,7 @@ class importHydx:
         :rtype: QString
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('importHydx', message)
-
+        return QCoreApplication.translate("importHydx", message)
 
     def add_action(
         self,
@@ -76,7 +81,8 @@ class importHydx:
         add_to_toolbar=True,
         status_tip=None,
         whats_this=None,
-        parent=None):
+        parent=None,
+    ):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -132,9 +138,7 @@ class importHydx:
             self.iface.addToolBarIcon(action)
 
         if add_to_menu:
-            self.iface.addPluginToMenu(
-                self.menu,
-                action)
+            self.iface.addPluginToMenu(self.menu, action)
 
         self.actions.append(action)
 
@@ -143,54 +147,49 @@ class importHydx:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/import_hydx/icon.png'
+        icon_path = ":/plugins/import_hydx/icon.png"
         self.add_action(
             icon_path,
-            text=self.tr(u'Import Hydx to 3Di model'),
+            text=self.tr(u"Import Hydx to 3Di model"),
             callback=self.run,
-            parent=self.iface.mainWindow())
+            parent=self.iface.mainWindow(),
+        )
 
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
-            self.iface.removePluginMenu(
-                self.tr(u'&Import Hydx'),
-                action)
+            self.iface.removePluginMenu(self.tr(u"&Import Hydx"), action)
             self.iface.removeToolBarIcon(action)
-            
+
     def getHydxFromUserSelection(self):
         """Gets a spatliate through the QFileDialog and inserts it. """
         file_name = QFileDialog.getExistingDirectory()
         self.dlg.hydxFile.setText(str(file_name))
         return None
 
-    def getConnectionDetails(self,value):
+    def getConnectionDetails(self, value):
         type = value.split()[0]
         value = value.split()[1]
 
-        if type == 'Postgresql:':
-            password = self.s_postgresql.value(value+'/password')
-            username = self.s_postgresql.value(value+'/username')
-            port = self.s_postgresql.value(value+'/port')
-            host = self.s_postgresql.value(value+'/host')
+        if type == "Postgresql:":
+            password = self.s_postgresql.value(value + "/password")
+            username = self.s_postgresql.value(value + "/username")
+            port = self.s_postgresql.value(value + "/port")
+            host = self.s_postgresql.value(value + "/host")
             self.threedi_db_settings = {
-                            "threedi_dbname": value,
-                            "threedi_host": host,
-                            "threedi_user": username,
-                            "threedi_password": password,
-                            "threedi_port": port,
-                            "type": "Postgresql"
-                        }
+                "threedi_dbname": value,
+                "threedi_host": host,
+                "threedi_user": username,
+                "threedi_password": password,
+                "threedi_port": port,
+                "type": "Postgresql",
+            }
         else:
-            sqlite_path = self.s_spatialite.value(value+'/sqlitepath')
-            self.threedi_db_settings = {"db_file": sqlite_path,
-                                        "type": "Spatialite"
-                                       }
-            
+            sqlite_path = self.s_spatialite.value(value + "/sqlitepath")
+            self.threedi_db_settings = {"db_file": sqlite_path, "type": "Spatialite"}
 
     def get_databases(self):
         self.s_spatialite = QSettings()
@@ -199,41 +198,45 @@ class importHydx:
         databases = []
 
         for key in all_spatialite_dbkeys:
-            databases.append('Spatialite: '+key.split("/")[0])
-        
+            databases.append("Spatialite: " + key.split("/")[0])
+
         self.s_postgresql = QSettings()
         self.s_postgresql.beginGroup("PostgreSQL/connections")
         all_pgsql_dbkeys = self.s_postgresql.allKeys()
         for key in all_pgsql_dbkeys:
-            databases.append('Postgresql: '+key.split("/")[0])
+            databases.append("Postgresql: " + key.split("/")[0])
         databases = list(dict.fromkeys(databases))
         return databases
 
     def stopped(task):
         QgsMessageLog.logMessage(
-        'Task "{name}" was canceled'.format(
-            name=task.description()),
-        MESSAGE_CATEGORY, Qgis.Info)
+            'Task "{name}" was canceled'.format(name=task.description()),
+            MESSAGE_CATEGORY,
+            Qgis.Info,
+        )
 
-    def completed(self,exception, result=None):
+    def completed(self, exception, result=None):
         """This is called when doSomething is finished.
         Exception is not None if doSomething raises an exception.
         result is the return value of doSomething."""
         if exception is None:
             if result is None:
                 QgsMessageLog.logMessage(
-                    'Completed with no exception and no result '\
-                    '(probably manually canceled by the user)',
-                    MESSAGE_CATEGORY, Qgis.Warning)
+                    "Completed with no exception and no result "
+                    "(probably manually canceled by the user)",
+                    MESSAGE_CATEGORY,
+                    Qgis.Warning,
+                )
             else:
                 QMessageBox.information(
-                None,
-                "Result of hydx import",
-                "Your HydX file has succesfully been imported",
+                    None,
+                    "Result of hydx import",
+                    "Your HydX file has succesfully been imported. Please check the hydx folder for the import logging.",
                 )
         else:
-            QgsMessageLog.logMessage("Exception: {}".format(exception),
-                                     MESSAGE_CATEGORY, Qgis.Critical)
+            QgsMessageLog.logMessage(
+                "Exception: {}".format(exception), MESSAGE_CATEGORY, Qgis.Critical
+            )
             raise exception
 
     def run(self):
@@ -257,8 +260,19 @@ class importHydx:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            task1 = QgsTask.fromFunction('import hydx', run_import_export,
-                             on_finished=self.completed, import_type="hydx",export_type="threedi",
-                             hydx_path=self.dlg.hydxFile.text(),threedi_db_settings=self.threedi_db_settings)
+            log_relpath = os.path.join(
+                os.path.abspath(self.dlg.hydxFile.text()), "import_hydx_hydxlib.log"
+            )
+            write_logging_to_file(log_relpath)
+            logger.info("Log file is created in hydx directory: %r", log_relpath)
+            task1 = QgsTask.fromFunction(
+                "import hydx",
+                run_import_export,
+                on_finished=self.completed,
+                import_type="hydx",
+                export_type="threedi",
+                hydx_path=self.dlg.hydxFile.text(),
+                threedi_db_settings=self.threedi_db_settings,
+            )
             QgsApplication.taskManager().addTask(task1)
             pass

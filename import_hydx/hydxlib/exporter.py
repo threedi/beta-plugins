@@ -56,23 +56,26 @@ def export_threedi(hydx, threedi_db_settings):
 
 def write_threedi_to_db(threedi, threedi_db_settings):
     """
-        writes threedi to model database
+    writes threedi to model database
 
-        threedi (dict): dictionary with for each object type a list of objects
+    threedi (dict): dictionary with for each object type a list of objects
 
-        returns: (dict) with number of objects committed to the database of
-                 each object type
+    returns: (dict) with number of objects committed to the database of
+             each object type
 
-        """
+    """
 
     commit_counts = {}
 
-    if threedi_db_settings["type"] == 'Spatialite':
+    if threedi_db_settings["type"] == "Spatialite":
         db = ThreediDatabase(
-            {"db_file": threedi_db_settings["db_file"],
-             "db_path": threedi_db_settings["db_file"]})
+            {
+                "db_file": threedi_db_settings["db_file"],
+                "db_path": threedi_db_settings["db_file"],
+            }
+        )
 
-    elif threedi_db_settings["type"] == 'Postgresql':
+    elif threedi_db_settings["type"] == "Postgresql":
         db = ThreediDatabase(
             {
                 "host": threedi_db_settings["threedi_host"],
@@ -89,16 +92,16 @@ def write_threedi_to_db(threedi, threedi_db_settings):
     # set all autoincrement counters to max ids
     if db.db_type == "postgres":
         for table in (
-                ConnectionNode,
-                Manhole,
-                BoundaryCondition1D,
-                Pipe,
-                CrossSectionDefinition,
-                Orifice,
-                Weir,
-                Pumpstation,
-                ImperviousSurface,
-                ImperviousSurfaceMap,
+            ConnectionNode,
+            Manhole,
+            BoundaryCondition1D,
+            Pipe,
+            CrossSectionDefinition,
+            Orifice,
+            Weir,
+            Pumpstation,
+            ImperviousSurface,
+            ImperviousSurfaceMap,
         ):
             session.execute(
                 "SELECT setval('{table}_id_seq', max(id)) "
@@ -113,20 +116,20 @@ def write_threedi_to_db(threedi, threedi_db_settings):
     # session.bulk_save_objects(cross_section_list)
     # session.commit()
     for xsec in cross_section_list:
-        session.execute("INSERT INTO v2_cross_section_definition(shape,width,height,code) VALUES({0}, {1}, {2}, {3})"
-            .format(
+        session.execute(
+            "INSERT INTO v2_cross_section_definition(shape,width,height,code) VALUES({0}, {1}, {2}, {3})".format(
                 quote_nullable(xsec.shape),
                 quote_nullable(xsec.width),
                 quote_nullable(xsec.height),
-                quote_nullable(xsec.code)
+                quote_nullable(xsec.code),
             )
         )
 
     cross_section_list = (
         session.query(CrossSectionDefinition)
-            .options(load_only("id", "code"))
-            .order_by(CrossSectionDefinition.id)
-            .all()
+        .options(load_only("id", "code"))
+        .order_by(CrossSectionDefinition.id)
+        .all()
     )
     cross_section_dict = {m.code: m.id for m in cross_section_list}
 
@@ -145,7 +148,7 @@ def write_threedi_to_db(threedi, threedi_db_settings):
         connection_node_list.append(
             ConnectionNode(
                 code=connection_node["code"],
-                storage_area=None,
+                storage_area=connection_node["storage_area"],
                 the_geom="srid={0};{1}".format(srid, wkt),
             )
         )
@@ -155,9 +158,9 @@ def write_threedi_to_db(threedi, threedi_db_settings):
 
     connection_node_list = (
         session.query(ConnectionNode)
-            .options(load_only("id", "code"))
-            .order_by(ConnectionNode.id)
-            .all()
+        .options(load_only("id", "code"))
+        .order_by(ConnectionNode.id)
+        .all()
     )
     connection_node_dict = {m.code: m.id for m in connection_node_list}
 
@@ -274,9 +277,9 @@ def write_threedi_to_db(threedi, threedi_db_settings):
 
     imp_list = (
         session.query(ImperviousSurface)
-            .options(load_only("id", "code"))
-            .order_by(ImperviousSurface.id)
-            .all()
+        .options(load_only("id", "code"))
+        .order_by(ImperviousSurface.id)
+        .all()
     )
     imp_dict = {m.code: m.id for m in imp_list}
 

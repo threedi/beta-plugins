@@ -16,7 +16,6 @@ from import_hydx.hydxlib.exporter import export_threedi
 
 logger = logging.getLogger(__name__)
 
-
 if "TRAVIS" in os.environ:
     # TODO: temporary measure, Reinout will have to investigate proper db env
     # variables. If we run on travis-ci, the default password should be empty.
@@ -29,10 +28,10 @@ class OptionException(Exception):
     pass
 
 
-def run_import_export(task,
-    import_type, export_type, hydx_path=None, threedi_db_settings=None
-    ):
-    """ Run import and export functionality of hydxlib
+def run_import_export(
+    task, import_type, export_type, hydx_path=None, threedi_db_settings=None
+):
+    """Run import and export functionality of hydxlib
 
     Args:
         import_type (str):          import operator ["hydx", "threedi"]
@@ -54,10 +53,10 @@ def run_import_export(task,
 
     *hydx_path*
         required when selected operator 'hydx'
-        
+
         relative or absolute path to your hydx location files
         example: hydx_path = "hydxlib\\tests\\example_files_structures_hydx"
-    
+
     *threedi_db_settings*
         required when selected operator 'threedi'
 
@@ -68,7 +67,7 @@ def run_import_export(task,
                         "threedi_password": TODO_TREEDI_DB_PASSWORD,
                         "threedi_port": 5432,
                     }
-        
+
         threedi_dbname (str):   name of your threedi database, e.g. test_gwsw
         threedi_host (str):     host of your threedi database, e.g. localhost
         threedi_user (str):     username of your threedi database, e.g. postgres
@@ -82,7 +81,7 @@ def run_import_export(task,
         )
         write_logging_to_file(hydx_path)
         run_import_export(import_type, export_type, hydx_path, threedi_db_settings)
-        
+
     """
     logger.info("Started exchange of GWSW-hydx at %s", datetime.now())
     logger.info("import type %r ", import_type)
@@ -105,16 +104,16 @@ def run_import_export(task,
 
     logger.info("Exchange of GWSW-hydx finished")
 
-    return {'task': task.description()}
+    return {"task": task.description()}
 
 
 def write_logging_to_file(log_relpath):
     """ Add file handler for writing logfile with warning and errors of hydxlib """
     fh = logging.FileHandler(log_relpath, mode="w")
-    fh.setLevel(logging.INFO)
+    fh.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(levelname)s: %(message)s")
     fh.setFormatter(formatter)
-    logging.getLogger("hydxlib").addHandler(fh)
+    logging.getLogger("import_hydx").addHandler(fh)
     return
 
 
