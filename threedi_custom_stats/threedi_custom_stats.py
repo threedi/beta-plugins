@@ -26,7 +26,13 @@ import processing
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
-from qgis.core import Qgis, QgsProject, QgsRasterLayer
+from qgis.core import (
+    Qgis,
+    QgsApplication,
+    QgsProject,
+    QgsTask,
+    QgsRasterLayer
+)
 
 from .threedi_result_aggregation import *
 from .ogr2qgis import *
@@ -37,9 +43,172 @@ from .resources import *
 from .threedi_custom_stats_dialog import ThreeDiCustomStatsDialog
 import os.path
 
+
 # TODO: cfl strictness factors instelbaar maken
 # TODO: berekening van max timestep ook op basis van volume vs. debiet
 # TODO: opties af laten hangen van wat er in het model aanwezig is; is wel tricky ivm presets
+
+
+class Aggregate3DiResults(QgsTask):
+
+    def __init__(self,
+                 description: str,
+                 parent: ThreeDiCustomStatsDialog,
+                 gridadmin: str,
+                 results_3di: str,
+                 demanded_aggregations: List,
+                 bbox,
+                 start_time: int,
+                 end_time: int,
+                 subsets,
+                 interpolation_method,
+                 resample_point_layer: bool,
+                 resolution,
+                 output_flowlines: bool,
+                 output_cells: bool,
+                 output_nodes: bool,
+                 output_rasters: bool
+                 ):
+        super().__init__(description, QgsTask.CanCancel)
+        self.exception = None
+        self.parent = parent
+        self.parent.setEnabled(False)
+        self.grid_admin = gridadmin
+        self.results_3di = results_3di
+        self.demanded_aggregations = demanded_aggregations
+        self.bbox = bbox
+        self.start_time = start_time
+        self.end_time = end_time
+        self.subsets = subsets
+        self.interpolation_method = interpolation_method
+        self.resample_point_layer = resample_point_layer
+        self.resolution = resolution
+        self.output_flowlines = output_flowlines
+        self.output_cells = output_cells
+        self.output_nodes = output_nodes
+        self.output_rasters = output_rasters
+
+        self.parent.iface.messageBar().pushMessage("3Di Custom Statistics",
+                                                   "Started aggregating 3Di results",
+                                                   level=Qgis.Info,
+                                                   duration=3
+                                                   )
+        self.parent.iface.mainWindow().repaint()  # to show the message before the task starts
+
+    def run(self):
+        try:
+            self.ogr_ds, self.mem_rasts = aggregate_threedi_results(
+                gridadmin=self.grid_admin,
+                results_3di=self.results_3di,
+                demanded_aggregations=self.demanded_aggregations,
+                bbox=self.bbox,
+                start_time=self.start_time,
+                end_time=self.end_time,
+                subsets=self.subsets,
+                interpolation_method=self.interpolation_method,
+                resample_point_layer=self.resample_point_layer,
+                resolution=self.resolution,
+                output_flowlines=self.output_flowlines,
+                output_cells=self.output_cells,
+                output_nodes=self.output_nodes,
+                output_rasters=self.output_rasters
+            )
+
+            return True
+
+        except Exception as e:
+            self.exception = e
+
+        return False
+
+    def finished(self, result):
+        if self.exception is not None:
+            self.parent.setEnabled(True)
+            self.parent.repaint()
+            raise self.exception
+        if result:
+            # Add layers to layer tree
+            # They are added in order so the raster is below the polygon is below the line is below the point layer
+
+            # raster layer
+            if len(self.mem_rasts) > 0:
+                for rastname, rast in self.mem_rasts.items():
+                    raster_output_dir = self.parent.mQgsFileWidgetRasterFolder.filePath()
+                    raster_output_fn = os.path.join(raster_output_dir, rastname + '.tif')
+                    drv = gdal.GetDriverByName('GTiff')
+                    gdal_tif = drv.CreateCopy(utf8_path=raster_output_fn, src=rast)
+                    gdal_tif = None
+                    self.parent.iface.addRasterLayer(raster_output_fn,
+                                                     "Aggregation results: raster {}".format(rastname))
+
+            # cell layer
+            ogr_lyr = self.ogr_ds.GetLayerByName('cell')
+            if ogr_lyr is not None:
+                if ogr_lyr.GetFeatureCount() > 0:
+                    # polygon layer
+                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: cells')
+                    project = QgsProject.instance()
+                    project.addMapLayer(qgs_lyr)
+                    style = self.parent.comboBoxCellsStyleType.currentData()
+                    style_kwargs = self.parent.get_styling_parameters(output_type=style.output_type)
+                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
+
+            # flowline layer
+            ogr_lyr = self.ogr_ds.GetLayerByName('flowline')
+            if ogr_lyr is not None:
+                if ogr_lyr.GetFeatureCount() > 0:
+                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: flowlines')
+                    project = QgsProject.instance()
+                    project.addMapLayer(qgs_lyr)
+                    style = self.parent.comboBoxFlowlinesStyleType.currentData()
+                    style_kwargs = self.parent.get_styling_parameters(output_type=style.output_type)
+                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
+
+            # node layer
+            ogr_lyr = self.ogr_ds.GetLayerByName('node')
+            if ogr_lyr is not None:
+                if ogr_lyr.GetFeatureCount() > 0:
+                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: nodes')
+                    project = QgsProject.instance()
+                    project.addMapLayer(qgs_lyr)
+                    style = self.parent.comboBoxNodesStyleType.currentData()
+                    style_kwargs = self.parent.get_styling_parameters(output_type=style.output_type)
+                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
+
+            # resampled point layer
+            ogr_lyr = self.ogr_ds.GetLayerByName('node_resampled')
+            if ogr_lyr is not None:
+                if ogr_lyr.GetFeatureCount() > 0:
+                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
+                    project = QgsProject.instance()
+                    project.addMapLayer(qgs_lyr)
+                    style = self.parent.comboBoxNodesStyleType.currentData()
+                    style_kwargs = self.parent.get_styling_parameters(output_type=style.output_type)
+                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
+
+            self.parent.setEnabled(True)
+            self.parent.iface.messageBar().pushMessage("3Di Custom Statistics",
+                                                       "Finished custom aggregation",
+                                                       level=Qgis.Success,
+                                                       duration=3
+                                                       )
+
+        else:
+            self.parent.setEnabled(True)
+            self.parent.iface.messageBar().pushMessage("3Di Custom Statistics",
+                                                       "Aggregating 3Di results returned no results",
+                                                       level=Qgis.Warning,
+                                                       duration=3
+                                                       )
+
+    def cancel(self):
+        self.parent.iface.messageBar().pushMessage("3Di Custom Statistics",
+                                                   "Pre-processing simulation results cancelled by user",
+                                                   level=Qgis.Info,
+                                                   duration=3
+                                                   )
+        super().cancel()
+
 
 class ThreeDiCustomStats:
     """QGIS Plugin Implementation."""
@@ -54,6 +223,7 @@ class ThreeDiCustomStats:
         """
         # Save reference to the QGIS interface
         self.iface = iface
+
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
@@ -75,6 +245,8 @@ class ThreeDiCustomStats:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+
+        self.tm = QgsApplication.taskManager()
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -251,90 +423,22 @@ class ThreeDiCustomStats:
             else:
                 interpolation_method = None
 
-            self.iface.messageBar().pushMessage("Info",
-                                                "Started aggregating 3Di results",
-                                                level=Qgis.Info,
-                                                duration=3
-                                                )
-            # TODO: bovenstaande message voorzien van progress bar
-            ogr_ds, mem_rasts = aggregate_threedi_results(gridadmin=grid_admin,
-                                                          results_3di=results_3di,
-                                                          demanded_aggregations=self.dlg.demanded_aggregations,
-                                                          bbox=bbox,
-                                                          start_time=start_time,
-                                                          end_time=end_time,
-                                                          subsets=subsets,
-                                                          interpolation_method=interpolation_method,
-                                                          resample_point_layer=resample_point_layer,
-                                                          resolution=resolution,
-                                                          output_flowlines=output_flowlines,
-                                                          output_cells=output_cells,
-                                                          output_nodes=output_nodes,
-                                                          output_rasters=output_rasters
-
-                                                          )
-
-            # Add layers to layer tree
-            # They are added in order so the raster is below the polygon is below the line is below the point layer
-
-            # raster layer
-            if len(mem_rasts) > 0:
-                for rastname, rast in mem_rasts.items():
-                    raster_output_dir = self.dlg.mQgsFileWidgetRasterFolder.filePath()
-                    raster_output_fn = os.path.join(raster_output_dir, rastname + '.tif')
-                    drv = gdal.GetDriverByName('GTiff')
-                    gdal_tif = drv.CreateCopy(utf8_path=raster_output_fn, src=rast)
-                    gdal_tif = None
-                    self.iface.addRasterLayer(raster_output_fn,
-                                              "Aggregation results: raster {}".format(rastname))
-
-            # cell layer
-            ogr_lyr = ogr_ds.GetLayerByName('cell')
-            if ogr_lyr is not None:
-                if ogr_lyr.GetFeatureCount() > 0:
-                    # polygon layer
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: cells')
-                    project = QgsProject.instance()
-                    project.addMapLayer(qgs_lyr)
-                    style = self.dlg.comboBoxCellsStyleType.currentData()
-                    style_kwargs = self.dlg.get_styling_parameters(output_type=style.output_type)
-                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
-
-            # flowline layer
-            ogr_lyr = ogr_ds.GetLayerByName('flowline')
-            if ogr_lyr is not None:
-                if ogr_lyr.GetFeatureCount() > 0:
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: flowlines')
-                    project = QgsProject.instance()
-                    project.addMapLayer(qgs_lyr)
-                    style = self.dlg.comboBoxFlowlinesStyleType.currentData()
-                    style_kwargs = self.dlg.get_styling_parameters(output_type=style.output_type)
-                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
-
-            # node layer
-            ogr_lyr = ogr_ds.GetLayerByName('node')
-            if ogr_lyr is not None:
-                if ogr_lyr.GetFeatureCount() > 0:
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: nodes')
-                    project = QgsProject.instance()
-                    project.addMapLayer(qgs_lyr)
-                    style = self.dlg.comboBoxNodesStyleType.currentData()
-                    style_kwargs = self.dlg.get_styling_parameters(output_type=style.output_type)
-                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
-
-            # resampled point layer
-            ogr_lyr = ogr_ds.GetLayerByName('node_resampled')
-            if ogr_lyr is not None:
-                if ogr_lyr.GetFeatureCount() > 0:
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
-                    project = QgsProject.instance()
-                    project.addMapLayer(qgs_lyr)
-                    style = self.dlg.comboBoxNodesStyleType.currentData()
-                    style_kwargs = self.dlg.get_styling_parameters(output_type=style.output_type)
-                    style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
-
-            self.iface.messageBar().pushMessage("Success",
-                                                "Finished custom aggregation",
-                                                level=Qgis.Success,
-                                                duration=3
-                                                )
+            aggregate_threedi_results_task = Aggregate3DiResults(
+                description='Aggregate 3Di Results',
+                parent=self.dlg,
+                gridadmin=grid_admin,
+                results_3di=results_3di,
+                demanded_aggregations=self.dlg.demanded_aggregations,
+                bbox=bbox,
+                start_time=start_time,
+                end_time=end_time,
+                subsets=subsets,
+                interpolation_method=interpolation_method,
+                resample_point_layer=resample_point_layer,
+                resolution=resolution,
+                output_flowlines=output_flowlines,
+                output_cells=output_cells,
+                output_nodes=output_nodes,
+                output_rasters=output_rasters
+            )
+            self.tm.addTask(aggregate_threedi_results_task)

@@ -116,7 +116,7 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
     raw_values = np.ndarray((0, 0))
 
     # Line variables
-    if aggregation.variable.short_name in ['q', 'u', 'au']:
+    if aggregation.variable.short_name in ['q', 'u1', 'au']:
         raw_values = getattr(ts, aggregation.variable.short_name)
     elif aggregation.variable.short_name == 'ts_max':
         if hasattr(nodes_or_lines, 'line_geometries'):
@@ -201,6 +201,11 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
         result = np.nanmin(raw_values_signed, axis=0)
     elif aggregation.method.short_name == 'max':
         result = np.nanmax(raw_values_signed, axis=0)
+    elif aggregation.method.short_name == 'max_time':
+        raw_values_signed[np.isnan(raw_values_signed)] = -9999
+        first_max_pos = np.nanargmax(raw_values_signed, axis=0)
+        time_steps = np.cumsum(np.insert(tintervals[0:-1], 0, start_time))
+        result = time_steps[first_max_pos]
     elif aggregation.method.short_name == 'mean':
         result = np.nanmean(raw_values_signed, axis=0)
     elif aggregation.method.short_name == 'median':

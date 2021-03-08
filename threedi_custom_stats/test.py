@@ -1,10 +1,16 @@
-# from threedi_result_aggregation import *
-# # from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
-#
-# ga='C:\\Users\\leendert.vanwolfswin\\Documents\\bergeijk\\rev32\\gridadmin.h5'
-# res='C:\\Users\\leendert.vanwolfswin\\Documents\\bergeijk\\rev32\\results_3di.nc'
-#
-# gr = GridH5ResultAdmin(ga, res)
+from threedi_result_aggregation import *
+from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
+from threedigrid.admin.gridresultadmin import GridH5AggregateResultAdmin
+
+ga ='C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\gridadmin.h5'
+res ='C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\results_3di.nc'
+agg_res = 'C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\aggregate_results_3di.nc'
+
+gr = GridH5ResultAdmin(ga, res)
+gr_agg = GridH5ResultAdmin(ga, agg_res)
+gr_agg.nodes._field_names
+gr_agg.nodes.Meta.composite_fields.keys()
+gr_agg.nodes.Meta.subset_fields.keys()
 # nodes = list(gr.nodes.id)
 # flow_per_node(gr=gr, node_ids=nodes, start_time=0, end_time=3600, out=True, aggregation_method=AGGREGATION_METHODS.get_by_short_name('sum'))
 #

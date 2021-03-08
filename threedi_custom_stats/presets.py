@@ -15,7 +15,7 @@ class Preset:
     def __init__(self,
                  name: str,
                  description: str = '',
-                 aggregations: List[Aggregation] = [],
+                 aggregations=None,
                  resample_point_layer: bool = False,
                  flowlines_style: Style = None,
                  cells_style: Style = None,
@@ -24,6 +24,8 @@ class Preset:
                  cells_style_param_values: dict = None,
                  nodes_style_param_values: dict = None
                  ):
+        if aggregations is None:
+            aggregations = list()
         self.name = name
         self.description = description
         self.__aggregations = aggregations
