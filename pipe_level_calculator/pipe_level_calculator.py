@@ -69,6 +69,25 @@ MESSAGE_CATEGORY = 'TaskFromFunction'
 STYLE =  os.path.join(os.path.dirname(__file__), 'style.qml')
 
 
+# Local scripts
+from .dependencies import DEPENDENCIES
+import importlib
+import pkg_resources
+
+for dependency in DEPENDENCIES:
+    try:
+        importlib.import_module(dependency.package)
+        version = pkg_resources.get_distribution(dependency.package).version
+        
+        QgsMessageLog.logMessage('dependecy {} present version {}'.format(dependency.name, version),
+                                 "Pipe level calculator")
+    except Exception as e:
+            QgsMessageLog.logMessage('dependecy {} not present: {}'.format(dependency.name, e),
+                             "Pipe level calculator")
+    
+
+
+
 class PipeLevelCalculator:
     """QGIS Plugin Implementation."""
 
@@ -237,7 +256,8 @@ class PipeLevelCalculator:
                         qgs_lyr.loadNamedStyle(STYLE) 
                 
         else:
-            self.iface.messageBar().pushMessage("{ex}".format(ex=exception), level=Qgis.Critical, duration=5)
+            #return 
+            self.iface.messageBar().pushMessage("Found exception {ex}".format(ex=exception), level=Qgis.Critical, duration=5)
             raise exception
             
     def stopped(self,task):
@@ -259,7 +279,8 @@ class PipeLevelCalculator:
 
         else:        
 
-            task = QgsTask.fromFunction('Calculate Pipe Levels', bereken_bobs, on_finished=self.completed,
+            task = QgsTask.fromFunction('Calculate Pipe Levels', bereken_bobs, 
+                                        on_finished=self.completed,
                                          trace_fn = self.dlg.trace_layer,
                                           dem_fn = self.dlg.raster_layer,
                                           minimale_dekking = self.dlg.dekking,

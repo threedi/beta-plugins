@@ -10,7 +10,6 @@ import networkx
 import gdal,ogr
 import json
 import numpy as np
-from qgis.core import QgsMessageLog
 
 MEM_DRIVER = ogr.GetDriverByName('MEMORY') 
 MAX_ITERATIONS = 100
@@ -47,14 +46,15 @@ def bereken_bobs(task, trace_fn, dem_fn, minimale_dekking, maximale_valhoogte, e
     for i, node in enumerate(network.nodes):
         network.nodes[node]['id'] = i
     
-    QgsMessageLog.logMessage("Voeg lines toe aan networkx","Pipe level calculator")
+    # Voeg id's toe aan de edges van het netwerk
     trace_layer.ResetReading()
     for feature in trace_layer:
-        print(feature.GetFID())
+        
         if feature.diameter is None:
             raise Exception('Pipe with id {leiding_id} doesnt have a diameter'.format(leiding_id = feature.id))
         if feature.id is None:
             raise Exception('Not all pipes have an ID')
+            
                 
         feature_id = feature.id
         feature_geometry = feature.GetGeometryRef()
@@ -82,15 +82,9 @@ def bereken_bobs(task, trace_fn, dem_fn, minimale_dekking, maximale_valhoogte, e
         p_source_dem = dem_rb.ReadAsArray(p_source_x,p_source_y,1,1)
         p_target_dem = dem_rb.ReadAsArray(p_target_x,p_target_y,1,1)
         
-
-        
         if p_source_dem is None:
-            QgsMessageLog.logMessage('Startpoint of pipe {leiding_id} is outside DEM extent'.format(leiding_id = feature_id),
-                                 "Pipe level calculator")
             raise Exception('Startpoint of pipe {leiding_id} is outside DEM extent'.format(leiding_id = feature_id))
         if p_target_dem is None:
-            QgsMessageLog.logMessage('Endpoint of pipe {leiding_id} is outside DEM extent'.format(leiding_id = feature_id),
-                                 "Pipe level calculator")
             raise Exception('Endpoint of pipe {leiding_id} is outside DEM extent'.format(leiding_id = feature_id))
         
         p_source_dem = p_source_dem[0]
@@ -100,7 +94,7 @@ def bereken_bobs(task, trace_fn, dem_fn, minimale_dekking, maximale_valhoogte, e
             raise Exception('No Data value in DEM for startpoint of pipe {leiding_id}'.format(leiding_id = feature_id))
         if p_target_dem == demNoData:
             raise Exception('No Data value in DEM for endpoint of pipe {leiding_id}'.format(leiding_id = feature_id))       
-            
+        
 
         append_dict = {'id': feature_id, 
                        'diameter':feature.diameter,
@@ -111,16 +105,15 @@ def bereken_bobs(task, trace_fn, dem_fn, minimale_dekking, maximale_valhoogte, e
                        'length': geometry_length, 
                        'source_elevation': p_source_dem,
                        'target_elevation': p_target_dem,
-                       'startpoint_distance': 0,
-                       'edit': feature.edit,
-                       'start_ontwerp': float(feature.pipe_inver),
-                       'eind_ontwerp': float(feature.pipe_inv_1)}
+                       'startpoint_distance': 0}
         
+        # if feature.edit:
+        #     append_dict.update({'edit': feature.edit})
+        #     edits = True
+            
         trace_df = trace_df.append(pandas.DataFrame(append_dict, index=[feature_id]), sort = False)
     
     # calculate distance matrix 
-        
-    QgsMessageLog.logMessage("calculate distance matrix ","Pipe level calculator")
     reverse_network = network.reverse()  # reverses het netwerk, we willen de afstand naar het begin
     distance_matrix = dict(networkx.all_pairs_dijkstra(reverse_network, weight='length'))
     
@@ -139,28 +132,28 @@ def bereken_bobs(task, trace_fn, dem_fn, minimale_dekking, maximale_valhoogte, e
             if p_startpoint_distance >= category[0] and p_startpoint_distance < category[1]:
                 trace_df.loc[trace_df.id == p_id, 'gradient'] = category[2]
                 break
+                 
     
     # Bereken de bob's op basis van de dem en de minimale dekking     
-    trace_df.loc[trace_df.edit==1, 'invert_level_start_point'] = trace_df['source_elevation'] - minimale_dekking - (trace_df['diameter'] / 1000)
-    trace_df.loc[trace_df.edit==1, 'invert_level_end_point'] = trace_df['source_elevation'] - minimale_dekking - (trace_df['gradient'] * trace_df.length) - (trace_df['diameter'] / 1000)
-    
-    trace_df.loc[trace_df.edit==0, 'invert_level_start_point'] = trace_df['start_ontwerp']
-    trace_df.loc[trace_df.edit==0, 'invert_level_end_point'] = trace_df['eind_ontwerp']
+    trace_df['invert_level_start_point'] = trace_df['source_elevation'] - minimale_dekking - (trace_df['diameter'] / 1000)
+    trace_df['invert_level_end_point'] = trace_df['source_elevation'] - minimale_dekking - (trace_df['gradient'] * trace_df.length) - (trace_df['diameter'] / 1000)
     
     # doordat verhang van het maaiveld groter is dan het verhang van de buis kan de bob_eind niet genoeg dekking krijgen
-    #trace_df.loc[((trace_df.invert_level_end_point + trace_df.diameter/1000) > (trace_df.target_elevation - minimale_dekking)) & (trace_df.edit == 1), 'invert_level_start_point'] = trace_df['invert_level_start_point'] - ((trace_df['invert_level_end_point'] + trace_df.diameter/1000) - (trace_df.target_elevation - minimale_dekking))
-    #trace_df.loc[((trace_df.invert_level_end_point + trace_df.diameter/1000) > (trace_df.target_elevation - minimale_dekking)) & (trace_df.edit == 1), 'invert_level_end_point'] = trace_df['invert_level_end_point'] - ((trace_df['invert_level_end_point'] + trace_df.diameter/1000) - (trace_df.target_elevation - minimale_dekking))
+    trace_df.loc[(trace_df.invert_level_end_point + trace_df.diameter/1000) > (trace_df.target_elevation - minimale_dekking), 'invert_level_start_point'] = trace_df['invert_level_start_point'] - ((trace_df['invert_level_end_point'] + trace_df.diameter/1000) - (trace_df.target_elevation - minimale_dekking))
+    trace_df.loc[(trace_df.invert_level_end_point + trace_df.diameter/1000) > (trace_df.target_elevation - minimale_dekking), 'invert_level_end_point'] = trace_df['invert_level_end_point'] - ((trace_df['invert_level_end_point'] + trace_df.diameter/1000) - (trace_df.target_elevation - minimale_dekking))
     
     wrong_pipes = True
     iterations = 0
     
-    QgsMessageLog.logMessage("Start iteraties","Pipe level calculator")
     while wrong_pipes and iterations < MAX_ITERATIONS:
                 
         wrong_pipes = False
         
         for p_index, p_row in trace_df.iterrows():
-                        
+            # if edits:
+            #     if p_row.edit == 0:
+            #         continue
+            
             p_id = p_row.id
                 
             p_source_id = p_row.source
@@ -170,8 +163,6 @@ def bereken_bobs(task, trace_fn, dem_fn, minimale_dekking, maximale_valhoogte, e
             connected_pipes = trace_df.loc[((trace_df.source == p_target_id) |   
                                                 (trace_df.target == p_source_id)) &
                                                 (trace_df.id != p_id)]
-            
-            connected_pipes = connected_pipes[connected_pipes.edit != 0]
             
             if len(connected_pipes) > 0:
                 

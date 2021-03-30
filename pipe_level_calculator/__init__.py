@@ -22,8 +22,9 @@
  ***************************************************************************/
  This script initializes the plugin, making it known to QGIS.
 """
-
-
+from pipe_level_calculator import dependencies
+dependencies.ensure_everything_installed()
+dependencies.show_installed_dependencies_in_qgis()
 # noinspection PyPep8Naming
 def classFactory(iface):  # pylint: disable=invalid-name
     """Load PipeLevelCalculator class from file PipeLevelCalculator.
