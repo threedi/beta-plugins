@@ -122,6 +122,7 @@ class PipeLevelCalculator:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+        self.tm = QgsApplication.taskManager()
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -268,9 +269,6 @@ class PipeLevelCalculator:
         verhang_first_distance = self.dlg.verhang_table[0][1]       
         verhang_largest_distance = self.dlg.verhang_table[-1][1]
         #verhang_gradient_check = all([row[2]>0 for row in self.dlg.verhang_table])
-        if verhang_first_distance != 0:
-            self.iface.messageBar().pushMessage("First distance in gradient table should be 0", level=Qgis.Warning, duration=5)
-                    
         if self.dlg.trace_max_distance > verhang_largest_distance:
             self.iface.messageBar().pushMessage("Maximum distance in gradient table not sufficient, not all pipes have a gradient", level=Qgis.Warning, duration=5)
         
@@ -289,7 +287,7 @@ class PipeLevelCalculator:
                                           egalisatie = self.dlg.egalisatie,
                                           egalisatiehoek = self.dlg.egalisatie_hoek)
 
-            QgsApplication.taskManager().addTask(task)
+            self.tm.addTask(task)
                     
 
     def run(self):
