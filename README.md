@@ -28,7 +28,6 @@ Below the currently available beta plugins are listed. Most plugins have some do
 * pipelevelcalculator: Calculate pipe levels based on a design and DEM. Made by Emile de Badts (Nelen & Schuurmans).
 * resultsdownloader: Searches for 3Di simulation results and facilitates downloading/visualising these. Made by Ivar Lokhorst / Emiel Verstegen (Nelen & Schuurmans).
 * threedi_custom_stats: 3Di Custom Statistics. Calculate custom aggregations (e.g. sum, max, min, first, last, etc) for flow variables (waterlevel, volume, velocity, discharge, etc.). Made by Leendert van Wolfswinkel (Nelen & Schuurmans).
-* threedi_leak_detector: Identify flowlines where flow occurs because the boundary between the cells is 'leaky' (a higher part of the DEM is not taken into account because it is not located on the cell boundary). Made by Leendert van Wolfswinkel (Nelen & Schuurmans).
 * threediresultstyler: Adds functionality like adding a styled DEM, areal photo's, saving/loading settings in the Layer menu (visibility, expanded groups and filters) and showing Courant numbers of the calculated results. Made by Emiel Verstegen (Nelen & Schuurmans).
 
 ## Contribute
