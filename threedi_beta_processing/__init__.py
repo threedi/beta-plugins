@@ -35,5 +35,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :type iface: QgsInterface
     """
     #
-    from .crestlevelsampler import CrestLevelSamplerPlugin
+    from .threedibetaprocessing import CrestLevelSamplerPlugin
     return CrestLevelSamplerPlugin()

@@ -35,7 +35,7 @@ import sys
 import inspect
 
 from qgis.core import QgsProcessingAlgorithm, QgsApplication
-from .crestlevelsampler_provider import CrestLevelSamplerProvider
+from .threedibetaprocessing_provider import ThreeDiBetaAlgorithmsProvider
 
 cmd_folder = os.path.split(inspect.getfile(inspect.currentframe()))[0]
 
@@ -50,7 +50,7 @@ class CrestLevelSamplerPlugin(object):
 
     def initProcessing(self):
         """Init Processing provider for QGIS >= 3.8."""
-        self.provider = CrestLevelSamplerProvider()
+        self.provider = ThreeDiBetaAlgorithmsProvider()
         QgsApplication.processingRegistry().addProvider(self.provider)
 
     def initGui(self):

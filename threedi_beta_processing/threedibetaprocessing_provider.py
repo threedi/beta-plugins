@@ -31,10 +31,10 @@ __copyright__ = '(C) 2021 by Nelen & Schuurmans'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .crestlevelsampler_algorithm import CrestLevelSamplerAlgorithm
+from .dem_sampling_algorithms import CrestLevelAlgorithm, MaxBreachDepthAlgorithm
 
 
-class CrestLevelSamplerProvider(QgsProcessingProvider):
+class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
 
     def __init__(self):
         """
@@ -53,9 +53,8 @@ class CrestLevelSamplerProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
-        self.addAlgorithm(CrestLevelSamplerAlgorithm())
-        # add additional algorithms here
-        # self.addAlgorithm(MyOtherAlgorithm())
+        self.addAlgorithm(CrestLevelAlgorithm())
+        self.addAlgorithm(MaxBreachDepthAlgorithm())
 
     def id(self):
         """

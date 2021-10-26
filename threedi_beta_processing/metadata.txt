@@ -3,17 +3,17 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=Crest Level Sampler
+name=3Di Beta Processing
 qgisMinimumVersion=3.16
-description=Derive obstacle crest level from DEM
+description=Processing algorithms for 3Di (beta)
 version=0.1
 author=Nelen & Schuurmans
 email=leendert.vanwolfswinkel@nelen-schuurmans.nl
 
-about=This plugin analyses the DEM around the input obstacle or levee to guess its crest level
+about=Processing algorithms for 3Di (beta) to be tested before inclusion in 3Di Modeller Interface
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/threedi/beta-plugins/issues
+repository=https://github.com/threedi/beta-plugins
 # End of mandatory metadata
 
 # Recommended items:
