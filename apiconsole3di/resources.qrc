@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/plugins/ApiConsole3Di" >
-        <file>icon.png</file>
-    </qresource>
-</RCC>
