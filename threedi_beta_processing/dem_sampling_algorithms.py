@@ -34,6 +34,7 @@ import gdal
 
 from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
 from qgis.core import (
+    NULL,
     QgsCoordinateTransform,
     QgsExpression,
     QgsFeature,
@@ -46,6 +47,7 @@ from qgis.core import (
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingFeatureSource,
+    QgsProcessingMultiStepFeedback,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFeatureSource,
     QgsProcessingParameterFeatureSink,
@@ -55,10 +57,34 @@ from qgis.core import (
     QgsRasterLayer,
     QgsVectorLayer
 )
+import processing
+
 from .raster_tools.dem_sampler import AttributeProcessor
+
+CONNECTED=2
+INSPECTION=0
+
 
 ogr.UseExceptions()
 gdal.UseExceptions()
+
+
+def add_float_field_if_not_exists(source: QgsProcessingFeatureSource, fieldname: str) -> tuple:
+    """Return tuple of result_fields, result_field_idx, field_added"""
+    result_fields = QgsFields(source.fields())
+    if fieldname not in source.fields().names():
+        field_added = True  # field does not exists, so value has to be filled for all features
+        result_field = QgsField(
+            name=fieldname,
+            type=QVariant.Double,
+            len=16,
+            prec=3
+        )
+        result_fields.append(result_field)
+    else:
+        field_added = False
+    result_field_idx = result_fields.indexFromName(fieldname)
+    return result_fields, result_field_idx, field_added
 
 
 class DemSamplerQgsConnector:
@@ -75,17 +101,10 @@ class DemSamplerQgsConnector:
             modify: bool = False,
             average: int = None
     ):
-        self.target_fields = QgsFields(source.fields())
-        if target_fieldname not in source.fields().names():
-            self.overwrite = True  # field does not exists, so value has to be filled for all features
-            target_field = QgsField(
-                name=target_fieldname,
-                type=QVariant.Double,
-                len=16,
-                prec=3
-            )
-            self.target_fields.append(target_field)
-        self.target_field_idx = self.target_fields.indexFromName(target_fieldname)
+        self.target_fields, self.target_field_idx, self.overwrite = add_float_field_if_not_exists(
+            source=source,
+            fieldname=target_fieldname
+        )
         if overwrite:
             self.features = source.getFeatures()
         else:
@@ -395,7 +414,6 @@ class MaxBreachDepthAlgorithm(QgsProcessingAlgorithm):
         total = 100.0 / source.featureCount() if source.featureCount() else 0
 
         for current, feature in enumerate(dem_sampler.result_features()):
-            # Stop the algorithm if cancel button has been clicked
             if feedback.isCanceled():
                 break
 
@@ -405,7 +423,6 @@ class MaxBreachDepthAlgorithm(QgsProcessingAlgorithm):
 
             sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
-            # Update the progress bar
             feedback.setProgress(int(current * total))
 
         return {self.OUTPUT: dest_id}
@@ -458,3 +475,235 @@ class MaxBreachDepthAlgorithm(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return MaxBreachDepthAlgorithm()
+
+
+class DrainLevelAlgorithm(QgsProcessingAlgorithm):
+    """
+    Estimate drain level by finding the minimum value in the DEM in a buffer of specified width around the input point
+    """
+    OUTPUT = 'OUTPUT'
+    INPUT_POINTS = 'INPUT_POINTS'
+    OVERWRITE_VALUES = 'OVERWRITE_VALUES'
+    CONNECTED_ONLY = 'CONNECTED_ONLY'
+    INSPECTION_ONLY = 'INSPECTION_ONLY'
+    SEARCH_DISTANCE = 'SEARCH_DISTANCE'
+    DEM = 'DEM'
+
+    TARGET_FIELDNAME = 'drain_level'
+
+    def initAlgorithm(self, config):
+        """
+        Here we define the inputs and output of the algorithm, along
+        with some other properties.
+        """
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSource(
+                self.INPUT_POINTS,
+                self.tr('Manholes'),
+                [QgsProcessing.TypeVectorPoint]
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.OVERWRITE_VALUES,
+                self.tr('Overwrite existing values')
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.CONNECTED_ONLY,
+                self.tr("'Connected' calculation type only "),
+                defaultValue=True
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.INSPECTION_ONLY,
+                self.tr("'Inspection' manhole indicator only"),
+                defaultValue=True
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.DEM,
+                self.tr('Digital Elevation Model')
+            )
+        )
+
+        param = QgsProcessingParameterNumber(
+                self.SEARCH_DISTANCE,
+                self.tr('Search distance [m]'),
+                type=QgsProcessingParameterNumber.Double,
+                defaultValue=10.0,
+                minValue=0.0
+        )
+        param.setMetadata({'widget_wrapper': {'decimals': 2}})
+        param.toolTip = 'Search distance for finding minimum value in DEM around manhole'
+        self.addParameter(param)
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT,
+                self.tr('Drain level')
+            )
+        )
+
+    def processAlgorithm(self, parameters, context, feedback):
+        """
+        Here is where the processing itself takes place.
+        """
+        feedback = QgsProcessingMultiStepFeedback(3, feedback)
+
+        source = self.parameterAsSource(parameters, self.INPUT_POINTS, context)
+        source_layer = self.parameterAsVectorLayer(parameters, self.INPUT_POINTS, context)
+        distance = self.parameterAsDouble(parameters, self.SEARCH_DISTANCE, context)
+        overwrite = self.parameterAsBoolean(parameters, self.OVERWRITE_VALUES, context)
+        connected_only = self.parameterAsBoolean(parameters, self.CONNECTED_ONLY, context)
+        inspection_only = self.parameterAsBoolean(parameters, self.INSPECTION_ONLY, context)
+
+        target_fields, target_field_idx, field_added = add_float_field_if_not_exists(
+            source=source,
+            fieldname=self.TARGET_FIELDNAME
+        )
+        calculation_type_field_idx = source.fields().indexFromName('calculation_type')
+        manhole_indicator_field_idx = source.fields().indexFromName('manhole_indicator')
+
+        (sink, dest_id) = self.parameterAsSink(
+            parameters,
+            self.OUTPUT,
+            context,
+            target_fields,
+            source.wkbType(),
+            source.sourceCrs()
+        )
+
+        # Buffer
+        alg_params = {
+            'DISSOLVE': False,
+            'DISTANCE': distance,
+            'END_CAP_STYLE': 0,
+            'INPUT': parameters[self.INPUT_POINTS],
+            'JOIN_STYLE': 0,
+            'MITER_LIMIT': 2,
+            'SEGMENTS': 5,
+            'OUTPUT': 'TEMPORARY_OUTPUT'
+        }
+        buffer_run = processing.run('native:buffer', alg_params, context=context, feedback=feedback,
+                                    is_child_algorithm=True)
+        buffered = buffer_run['OUTPUT']
+        print(buffered)
+
+        feedback.setCurrentStep(1)
+        if feedback.isCanceled():
+            return
+
+        # Zonal statistics (in place)
+        alg_params = {
+            'COLUMN_PREFIX': 'stats_',
+            'INPUT_RASTER': parameters['DEM'],
+            'INPUT_VECTOR': buffered,
+            'RASTER_BAND': 1,
+            'STATISTICS': [5]  # 5 = MIN
+        }
+
+        processing.run(
+            'native:zonalstatistics',
+            alg_params,
+            context=context,
+            feedback=feedback,
+            is_child_algorithm=True
+        )
+
+        zonal_statistics_output_layer = context.getMapLayer(buffered)
+        feedback.setCurrentStep(2)
+        if feedback.isCanceled():
+            return
+
+        total = 100.0 / source.featureCount() if source.featureCount() else 0
+        for current, feature in enumerate(zonal_statistics_output_layer.getFeatures()):
+
+            if feedback.isCanceled():
+                break
+
+            source_feature = source_layer.getFeature(feature.id())
+            output_feature = QgsFeature()
+            output_feature.setFields(target_fields)
+
+            for idx, value in enumerate(source_feature.attributes()):
+                output_feature.setAttribute(idx, value)
+
+            # TODO move filtering to the start of the algorithm
+            skip = False
+            if overwrite and output_feature[target_field_idx] != NULL:
+                skip = True
+            if calculation_type_field_idx != -1:
+                if output_feature[calculation_type_field_idx] != CONNECTED and connected_only:
+                    skip = True
+            if manhole_indicator_field_idx != -1:
+                if output_feature[manhole_indicator_field_idx] != INSPECTION and inspection_only:
+                    skip = True
+
+            if not skip:
+                output_feature[target_field_idx] = feature['stats_min']
+            geom = QgsGeometry(source_feature.geometry())
+            output_feature.setGeometry(geom)
+
+            sink.addFeature(output_feature, QgsFeatureSink.FastInsert)
+
+            feedback.setProgress(int(current * total))
+
+        return {self.OUTPUT: dest_id}
+
+    def supportInPlaceEdit(self, layer: QgsMapLayer):
+        if isinstance(layer, QgsVectorLayer):
+            if self.TARGET_FIELDNAME in layer.fields().names():
+                return True
+        return False
+
+    def flags(self):
+        return super().flags() | QgsProcessingAlgorithm.FlagSupportsInPlaceEdits
+
+    def name(self):
+        """
+        Returns the algorithm name, used for identifying the algorithm. This
+        string should be fixed for the algorithm, and must not be localised.
+        The name should be unique within each provider. Names should contain
+        lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return 'Drain level'
+
+    def displayName(self):
+        """
+        Returns the translated algorithm name, which should be used for any
+        user-visible display of the algorithm name.
+        """
+        return self.tr(self.name())
+
+    def group(self):
+        """
+        Returns the name of the group this algorithm belongs to. This string
+        should be localised.
+        """
+        return self.tr(self.groupId())
+
+    def groupId(self):
+        """
+        Returns the unique ID of the group this algorithm belongs to. This
+        string should be fixed for the algorithm, and must not be localised.
+        The group id should be unique within each provider. Group id should
+        contain lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return 'Digital Elevation Model'
+
+    def tr(self, string):
+        return QCoreApplication.translate('Processing', string)
+
+    def createInstance(self):
+        return DrainLevelAlgorithm()
