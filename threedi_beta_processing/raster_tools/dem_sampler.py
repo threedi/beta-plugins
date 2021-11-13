@@ -11,6 +11,7 @@ feature in the source shapefile, with two extra attributes compared to the
 original shapefile, one to store the elevation, and another to store an
 arbitrary feature id referring to the source feature in the source shapefile.
 """
+# TODO: handle nodata values in raster
 
 import argparse
 import logging
@@ -36,7 +37,7 @@ LINESTRINGS = ogr.wkbLineString, ogr.wkbLineString25D
 MULTILINESTRINGS = ogr.wkbMultiLineString, ogr.wkbMultiLineString25D
 
 
-def get_carpet(parameterized_line, distance, step):
+def get_carpet(parameterized_line, distance, step, left=True, right=True):
     """
     Return M x N x 2 numpy array.
 
@@ -46,7 +47,16 @@ def get_carpet(parameterized_line, distance, step):
     """
     # length must be uneven, and no less than 2 * distance / step + 1
     steps = math.ceil(distance / step)
-    offsets_1d = step * np.arange(-steps, steps + 1)
+
+    if left:
+        range_start = -steps
+    else:
+        range_start = 0
+    if right:
+        range_end = steps
+    else:
+        range_end = 0
+    offsets_1d = step * np.arange(range_start, range_end + 1)
 
     # normalize and rotate the vectors of the linesegments
     rvectors = vectors.rotate(parameterized_line.vectors, 270)
@@ -208,7 +218,7 @@ class BaseProcessor(object):
 
         return {'lines': rlines, 'values': rvalues, 'centers': rcenters}
 
-    def _calculate(self, wkb_line_string):
+    def _calculate(self, wkb_line_string, left=True, right=True):
         """ Return lines, points, values tuple of numpy arrays. """
         # determine the point and values carpets
         geo_transform = self.raster.GetGeoTransform()
@@ -223,7 +233,10 @@ class BaseProcessor(object):
             step = geo_transform[1]
             points = get_carpet(step=step,
                                 distance=self.distance,
-                                parameterized_line=pline2)
+                                parameterized_line=pline2,
+                                left=left,
+                                right=right
+                                )
         else:
             points = pline2.centers.reshape(-1, 1, 2)
 
@@ -307,7 +320,7 @@ class CoordinateProcessor(BaseProcessor):
 
 class AttributeProcessor(BaseProcessor):
     """ Writes a shapefile with height in z attribute. """
-    def process(self, source_geometry):
+    def process(self, source_geometry, left=True, right=True):
         """
         Return generator of (geometry, height) tuples.
         """
@@ -321,7 +334,7 @@ class AttributeProcessor(BaseProcessor):
                 source_geometry.GetGeometryName(),
             ))
         for source_wkb_line_string in source_wkb_line_strings:
-            result = self._calculate(wkb_line_string=source_wkb_line_string)
+            result = self._calculate(wkb_line_string=source_wkb_line_string, left=left, right=right)
             weighted_sum_of_heights = 0
             lines = []
             for line, value in zip(result['lines'], result['values']):

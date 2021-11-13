@@ -31,7 +31,7 @@ __copyright__ = '(C) 2021 by Nelen & Schuurmans'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .dem_sampling_algorithms import CrestLevelAlgorithm, MaxBreachDepthAlgorithm, DrainLevelAlgorithm
+from .dem_sampling_algorithms import CrestLevelAlgorithm, MaxBreachDepthAlgorithm, DrainLevelAlgorithm, BankLevelAlgorithm
 
 
 class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
@@ -56,6 +56,7 @@ class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
         self.addAlgorithm(CrestLevelAlgorithm())
         self.addAlgorithm(MaxBreachDepthAlgorithm())
         self.addAlgorithm(DrainLevelAlgorithm())
+        self.addAlgorithm(BankLevelAlgorithm())
 
     def id(self):
         """
