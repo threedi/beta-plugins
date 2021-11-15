@@ -257,6 +257,9 @@ class BaseProcessor(object):
         array = self.read_raster(bounds)
         values = array[i - bounds[1], j - bounds[0]].transpose()
 
+        # set nodatavalues to NaN
+        values[values == self.no_data_value] = np.nan
+
         # return lines, centers, values
         if self.modify:
             step = geo_transform[1]
@@ -265,7 +268,7 @@ class BaseProcessor(object):
                                   values=values,
                                   parameterized_line=pline1)
         else:
-            extremum = np.min if self.inverse else np.max
+            extremum = np.nanmin if self.inverse else np.nanmax
             result = {'lines': pline2.lines,
                       'centers': pline2.centers,
                       'values': extremum(values, 1)}
