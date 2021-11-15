@@ -11,7 +11,6 @@ feature in the source shapefile, with two extra attributes compared to the
 original shapefile, one to store the elevation, and another to store an
 arbitrary feature id referring to the source feature in the source shapefile.
 """
-# TODO: handle nodata values in raster
 
 import argparse
 import logging
