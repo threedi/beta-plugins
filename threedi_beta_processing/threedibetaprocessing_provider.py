@@ -31,7 +31,13 @@ __copyright__ = '(C) 2021 by Nelen & Schuurmans'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .dem_sampling_algorithms import CrestLevelAlgorithm, MaxBreachDepthAlgorithm, DrainLevelAlgorithm, BankLevelAlgorithm
+from .dem_sampling_algorithms import (
+    CrestLevelAlgorithm,
+    MaxBreachDepthAlgorithm,
+    DrainLevelAlgorithm,
+    BankLevelAlgorithm,
+    SurfaceLevelAlgorithm
+)
 
 
 class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
@@ -57,7 +63,7 @@ class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
         self.addAlgorithm(MaxBreachDepthAlgorithm())
         self.addAlgorithm(DrainLevelAlgorithm())
         self.addAlgorithm(BankLevelAlgorithm())
-
+        self.addAlgorithm(SurfaceLevelAlgorithm())
     def id(self):
         """
         Returns the unique provider id, used for identifying the provider. This

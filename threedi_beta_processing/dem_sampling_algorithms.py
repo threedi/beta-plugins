@@ -154,13 +154,6 @@ class CrestLevelAlgorithm(QgsProcessingAlgorithm):
     TARGET_FIELDNAME = 'crest_level'
 
     def initAlgorithm(self, config):
-        """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
-        """
-
-        # We add the input vector features source. It can have any kind of
-        # geometry.
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.OBSTACLE_LINES,
@@ -212,10 +205,6 @@ class CrestLevelAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        """
-        Here is where the processing itself takes place.
-        """
-
         source = self.parameterAsSource(parameters, self.OBSTACLE_LINES, context)
         qgs_raster_layer = self.parameterAsRasterLayer(parameters, self.DEM, context)
 
@@ -238,12 +227,10 @@ class CrestLevelAlgorithm(QgsProcessingAlgorithm):
         total = 100.0 / source.featureCount() if source.featureCount() else 0
 
         for current, feature in enumerate(dem_sampler.results()):
-            # Stop the algorithm if cancel button has been clicked
             if feedback.isCanceled():
                 break
             sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
-            # Update the progress bar
             feedback.setProgress(int(current * total))
 
         return {self.OUTPUT: dest_id}
@@ -265,14 +252,14 @@ class CrestLevelAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Crest level for linear obstacle'
+        return 'crest_level'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr(self.name())
+        return self.tr('Crest level for linear obstacle')
 
     def group(self):
         """
@@ -312,11 +299,6 @@ class MaxBreachDepthAlgorithm(QgsProcessingAlgorithm):
     TARGET_FIELDNAME = 'max_breach_depth'
 
     def initAlgorithm(self, config):
-        """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
-        """
-
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.OBSTACLE_LINES,
@@ -379,10 +361,6 @@ class MaxBreachDepthAlgorithm(QgsProcessingAlgorithm):
         return success, msg
 
     def processAlgorithm(self, parameters, context, feedback):
-        """
-        Here is where the processing itself takes place.
-        """
-
         source = self.parameterAsSource(parameters, self.OBSTACLE_LINES, context)
         crest_level_field_idx = source.fields().indexFromName('crest_level')
 
@@ -438,14 +416,14 @@ class MaxBreachDepthAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Max breach depth'
+        return 'max_breach_depth'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr(self.name())
+        return self.tr('Max breach depth')
 
     def group(self):
         """
@@ -473,7 +451,7 @@ class MaxBreachDepthAlgorithm(QgsProcessingAlgorithm):
 
 class BankLevelAlgorithm(QgsProcessingAlgorithm):
     """
-    Estimate crest level from sampling the DEM perpendicular to the input lines
+    Estimate bank level from sampling the DEM perpendicular to the input lines
     """
     CROSS_SECTION_LOCATIONS = 'CROSS_SECTION_LOCATIONS'
     OVERWRITE_VALUES = 'OVERWRITE_VALUES'
@@ -488,10 +466,6 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
     TARGET_FIELDNAME = 'bank_level'
 
     def initAlgorithm(self, config):
-        """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
-        """
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.CROSS_SECTION_LOCATIONS,
@@ -577,10 +551,6 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         return success, msg
 
     def processAlgorithm(self, parameters, context, feedback):
-        """
-        Here is where the processing itself takes place.
-        """
-        # TODO: CRS transformation
         qgs_project = QgsProject.instance()
 
         # convert parameters
@@ -758,14 +728,14 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Bank level'
+        return 'bank_level'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr(self.name())
+        return self.tr('Bank level')
 
     def shortHelpString(self):
         # TODO: implement helpUrl() when documentation is available online and prune this description
@@ -891,9 +861,6 @@ class DrainLevelAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        """
-        Here is where the processing itself takes place.
-        """
         feedback = QgsProcessingMultiStepFeedback(3, feedback)
 
         source = self.parameterAsSource(parameters, self.INPUT_POINTS, context)
@@ -973,7 +940,6 @@ class DrainLevelAlgorithm(QgsProcessingAlgorithm):
             for idx, value in enumerate(source_feature.attributes()):
                 output_feature.setAttribute(idx, value)
 
-            # TODO move filtering to the start of the algorithm
             skip = False
             if overwrite and output_feature[target_field_idx] != NULL:
                 skip = True
@@ -1012,14 +978,14 @@ class DrainLevelAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Drain level'
+        return 'drain_level'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr(self.name())
+        return self.tr('Drain level')
 
     def group(self):
         """
@@ -1043,3 +1009,148 @@ class DrainLevelAlgorithm(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return DrainLevelAlgorithm()
+
+
+class SurfaceLevelAlgorithm(QgsProcessingAlgorithm):
+    """
+    Estimate drain level by finding the minimum value in the DEM in a buffer of specified width around the input point
+    """
+    OUTPUT = 'OUTPUT'
+    INPUT_POINTS = 'INPUT_POINTS'
+    OVERWRITE_VALUES = 'OVERWRITE_VALUES'
+    DEM = 'DEM'
+
+    TARGET_FIELDNAME = 'surface_level'
+
+    def initAlgorithm(self, config):
+        """
+        Here we define the inputs and output of the algorithm, along
+        with some other properties.
+        """
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSource(
+                self.INPUT_POINTS,
+                self.tr('Manholes'),
+                [QgsProcessing.TypeVectorPoint]
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.OVERWRITE_VALUES,
+                self.tr('Overwrite existing values')
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.DEM,
+                self.tr('Digital Elevation Model')
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT,
+                self.tr('Surface level')
+            )
+        )
+
+    def processAlgorithm(self, parameters, context, feedback):
+        source = self.parameterAsSource(parameters, self.INPUT_POINTS, context)
+        source_layer = self.parameterAsVectorLayer(parameters, self.INPUT_POINTS, context)
+        overwrite = self.parameterAsBoolean(parameters, self.OVERWRITE_VALUES, context)
+
+        target_fields, target_field_idx, field_added = add_float_field_if_not_exists(
+            source=source,
+            fieldname=self.TARGET_FIELDNAME
+        )
+
+        (sink, dest_id) = self.parameterAsSink(
+            parameters,
+            self.OUTPUT,
+            context,
+            target_fields,
+            source.wkbType(),
+            source.sourceCrs()
+        )
+
+        # Sample raster values
+        alg_params = {
+            'COLUMN_PREFIX': 'value_1234567890',   # make sure input layer doesn't have a field with this name
+            'INPUT': parameters[self.INPUT_POINTS],
+            'RASTERCOPY': parameters[self.DEM],
+            'OUTPUT': 'TEMPORARY_OUTPUT'
+        }
+        sampled = processing.run('native:rastersampling', alg_params, context=context, feedback=feedback)['OUTPUT']
+
+        for current, feature in enumerate(sampled.getFeatures()):
+
+            if feedback.isCanceled():
+                break
+
+            source_feature = source_layer.getFeature(feature.id())
+            output_feature = QgsFeature()
+            output_feature.setFields(target_fields)
+
+            for idx, value in enumerate(source_feature.attributes()):
+                output_feature.setAttribute(idx, value)
+
+            if overwrite or output_feature[target_field_idx] == NULL:
+                output_feature[target_field_idx] = feature['value_12345678901']
+            geom = QgsGeometry(source_feature.geometry())
+            output_feature.setGeometry(geom)
+
+            sink.addFeature(output_feature, QgsFeatureSink.FastInsert)
+
+        return {self.OUTPUT: dest_id}
+
+    def supportInPlaceEdit(self, layer: QgsMapLayer):
+        if isinstance(layer, QgsVectorLayer):
+            if self.TARGET_FIELDNAME in layer.fields().names():
+                return True
+        return False
+
+    def flags(self):
+        return super().flags() | QgsProcessingAlgorithm.FlagSupportsInPlaceEdits
+
+    def name(self):
+        """
+        Returns the algorithm name, used for identifying the algorithm. This
+        string should be fixed for the algorithm, and must not be localised.
+        The name should be unique within each provider. Names should contain
+        lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return 'surface_level'
+
+    def displayName(self):
+        """
+        Returns the translated algorithm name, which should be used for any
+        user-visible display of the algorithm name.
+        """
+        return self.tr('Surface level')
+
+    def group(self):
+        """
+        Returns the name of the group this algorithm belongs to. This string
+        should be localised.
+        """
+        return self.tr(self.groupId())
+
+    def groupId(self):
+        """
+        Returns the unique ID of the group this algorithm belongs to. This
+        string should be fixed for the algorithm, and must not be localised.
+        The group id should be unique within each provider. Group id should
+        contain lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return 'DEM Sampling'
+
+    def tr(self, string):
+        return QCoreApplication.translate('Processing', string)
+
+    def createInstance(self):
+        return SurfaceLevelAlgorithm()
