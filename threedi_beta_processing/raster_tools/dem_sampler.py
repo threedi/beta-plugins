@@ -217,7 +217,7 @@ class BaseProcessor(object):
 
         return {'lines': rlines, 'values': rvalues, 'centers': rcenters}
 
-    def _calculate(self, wkb_line_string, left=True, right=True):
+    def _calculate(self, wkb_line_string, left=True, right=True, distance_override: float = None):
         """ Return lines, points, values tuple of numpy arrays. """
         # determine the point and values carpets
         geo_transform = self.raster.GetGeoTransform()
@@ -228,10 +228,11 @@ class BaseProcessor(object):
         pline2 = pline1.pixelize(geo_transform)           # add pixel edges
 
         # expand points when necessary
-        if self.distance:
+        search_distance = distance_override if distance_override else self.distance
+        if search_distance:
             step = geo_transform[1]
             points = get_carpet(step=step,
-                                distance=self.distance,
+                                distance=search_distance,
                                 parameterized_line=pline2,
                                 left=left,
                                 right=right
@@ -322,7 +323,7 @@ class CoordinateProcessor(BaseProcessor):
 
 class AttributeProcessor(BaseProcessor):
     """ Writes a shapefile with height in z attribute. """
-    def process(self, source_geometry, left=True, right=True):
+    def process(self, source_geometry, left=True, right=True, distance_override: float = None):
         """
         Return generator of (geometry, height) tuples.
         """
@@ -336,7 +337,7 @@ class AttributeProcessor(BaseProcessor):
                 source_geometry.GetGeometryName(),
             ))
         for source_wkb_line_string in source_wkb_line_strings:
-            result = self._calculate(wkb_line_string=source_wkb_line_string, left=left, right=right)
+            result = self._calculate(wkb_line_string=source_wkb_line_string, left=left, right=right, distance_override=distance_override)
             weighted_sum_of_heights = 0
             lines = []
             for line, value in zip(result['lines'], result['values']):

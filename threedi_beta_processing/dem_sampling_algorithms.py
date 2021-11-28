@@ -11,7 +11,7 @@
 ***************************************************************************
 """
 
-from typing import (Any, Dict, Tuple, Union)
+from typing import (Any, Dict, Tuple, Union, List)
 
 from osgeo import ogr
 from osgeo import gdal
@@ -48,11 +48,46 @@ import processing
 
 from .raster_tools.dem_sampler import AttributeProcessor
 
-CONNECTED = 2
+# Calculation types channel (taken from CalculationType in threedi_modelchecker.threedi_model.constants)
+EMBEDDED = 100
+STANDALONE = 101
+CONNECTED = 102
+DOUBLE_CONNECTED = 105
+
+# Manhole indicator types
 INSPECTION = 0
+
+# cross section shapes (taken from CrossSectionShape in threedi_modelchecker.threedi_model.constants)
+CLOSED_RECTANGLE = 0
+RECTANGLE = 1
+CIRCLE = 2
+EGG = 3
+TABULATED_RECTANGLE = 5
+TABULATED_TRAPEZIUM = 6
 
 ogr.UseExceptions()
 gdal.UseExceptions()
+
+
+def cross_section_max_width(shape: int, width: float, table: str):
+    if shape in [0, 1, 2, 3]:
+        if width is None:
+            raise ValueError(f'Invalid cross section: width is required for shape {shape}')
+        return width
+    elif shape in [5, 6]:
+        try:
+            max_width = 0
+            height_width_pairs = table.split('\n')
+            for height_width_pair in height_width_pairs:
+                width_str = height_width_pair[1]
+                width = float(width_str)
+                if width > max_width:
+                    max_width = width
+            return max_width
+        except Exception:
+            raise ValueError(f'Invalid cross section table')
+    else:
+        raise ValueError(f'Unknown cross section shape: {shape}')
 
 
 def add_float_field_if_not_exists(source: Union[QgsFeature, QgsProcessingFeatureSource], fieldname: str) -> tuple:
@@ -111,7 +146,7 @@ class DemSamplerQgsConnector:
             request = QgsFeatureRequest(QgsExpression(f'{self.target_fieldname} IS NULL'))
             self.features = self.source.getFeatures(request)
 
-    def results(self, return_features: bool = True, left: bool = True, right: bool = True):
+    def results(self, return_features: bool = True, left: bool = True, right: bool = True, search_distance_field: str = None):
         self._get_features()
         for feature in self.features:
             input_qgs_geometry = QgsGeometry(feature.geometry())
@@ -119,8 +154,19 @@ class DemSamplerQgsConnector:
             input_qgs_geometry_simple = input_qgs_geometry.simplify(0.01)
             input_wkb_geometry = input_qgs_geometry_simple.asWkb()
             input_ogr_geometry = ogr.Geometry(wkb=input_wkb_geometry)
-
-            processed_features = self.processor.process(source_geometry=input_ogr_geometry, left=left, right=right)
+            if search_distance_field:
+                search_distance_field_idx = self.source.fields().indexFromName(search_distance_field)
+                if search_distance_field_idx == -1:
+                    raise ValueError(f'Invalid search_distance_field: source has no field {search_distance_field}')
+                distance_override = feature[search_distance_field_idx]
+            else:
+                distance_override = None
+            processed_features = self.processor.process(
+                source_geometry=input_ogr_geometry,
+                left=left,
+                right=right,
+                distance_override=distance_override
+            )
             for output_ogr_geometry, crest_level in processed_features:
                 if not return_features:
                     yield crest_level
@@ -129,7 +175,8 @@ class DemSamplerQgsConnector:
                     result_feature.setFields(self.target_fields)
                     for idx, value in enumerate(feature.attributes()):
                         result_feature.setAttribute(idx, value)
-                    result_feature[self.target_field_idx] = float(crest_level)
+                    if not np.isnan(crest_level):
+                        result_feature[self.target_field_idx] = float(crest_level)
 
                     output_wkb_geometry = output_ogr_geometry.ExportToWkb()
                     output_qgs_geometry = QgsGeometry()
@@ -453,16 +500,18 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
     """
     Estimate bank level from sampling the DEM perpendicular to the input lines
     """
+    # TODO add option to limit search_distance to max width of cross section
     CROSS_SECTION_LOCATIONS = 'CROSS_SECTION_LOCATIONS'
     OVERWRITE_VALUES = 'OVERWRITE_VALUES'
     CHANNELS = 'CHANNELS'
     CONNECTED_ONLY = 'CONNECTED_ONLY'
     DEM = 'DEM'
-    SEARCH_DISTANCE = 'SEARCH_DISTANCE'
+    EXTRA_SEARCH_DISTANCE = 'EXTRA_SEARCH_DISTANCE'
     MIN_CREST_WIDTH = 'MIN_CREST_WIDTH'
     MAX_SEGMENT_LENGTH = 'MAX_SEGMENT_LENGTH'
     OUTPUT = 'OUTPUT'
 
+    SEARCH_DISTANCE_FIELDNAME = 'search_distance'
     TARGET_FIELDNAME = 'bank_level'
 
     def initAlgorithm(self, config):
@@ -499,10 +548,10 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
             )
         )
         param = QgsProcessingParameterNumber(
-                self.SEARCH_DISTANCE,
-                self.tr('Search distance [m]'),
+                self.EXTRA_SEARCH_DISTANCE,
+                self.tr('Extra search distance [m]'),
                 type=QgsProcessingParameterNumber.Double,
-                defaultValue=10.0,
+                defaultValue=0.0,
                 minValue=0.0
         )
         param.setMetadata({'widget_wrapper': {'decimals': 2}})
@@ -560,7 +609,7 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         channels_layer = self.parameterAsVectorLayer(parameters, self.CHANNELS, context)
         connected_only = self.parameterAsBoolean(parameters, self.CONNECTED_ONLY, context)
         dem_layer = self.parameterAsRasterLayer(parameters, self.DEM, context)
-        search_distance = self.parameterAsDouble(parameters, self.SEARCH_DISTANCE, context)
+        extra_search_distance = self.parameterAsDouble(parameters, self.EXTRA_SEARCH_DISTANCE, context)
         min_crest_width = self.parameterAsDouble(parameters, self.MIN_CREST_WIDTH, context)
         max_segment_length = self.parameterAsDouble(parameters, self.MAX_SEGMENT_LENGTH, context)
 
@@ -579,6 +628,18 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
 
         cross_section_locations_id_field_idx = cross_section_locations_layer.fields().indexFromName('id')
         cross_section_locations_channel_id_field_idx = cross_section_locations_layer.fields().indexFromName('channel_id')
+        cross_section_shape_field_idx = cross_section_locations_layer.fields().indexFromName('shape')
+        cross_section_width_field_idx = cross_section_locations_layer.fields().indexFromName('width')
+        cross_section_table_field_idx = cross_section_locations_layer.fields().indexFromName('table')
+        cross_section_definition_available = (
+                cross_section_shape_field_idx != -1 and
+                cross_section_width_field_idx != -1 and
+                cross_section_table_field_idx != -1
+        )
+        if not cross_section_definition_available:
+            msg = f"Warning: No cross section definition attributes found in cross section location layer. Using " \
+                  f"'Extra search distance' ({extra_search_distance}) as search distance"
+            feedback.pushWarning(msg)
         cross_section_locations_coordinate_transform = QgsCoordinateTransform(
             cross_section_locations_source.sourceCrs(),
             dem_layer.dataProvider().crs(),
@@ -594,11 +655,12 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         )
 
         cross_section_location_id_field = QgsField(name='cross_section_location_id', type=QVariant.Int)
+        search_distance_field = QgsField(name=self.SEARCH_DISTANCE_FIELDNAME, type=QVariant.Double)
         cross_section_location_bank_level_field = QgsField(name=self.TARGET_FIELDNAME, type=QVariant.Double)
 
         # create (temp) channel segment layer to sample dem
         crs = dem_layer.dataProvider().crs()
-        uri = f"linestring?crs={crs.authid()}&field=cross_section_location_id:integer"
+        uri = f"linestring?crs={crs.authid()}&field=cross_section_location_id:integer&field={self.SEARCH_DISTANCE_FIELDNAME}:double"
         if not field_added:
             uri += f'&field={self.TARGET_FIELDNAME}:double'
         bank_level_sample_layer = QgsVectorLayer(uri, "Bank level sample layer", "memory")
@@ -611,7 +673,7 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         channel_ids_str = ','.join(channel_ids)
         request = QgsFeatureRequest(QgsExpression(f'id IN ({channel_ids_str})'))
         if calculation_type_field_idx != -1 and connected_only:
-            request.combineFilterExpression(f'calculation_type = {CONNECTED}')
+            request.combineFilterExpression(f'calculation_type IN ({CONNECTED}, {DOUBLE_CONNECTED})')
         for channel in channels_layer.getFeatures(request):
             channel_id = channel[channels_id_field_idx]
             channel_geom = channel.geometry()
@@ -619,21 +681,30 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
             for part in channel_geom.parts():  # get QgsLineString from QgsGeometry
                 channel_geom_part = part
             request = QgsFeatureRequest(QgsExpression(f'channel_id = {channel_id}'))
-            # request.setDistanceWithin(channel_geom, 0.1)    # cross section location should intersect channel, so this
-            #                                                 # is already a large tolerance
             cross_section_locations = cross_section_locations_source.getFeatures(request)
             positions = []
             for cross_section_location in cross_section_locations:
                 cross_section_location_fid = cross_section_location.id()
                 if cross_section_locations_id_field_idx != -1:
                     cross_section_location_id = cross_section_location[cross_section_locations_id_field_idx]
+                if cross_section_definition_available:
+                    shape = cross_section_location[cross_section_shape_field_idx]
+                    width = cross_section_location[cross_section_width_field_idx]
+                    table = cross_section_location[cross_section_table_field_idx]
+                    search_distance = cross_section_max_width(
+                        shape=shape,
+                        width=width,
+                        table=table
+                    ) + extra_search_distance
+                else:
+                    search_distance = extra_search_distance
                 cross_section_location_geom = cross_section_location.geometry()
                 cross_section_location_geom.transform(cross_section_locations_coordinate_transform)
                 if cross_section_location_geom.distance(channel_geom) > 0.1:
                     # cross section location should intersect channel, so this is already a large tolerance
                     if cross_section_locations_id_field_idx == -1:
-                        msg = f'Warning: A cross section location with channel_id {channel_id} is not located on that ' \
-                              f'channel'
+                        msg = f'Warning: A cross section location with channel_id {channel_id} is not located on that' \
+                              f' channel'
                     else:
                         msg = f'Warning: Cross section location with id {cross_section_location_id} referring to ' \
                               f'channel with id {channel_id} is not located on that channel'
@@ -651,50 +722,66 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
                 continue
             positions.sort()
             positions_array = np.array(positions)
-            in_betweens = np.mean([positions_array[0:-1,0], positions_array[1:,0]], axis=0)
+            in_betweens = np.mean([positions_array[0:-1, 0], positions_array[1:, 0]], axis=0)
             cut_positions = np.concatenate([[0], in_betweens, [channel_geom_part.length()]])
             for i in range(len(cut_positions) - 1):
                 bank_level_sample_feature_fields = QgsFields()
-                bank_level_sample_feature_fields.append(cross_section_location_id_field)
+                if not bank_level_sample_feature_fields.append(cross_section_location_id_field):  # 0
+                    raise Exception('Failed to add cross_section_location_id_field to bank_level_sample_feature_fields')
+                if not bank_level_sample_feature_fields.append(search_distance_field):  # 1
+                    raise Exception('Failed to add search_distance_field to bank_level_sample_feature_fields')
                 if not field_added:
-                    bank_level_sample_feature_fields.append(cross_section_location_bank_level_field)
+                    if not bank_level_sample_feature_fields.append(cross_section_location_bank_level_field):  # 2
+                        raise Exception('Failed to add cross_section_location_bank_level_field to '
+                                        'bank_level_sample_feature_fields')
                 bank_level_sample_feature = QgsFeature()
                 bank_level_sample_feature.setFields(bank_level_sample_feature_fields)
                 cross_section_location_position, cross_section_location_fid = positions[i][0:2]
-                bank_level_sample_feature[0] = cross_section_location_fid  # cross section location fid
+                bank_level_sample_feature[0] = cross_section_location_fid
+                bank_level_sample_feature[1] = search_distance
                 if not field_added:
-                    bank_level_sample_feature[1] = positions[i][2]
+                    bank_level_sample_feature[2] = positions[i][2]
                 cut_position_start = max(cut_positions[i], cross_section_location_position - (max_segment_length/2))
                 cut_position_end = min(cut_positions[i+1], cross_section_location_position + (max_segment_length/2))
                 bank_level_sample_geom = channel_geom_part.curveSubstring(cut_position_start, cut_position_end)
                 bank_level_sample_feature.setGeometry(bank_level_sample_geom)
                 bank_level_sample_features.append(bank_level_sample_feature)
-        bank_level_sample_layer.addFeatures(bank_level_sample_features)
+        if not bank_level_sample_layer.addFeatures(bank_level_sample_features):
+            raise Exception('Failed to add features to bank_level_sample_layer')
         bank_level_sample_layer.commitChanges()
 
         dem_sampler = DemSamplerQgsConnector(raster=dem_layer, source=bank_level_sample_layer,
                                              target_fieldname=self.TARGET_FIELDNAME, width=min_crest_width,
-                                             distance=search_distance, overwrite=overwrite)
+                                             distance=extra_search_distance, overwrite=overwrite)
 
         total = 100.0 / cross_section_locations_source.featureCount() if cross_section_locations_source.featureCount() else 0
 
-        crest_levels = list()
+        crest_levels_left = list()
         # crest level on left side of the sample line
-        for i, crest_level in enumerate(dem_sampler.results(return_features=False, left=True, right=False)):
+        for i, crest_level in enumerate(dem_sampler.results(
+                return_features=False,
+                left=True,
+                right=False,
+                search_distance_field=self.SEARCH_DISTANCE_FIELDNAME
+        )):
             if feedback.isCanceled():
                 break
-            crest_levels.append(crest_level)
+            crest_levels_left.append(crest_level)
             feedback.setProgress(int(i/2 * total))
 
         # crest level on right side of the sample line
         crest_level_fid_dict = dict()
-        for i, feature in enumerate(dem_sampler.results(return_features=True, left=False, right=True)):
+        for i, feature in enumerate(dem_sampler.results(
+                return_features=True,
+                left=False,
+                right=True,
+                search_distance_field=self.SEARCH_DISTANCE_FIELDNAME
+        )):
             if feedback.isCanceled():
                 break
-            crest_level = feature[dem_sampler.target_field_idx]
-            if crest_level < crest_levels[i]:
-                crest_levels[i] = crest_level
-            crest_level_fid_dict[feature[0]] = crest_levels[i]
+            crest_level_right = np.nan if feature[dem_sampler.target_field_idx] is None else feature[dem_sampler.target_field_idx]
+            crest_level_left = np.nan if crest_levels_left[i] is None else crest_levels_left[i]
+            crest_level_fid_dict[feature[0]] = float(np.nanmin([crest_level_right, crest_level_left]))
             feedback.setProgress(50 + int(i/2 * total))
 
         for source_feature in cross_section_locations_layer.getFeatures():
@@ -702,8 +789,11 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
             sink_feature.setFields(target_fields)
             for idx, value in enumerate(source_feature.attributes()):
                 sink_feature.setAttribute(idx, value)
-            if source_feature.id() in crest_level_fid_dict.keys():
-                sink_feature[target_field_idx] = float(round(crest_level_fid_dict[source_feature.id()], 3))
+            try:
+                if not np.isnan(crest_level_fid_dict[source_feature.id()]):
+                    sink_feature[target_field_idx] = float(round(crest_level_fid_dict[source_feature.id()], 3))
+            except KeyError:
+                pass
             sink_geom = QgsGeometry(source_feature.geometry())
             sink_feature.setGeometry(sink_geom)
 
@@ -944,7 +1034,7 @@ class DrainLevelAlgorithm(QgsProcessingAlgorithm):
             if overwrite and output_feature[target_field_idx] != NULL:
                 skip = True
             if calculation_type_field_idx != -1:
-                if output_feature[calculation_type_field_idx] != CONNECTED and connected_only:
+                if output_feature[calculation_type_field_idx] not in (CONNECTED, DOUBLE_CONNECTED) and connected_only:
                     skip = True
             if manhole_indicator_field_idx != -1:
                 if output_feature[manhole_indicator_field_idx] != INSPECTION and inspection_only:
