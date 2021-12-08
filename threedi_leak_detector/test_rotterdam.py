@@ -1,12 +1,13 @@
 # ------------- TEST AMSTELSTATION
 from leak_detector import *
 
-dem_fn = 'C:/3Di/amstelstation/subgrid/dem_huidig.tif'
+dem_fn = 'C:/3Di/w0127-rotterdam-3d-obstacle-detection/rasters/dem_01x01_new.tif'
 dem = gdal.Open(dem_fn, gdal.GA_ReadOnly)
-ga = 'C:/Users/leendert.vanwolfswin/Documents/amstelstation/gridadmin.h5'
+ga = 'C:/Users/leendert.vanwolfswin/Documents/rotterdam/obstacle_detection/revisie_2/gridadmin.h5'
 gr = GridH5Admin(ga)
-out_gis_file = 'C:\\Users\\leendert.vanwolfswin\\Documents\\LeakDetector\\test_amstelstation101.gpkg'
-test_cell_id = 12706
+out_gis_file = 'C:/Users/leendert.vanwolfswin/Documents/rotterdam/obstacle_detection/test_rotterdam_08_5cm.gpkg'
+test_cell_ids = [8377, 8376, 8375, 8654, 8655, 8931]
+test_cell_id = 45
 
 topo = Topology(gr, [test_cell_id], dem=dem)
 xmin_i, ymin_i, xmax_i, ymax_i = topo.cell_coords[test_cell_id]
@@ -34,9 +35,10 @@ obstacles = identify_obstacles(dem=dem,
                                gr=gr,
                                cell_ids=list(gr.cells.id),
                                # cell_ids=[test_cell_id],
-                               min_peak_prominence=0.3,
-                               search_precision=0.01,
-                               min_obstacle_height=0.3,
+                               # cell_ids=test_cell_ids,
+                               min_peak_prominence=0.05,
+                               search_precision=0.001,
+                               min_obstacle_height=0.05,
                                output_fn=out_gis_file,
                                driver_name='GPKG'
                                )
