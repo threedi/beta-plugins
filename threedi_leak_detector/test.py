@@ -6,12 +6,14 @@ ga = 'C:/Users/leendert.vanwolfswin/Documents/LeakDetector/test_result/gridadmin
 # res = 'C:/Users/leendert.vanwolfswin/Documents/LeakDetector/test_result/results_3di.nc '
 gr = GridH5Admin(ga)
 
-test_cell_id = 12932
+test_cell_id = 12045
 topo = Topology(gr, [test_cell_id], dem=dem)
 xmin_i, ymin_i, xmax_i, ymax_i = topo.cell_coords[test_cell_id]
 my_cell = Cell(parent=topo, id=test_cell_id, coords=topo.cell_coords[test_cell_id])
-for edge in ['top', 'left', 'bottom', 'right']:
-    print(f'exchange_levels {edge}: ', my_cell.edge(edge).exchange_levels)
+for side in ['top', 'left', 'bottom', 'right']:
+    edge = my_cell.edge(side)
+    if edge:
+        print(f'exchange_levels {side}: ', my_cell.edge(side).exchange_levels)
 my_cell.find_maxima(min_peak_prominence=0.1)
 # print('minima: ', my_cell.minima)
 print('maxima: ', my_cell.maxima)
@@ -37,7 +39,7 @@ for i in cell_down.obstacle_segments:
 print('kleine testjes klaar')
 
 ####
-out_gis_file = 'C:\\Users\\leendert.vanwolfswin\\Documents\\LeakDetector\\test98.gpkg'
+out_gis_file = 'C:\\Users\\leendert.vanwolfswin\\Documents\\LeakDetector\\test100.gpkg'
 obstacles = identify_obstacles(     dem=dem,
                                     gr=gr,
                                     cell_ids=list(gr.cells.id),
