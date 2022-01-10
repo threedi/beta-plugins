@@ -1,6 +1,11 @@
-import ogr 
+# TODO handle multilinestring inputs
+# TODO remove redundant points / apply tiny simplify
+# TODO deal with non-existent datasoure or layer
+
+import ogr
 from shapely import wkb
 from shapely.ops import linemerge
+from shapely.geometry import LineString, MultiLineString
 from operator import itemgetter
 from typing import Union, Iterable
 import numpy as np
@@ -101,9 +106,24 @@ def max_range_linemerge_io(input_filename, input_layername, output_drivername, o
 
 
 def max_range_linemerge(geometries, values, max_range):
-    input_lines = [{GEOMETRY: geometry, VALUE: values[i]} for i, geometry in enumerate(geometries)]
-    multilinestring = linemerge(geometries)
-    linestrings = [linestring for linestring in multilinestring]
+    singlepart_geometries = []
+    singlepart_values = []
+    for i, geometry in enumerate(geometries):
+        if isinstance(geometry, LineString):
+            singlepart_geometries.append(geometry)
+            singlepart_values.append(values[i])
+        elif isinstance(geometry, MultiLineString):
+            for part in geometry:
+                singlepart_geometries.append(part)
+                singlepart_values.append(values[i])
+        else:
+            raise TypeError('Invalid geometry type encountered')
+    input_lines = [{GEOMETRY: geometry, VALUE: singlepart_values[i]} for i, geometry in enumerate(singlepart_geometries)]
+    merged_lines = linemerge(singlepart_geometries)
+    if isinstance(merged_lines, MultiLineString):
+        linestrings = [linestring for linestring in merged_lines]
+    elif isinstance(merged_lines, LineString):
+        linestrings = [merged_lines]
 
     # group the input lines by merged linestring that they belong to
     # sort them within groups by position along line
@@ -132,12 +152,12 @@ def max_range_linemerge(geometries, values, max_range):
 
 
 if __name__ == "__main__":
-    max_range_linemerge_io(input_filename='C:/3Di/zeeuws-vlaanderen-hulst/T4000.gpkg',
-                           input_layername='linear_obstacle',
+    max_range_linemerge_io(input_filename='C:/Users/leendert.vanwolfswin/Documents/zeeland/terneuzen/nieuwe_obstacles_met_crest_level.gpkg',
+                           input_layername='nieuwe_obstacles_met_crest_level',
                            output_drivername='GPKG',
-                           output_filename='max_range_linemerge_0_25.gpkg',
+                           output_filename='multipart_test.gpkg',
                            output_layername='linear_obstacle',
                            merge_attribute='crest_level',
-                           max_range=0.25,
-                           group_by=['code', 'type', 'material']
+                           max_range=0.5,
+                           group_by=['code']
                            )
