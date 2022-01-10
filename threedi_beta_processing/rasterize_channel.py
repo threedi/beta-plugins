@@ -15,6 +15,9 @@ import logging
 import datetime
 import time
 
+# TODO get rid of geopandas dependency
+# TODO get rid of fiona dependency
+
 start_script = time.time()
 folder = Path(
     r"C:/Users/stijn.overmeen/Documents/Projecten_lokaal/Intern/Rasterize channel/logging"
@@ -67,14 +70,15 @@ def create_connection(db_file: str) -> sqlite3.Connection:
     return conn
 
 
-def convert_projection(proj_T):
+def convert_projection(proj_T: int):
     """
     Converts projection from EPSG:4326 to proj_T
     """
+    # @Stijn: wat betekent proj_T? refactor please. (daarnaast: argument name must be lowercase)
     project = partial(
         pyproj.transform,
         pyproj.Proj(init="epsg:4326"),
-        pyproj.Proj(init="epsg:" f"{proj_T}"),
+        pyproj.Proj(init=f"epsg:{proj_T}"),
     )
     return project
 
@@ -86,6 +90,7 @@ def features_from_sqlite(project, sqlite: str, table: str) -> List:
     If the feature is a cross section location, the channel_id, definition_id and reference_level are also stored in
     the attributes.
 
+    :param project: @Stijn graag beschrijven wat dit is
     :param sqlite: filename of the spatialite database
     :param table: name of the table
     :return: List of enriched shapely geometries. The FID is stored in each item's id attribute.
@@ -127,19 +132,14 @@ def two_sided_parallel_offsets(linestring, offset_dists):
 
 
 def get_channel_widths_and_heigths(
-    cur,
+    cur: sqlite3.Cursor,
     add_value,
-    profile_or_bank_level,
+    profile_or_bank_level: str,
     channel: LineString,
-    cross_section_locations: list,
-    sqlite: str,
+    cross_section_locations: list
 ):
     """
     Determine the maximum width and width/height relation for each cross section.
-
-    :param channel: Shapely Linestring
-    :param cross_section_locations: list of
-    :param sqlite:
     :return: a list of lists of [position, max_width] and a list of widths
     """
     channel_max_widths = []
@@ -158,13 +158,16 @@ def get_channel_widths_and_heigths(
                 map(float, definition[1].split())
             )  # heights relative to reference_level
             if profile_or_bank_level == "bank_level":
-                xsec.heights = [
-                    xsec.bank_level + add_value for x in xsec.heights
-                ]  # absolute heights
-            else:
+                xsec.heights = [xsec.bank_level + add_value]*len(xsec.heights)  # absolute heights
+
+            elif profile_or_bank_level == "profile":
                 xsec.heights = [
                     x + xsec.reference_level + add_value for x in xsec.heights
                 ]  # absolute heights
+            else:
+                raise ValueError(
+                    f"profile_or_bank_level must be 'profile' or 'bank_level', not {profile_or_bank_level}"
+                )
         channel_all_widths += xsec.widths
         channel_max_widths.append(
             [channel.project(xsec, normalized=True), max(xsec.widths)]
@@ -176,7 +179,7 @@ def get_channel_widths_and_heigths(
     return channel_max_widths, channel_all_widths
 
 
-def createChannelOutline(first_boundary_points, last_boundary_points):
+def create_channel_outline(first_boundary_points, last_boundary_points):
     """ Create polygon representing the channel shape 
     based on collected right boundary points and (reversed) left boundary channel points
     
@@ -205,7 +208,7 @@ def write_shapes_to_vsimem(
 ):
     # write elevation points along channel and outline polygon to in memory shapefile
     shape_drv = ogr.GetDriverByName("ESRI Shapefile")
-    if points_ds == None:
+    if points_ds is None:
         points_ds = shape_drv.CreateDataSource("/vsimem/tmp/points.shp")
         point_lyr = points_ds.CreateLayer("points")
     else:
@@ -217,7 +220,7 @@ def write_shapes_to_vsimem(
         point_lyr.CreateFeature(dst_feat)
     points_ds.ExecuteSQL("CREATE SPATIAL INDEX ON points")
     shape_drv = ogr.GetDriverByName("ESRI Shapefile")
-    if poly_ds == None:
+    if poly_ds is None:
         poly_ds = shape_drv.CreateDataSource("/vsimem/tmp/channel_outline.shp")
         poly_lyr = poly_ds.CreateLayer("channel_outline")
     else:
@@ -321,7 +324,7 @@ def merge(dem, clip_ds):
     return merged
 
 
-def writeRaster(output_raster, geotransform, geoprojection, data):
+def write_raster(output_raster, geotransform, geoprojection, data):
     """
     write a numpy array to a gdal raster (geotiff, float32, compress=deflate, nodatavalue -9999)
 
@@ -332,8 +335,8 @@ def writeRaster(output_raster, geotransform, geoprojection, data):
     :return:
     """
     (y, x) = data.shape
-    format = "GTiff"
-    driver = gdal.GetDriverByName(format)
+    output_format = "GTiff"
+    driver = gdal.GetDriverByName(output_format)
     dst_datatype = gdal.GDT_Float32
     dst_ds = driver.Create(
         output_raster,
@@ -351,7 +354,7 @@ def writeRaster(output_raster, geotransform, geoprojection, data):
     return
 
 
-def max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_T):
+def max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_T):  # @Stijn hernoem proj_T, zie eerder comment
     """
     Get both arrays (are same size) and get maximum or minimum values using np.maximum/np.minimum
     In case no-data values are not the same (is not -9999) it should also work
@@ -360,21 +363,20 @@ def max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_T):
     """
 
     time5 = time.time()
-    demRaster = gdal.Open(dem)
-    no_data_dem = demRaster.GetRasterBand(1).GetNoDataValue()
-    demArray = np.ma.filled(
-        np.ma.masked_equal(demRaster.ReadAsArray(), no_data_dem), -9999
+    dem_raster = gdal.Open(dem)
+    no_data_dem = dem_raster.GetRasterBand(1).GetNoDataValue()
+    dem_array = np.ma.filled(
+        np.ma.masked_equal(dem_raster.ReadAsArray(), no_data_dem), -9999
     )
-    mergedArray = gdal_array.LoadFile("/vsimem/tmp/raster4.tif")
+    merged_array = gdal_array.LoadFile("/vsimem/tmp/raster4.tif")
     if profile_or_bank_level == "bank_level":
-        Z = np.maximum(demArray, mergedArray)
+        z = np.maximum(dem_array, merged_array)
     else:
-        Z = np.minimum(demArray, mergedArray)
+        z = np.minimum(dem_array, merged_array)
     geotransform = merged.GetGeoTransform()
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(proj_T)
-    writeRaster(output_raster, geotransform, srs.ExportToWkt(), Z)
-    geotransform = Z = None
+    write_raster(output_raster, geotransform, srs.ExportToWkt(), z)
     logging.info(
         "Creating max/min raster took this much time: " f"{time.time()-time5:.0f}" "s"
     )
@@ -385,9 +387,8 @@ def write_raster_to_gtiff(merged, output_raster, proj_T):
     geotransform = merged.GetGeoTransform()
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(proj_T)
-    Z = band.ReadAsArray()
-    writeRaster(output_raster, geotransform, srs.ExportToWkt(), Z)
-    band = geotransform = Z = None
+    z = band.ReadAsArray()
+    write_raster(output_raster, geotransform, srs.ExportToWkt(), z)
     logging.info("Wrote raster to geotiff")
 
 
@@ -398,8 +399,8 @@ def rasterize_channels(
     profile_or_bank_level,
     higher_or_lower_only,
     add_value,
-    proj_T,
-    ids=[],
+    proj_T,  # @Stijn hernoem proj_T, zie eerder comment
+    ids=None,
 ):
     """
     Main function calling other functions
@@ -414,7 +415,8 @@ def rasterize_channels(
             Loop2 loops over points in the length of channel:
                 Interpolated height is described to point
                 Points that are within a previously defined channel outline are skipped to prevent messy interpolation
-                Boundary points are gathered to form the channel outline polygon (which will be used for cropping the channel raster)
+                Boundary points are gathered to form the channel outline polygon (which will be used for cropping the
+                channel raster)
         
     After the loop over channels:
         Dissolve and buffering (twice) of the channel outline to create a valid cropping layer
@@ -424,7 +426,8 @@ def rasterize_channels(
         Merging with dem
         Write this to raster or write minimum/maximum to raster 
     """
-
+    if not ids:
+        ids = []
     project = convert_projection(proj_T)
     try:
         if os.path.exists(output_raster):
@@ -469,8 +472,7 @@ def rasterize_channels(
                     add_value,
                     profile_or_bank_level,
                     channel=channel,
-                    cross_section_locations=channel_xsecs,
-                    sqlite=sqlite,
+                    cross_section_locations=channel_xsecs
                 )
                 channel_offsets = two_sided_parallel_offsets(
                     channel, channel_all_widths_flat
@@ -559,7 +561,8 @@ def rasterize_channels(
                                                 line.coords[-1][0], line.coords[-1][1]
                                             )
                                         )
-                            else:  # we do not need to gather other points than the boundary points for the bank level tool
+                            else:  # we do not need to gather other points than the boundary points for the bank
+                                # level tool
                                 continue
                         else:
                             skip_point = False
@@ -605,7 +608,7 @@ def rasterize_channels(
                                         Point(line.coords[-1][0], line.coords[-1][1])
                                     )
 
-                channel_outline = createChannelOutline(
+                channel_outline = create_channel_outline(
                     first_boundary_points, last_boundary_points
                 )
                 if "points_ds" in locals():
