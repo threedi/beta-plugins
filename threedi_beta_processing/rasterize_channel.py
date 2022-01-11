@@ -17,6 +17,15 @@ import time
 
 # TODO get rid of geopandas dependency
 # TODO get rid of fiona dependency
+# TODO get rid of sqlite3 dependency
+# TODO use osgeo.osr module instead of pyproj
+
+# TODO replace raster related functions by functions from raster_tools where possible (some functions that are not
+#  included in .raster_tools may be available in https://github.com/nens/raster-tools )
+
+# TODO use classes for cross sections and channels (see rasterize_channel_oo.py for a first sketch).
+
+# TODO make the tool compatible with the new geopackage / 3Di model editor data structure
 
 start_script = time.time()
 folder = Path(
@@ -74,7 +83,7 @@ def convert_projection(proj_T: int):
     """
     Converts projection from EPSG:4326 to proj_T
     """
-    # @Stijn: wat betekent proj_T? refactor please. (daarnaast: argument name must be lowercase)
+    # TODO @Stijn: wat betekent proj_T? refactor please. (daarnaast: argument name must be lowercase)
     project = partial(
         pyproj.transform,
         pyproj.Proj(init="epsg:4326"),
@@ -90,7 +99,7 @@ def features_from_sqlite(project, sqlite: str, table: str) -> List:
     If the feature is a cross section location, the channel_id, definition_id and reference_level are also stored in
     the attributes.
 
-    :param project: @Stijn graag beschrijven wat dit is
+    :param project: TODO @Stijn graag beschrijven wat dit is / duidelijkere argumentnaam
     :param sqlite: filename of the spatialite database
     :param table: name of the table
     :return: List of enriched shapely geometries. The FID is stored in each item's id attribute.
@@ -236,7 +245,7 @@ def write_shapes_to_vsimem(
 
 
 def dissolve_buffer_buffer():
-
+    # TODO @Stijn what is this and why is this done
     gdf = gpd.read_file("/vsimem/tmp/channel_outline.shp")
     logging.info("\nDissolving, buffering and buffering...")
     gdf2 = gdf.unary_union
@@ -354,7 +363,7 @@ def write_raster(output_raster, geotransform, geoprojection, data):
     return
 
 
-def max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_T):  # @Stijn hernoem proj_T, zie eerder comment
+def max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_T):  # TODO @Stijn hernoem proj_T, zie eerder comment
     """
     Get both arrays (are same size) and get maximum or minimum values using np.maximum/np.minimum
     In case no-data values are not the same (is not -9999) it should also work
@@ -399,7 +408,7 @@ def rasterize_channels(
     profile_or_bank_level,
     higher_or_lower_only,
     add_value,
-    proj_T,  # @Stijn hernoem proj_T, zie eerder comment
+    proj_T,  #  TODO @Stijn hernoem proj_T, zie eerder comment
     ids=None,
 ):
     """
@@ -426,8 +435,6 @@ def rasterize_channels(
         Merging with dem
         Write this to raster or write minimum/maximum to raster 
     """
-    if not ids:
-        ids = []
     project = convert_projection(proj_T)
     try:
         if os.path.exists(output_raster):
@@ -450,7 +457,7 @@ def rasterize_channels(
         count = 0
         save_time = time.time()
         for channel in channels:
-            if channel.id in ids or ids == []:
+            if channel.id in ids or ids is None:
                 logging.info("")
                 logging.info("Channel id = " f"{channel.id}")
                 count = count + 1
