@@ -1,12 +1,8 @@
 from shapely.geometry import shape, Point, Polygon, LineString
 from shapely.wkb import loads
-from shapely.ops import transform
-import geopandas as gpd
 import fiona
 from osgeo import ogr, osr, gdal, gdal_array
 import sqlite3
-from functools import partial
-import pyproj
 import numpy as np
 from typing import List
 from pathlib import Path
@@ -15,17 +11,27 @@ import logging
 import datetime
 import time
 
-# TODO get rid of geopandas dependency
-# TODO get rid of fiona dependency
-# TODO get rid of sqlite3 dependency
-# TODO use osgeo.osr module instead of pyproj
+ogr.UseExceptions()
+gdal.UseExceptions()
 
-# TODO replace raster related functions by functions from raster_tools where possible (some functions that are not
-#  included in .raster_tools may be available in https://github.com/nens/raster-tools )
+#Tasks with priority:
+"""
+TODO use classes for cross sections and channels (see rasterize_channel_oo.py for a first sketch).
 
-# TODO use classes for cross sections and channels (see rasterize_channel_oo.py for a first sketch).
+TODO channel for channel rasterising
+    TODO get rid of fiona dependency (fiona vervalt op het moment dat we channel per channel gaan rasterizeren)
+TODO merge channels based on minimum (later merge with DEM based on min or max)
 
-# TODO make the tool compatible with the new geopackage / 3Di model editor data structure
+TODO get rid of sqlite3 dependency
+"""
+
+#Improvements:
+"""
+TODO replace raster related functions by functions from raster_tools where possible (some functions that are not
+ included in .raster_tools may be available in https://github.com/nens/raster-tools )
+
+TODO make the tool compatible with the new geopackage / 3Di model editor data structure
+"""
 
 start_script = time.time()
 folder = Path(
@@ -61,7 +67,6 @@ logging.basicConfig(
     force=True,
 )
 
-
 def create_connection(db_file: str) -> sqlite3.Connection:
     """
     Create spatialite connection, return None if an Exception occurs
@@ -78,40 +83,34 @@ def create_connection(db_file: str) -> sqlite3.Connection:
     logging.info("Connection created")
     return conn
 
-
-def convert_projection(proj_T: int):
-    """
-    Converts projection from EPSG:4326 to proj_T
-    """
-    # TODO @Stijn: wat betekent proj_T? refactor please. (daarnaast: argument name must be lowercase)
-    project = partial(
-        pyproj.transform,
-        pyproj.Proj(init="epsg:4326"),
-        pyproj.Proj(init=f"epsg:{proj_T}"),
-    )
-    return project
-
-
-def features_from_sqlite(project, sqlite: str, table: str) -> List:
+def features_from_sqlite(proj_target: int, sqlite: str, table: str) -> List:
     """
     Get list of geometries with their FID from a specific table in an sqlite.
 
     If the feature is a cross section location, the channel_id, definition_id and reference_level are also stored in
     the attributes.
+    
+    Important note: projection had to happen in same function for it to work with osr
 
-    :param project: TODO @Stijn graag beschrijven wat dit is / duidelijkere argumentnaam
+    :param proj_target: target projection
     :param sqlite: filename of the spatialite database
     :param table: name of the table
     :return: List of enriched shapely geometries. The FID is stored in each item's id attribute.
     """
-    shapely_objects = []
-    ogrsqlite = ogr.Open(sqlite)
-    layer = ogrsqlite.GetLayerByName(table)
+    shapely_objects=[]
+    ogrsqlite=ogr.Open(sqlite)
+    layer=ogrsqlite.GetLayerByName(table)
     for n in range(0, layer.GetFeatureCount()):
-        feat = layer.GetNextFeature()
-        wkb_feat = loads(feat.GetGeometryRef().ExportToWkb())
-        wkb_feat = transform(project, wkb_feat)
-        wkb_feat.id = feat.GetFID()
+        feat=layer.GetNextFeature()
+        geom=feat.GetGeometryRef()
+        source=osr.SpatialReference()
+        source.ImportFromEPSG(4326)
+        target=osr.SpatialReference()
+        target.ImportFromEPSG(proj_target)
+        transformation=osr.CoordinateTransformation(source,target)
+        geom.Transform(transformation)
+        wkb_feat=loads(geom.ExportToWkb())
+        wkb_feat.id=feat.GetFID()
         if table == "v2_cross_section_location":
             wkb_feat.channel_id = feat.channel_id
             wkb_feat.definition_id = feat.definition_id
@@ -119,7 +118,6 @@ def features_from_sqlite(project, sqlite: str, table: str) -> List:
             wkb_feat.bank_level = feat.bank_level
         shapely_objects.append(wkb_feat)
     return shapely_objects
-
 
 def two_sided_parallel_offsets(linestring, offset_dists):
     """
@@ -243,17 +241,66 @@ def write_shapes_to_vsimem(
     )
     return points_ds, poly_ds, point_lyr, poly_lyr
 
+def createDS(ds_name,ds_format,geom_type,srs,overwrite=False):
+    drv=ogr.GetDriverByName(ds_format)
+    if os.path.exists(ds_name) and overwrite is True:
+        os.remove(ds_name)
+    ds=drv.CreateDataSource(ds_name)
+    lyr_name=os.path.splitext(os.path.basename(ds_name))[0]
+    lyr=ds.CreateLayer(lyr_name,srs,geom_type)
+    return ds,lyr
 
-def dissolve_buffer_buffer():
-    # TODO @Stijn what is this and why is this done
-    gdf = gpd.read_file("/vsimem/tmp/channel_outline.shp")
-    logging.info("\nDissolving, buffering and buffering...")
-    gdf2 = gdf.unary_union
-    gdf3 = gdf2.buffer(1)
-    gdf4 = gdf3.buffer(-1)
-    new = gpd.GeoDataFrame(crs=gdf.crs, geometry=[gdf4])
-    new.to_file("/vsimem/tmp/channel_outline2.shp")
-
+def dissolve(input_file,output_file,multipoly=False,overwrite=False):
+    """
+    Dissolve polygon layer using UnionCascaded
+    UnionCascaded operates on a geometry collection. According to GEOS documentation, 
+    this method is more efficient than performing a union piecewise on individual geometries.
+    UnionCascaded requires MultiPolygon as a geometry type. 
+    That is why a multipolygon is created in this function.
+    """
+    logging.info('dissolving...')
+    ds=ogr.Open(input_file)
+    lyr=ds.GetLayer()
+    out_ds,out_lyr=createDS(output_file,ds.GetDriver().GetName(),lyr.GetGeomType(),lyr.GetSpatialRef(),overwrite)
+    defn=out_lyr.GetLayerDefn()
+    multi=ogr.Geometry(ogr.wkbMultiPolygon)
+    for feat in lyr:
+        if feat.geometry():
+            feat.geometry().CloseRings() # this copies the first point to the end
+            wkt=feat.geometry().ExportToWkt()
+            multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+    union=multi.UnionCascaded()
+    if multipoly is False:
+        for geom in union:
+            poly=ogr.CreateGeometryFromWkb(geom.ExportToWkb())
+            feat=ogr.Feature(defn)
+            feat.SetGeometry(poly)
+            out_lyr.CreateFeature(feat)
+    else:
+        out_feat=ogr.Feature(defn)
+        out_feat.SetGeometry(union)
+        out_lyr.CreateFeature(out_feat)
+        out_ds.Destroy()
+    ds.Destroy()
+    return True
+    
+def buffer(input_file,output_file,buffer_reach,overwrite=False):
+    """
+    Buffer polygon layer using Buffer
+    """
+    logging.info('buffering by 'f"{buffer_reach}"' m...')
+    ds=ogr.Open(input_file)
+    lyr=ds.GetLayer()
+    out_ds,out_lyr=createDS(output_file,ds.GetDriver().GetName(),lyr.GetGeomType(),lyr.GetSpatialRef(),overwrite)
+    featureDefn=out_lyr.GetLayerDefn()
+    for feat in lyr:
+        geom=feat.GetGeometryRef()
+        buffer=geom.Buffer(buffer_reach)
+        out_feat=ogr.Feature(featureDefn)
+        out_feat.SetGeometry(buffer)
+        out_lyr.CreateFeature(out_feat)
+        out_feat=None
+    ds.Destroy()
 
 def rasterize_points():
 
@@ -311,7 +358,7 @@ def crop_to_cutline(dataset):
     clip_ds = gdal.Warp(
         destNameOrDestDS="/vsimem/tmp/raster3.tif",
         srcDSOrSrcDSTab=dataset,
-        cutlineDSName="/vsimem/tmp/channel_outline2.shp",
+        cutlineDSName="/vsimem/tmp/channel_outline4.shp",
         cropToCutline=True,
         dstNodata=-9999,
     )
@@ -319,7 +366,6 @@ def crop_to_cutline(dataset):
         "Cropping to cutline took this much time: " f"{time.time()-time3:.0f}" "s"
     )
     return clip_ds
-
 
 def merge(dem, clip_ds):
 
@@ -363,7 +409,7 @@ def write_raster(output_raster, geotransform, geoprojection, data):
     return
 
 
-def max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_T):  # TODO @Stijn hernoem proj_T, zie eerder comment
+def max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_target):
     """
     Get both arrays (are same size) and get maximum or minimum values using np.maximum/np.minimum
     In case no-data values are not the same (is not -9999) it should also work
@@ -384,18 +430,18 @@ def max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_T):  
         z = np.minimum(dem_array, merged_array)
     geotransform = merged.GetGeoTransform()
     srs = osr.SpatialReference()
-    srs.ImportFromEPSG(proj_T)
+    srs.ImportFromEPSG(proj_target)
     write_raster(output_raster, geotransform, srs.ExportToWkt(), z)
     logging.info(
         "Creating max/min raster took this much time: " f"{time.time()-time5:.0f}" "s"
     )
 
 
-def write_raster_to_gtiff(merged, output_raster, proj_T):
+def write_raster_to_gtiff(merged, output_raster, proj_target):
     band = merged.GetRasterBand(1)
     geotransform = merged.GetGeoTransform()
     srs = osr.SpatialReference()
-    srs.ImportFromEPSG(proj_T)
+    srs.ImportFromEPSG(proj_target)
     z = band.ReadAsArray()
     write_raster(output_raster, geotransform, srs.ExportToWkt(), z)
     logging.info("Wrote raster to geotiff")
@@ -406,10 +452,11 @@ def rasterize_channels(
     dem,
     output_raster,
     profile_or_bank_level,
+    burn_in_dem,
     higher_or_lower_only,
     add_value,
-    proj_T,  #  TODO @Stijn hernoem proj_T, zie eerder comment
-    ids=None,
+    proj_target,
+    ids=None
 ):
     """
     Main function calling other functions
@@ -435,17 +482,16 @@ def rasterize_channels(
         Merging with dem
         Write this to raster or write minimum/maximum to raster 
     """
-    project = convert_projection(proj_T)
     try:
         if os.path.exists(output_raster):
             os.remove(output_raster)
             logging.info("Found existing raster named " f"{output_raster}")
             logging.info("Removed it to create a new one...")
 
-        channels = features_from_sqlite(project, sqlite, "v2_channel")
+        channels = features_from_sqlite(proj_target, sqlite, "v2_channel")
         logging.info("List of enriched shapely geometries gained for: channels")
         cross_section_locations = features_from_sqlite(
-            project, sqlite, "v2_cross_section_location"
+            proj_target, sqlite, "v2_cross_section_location"
         )
         logging.info(
             "List of enriched shapely geometries gained for: cross_section_locations"
@@ -632,7 +678,9 @@ def rasterize_channels(
                         all_points, channel_outline
                     )
 
-        dissolve_buffer_buffer()
+        dissolve("/vsimem/tmp/channel_outline.shp","/vsimem/tmp/channel_outline2.shp")
+        buffer("/vsimem/tmp/channel_outline2.shp","/vsimem/tmp/channel_outline3.shp",1)
+        buffer("/vsimem/tmp/channel_outline3.shp","/vsimem/tmp/channel_outline4.shp",-1)
         logging.info(
             "Getting channel points and outline took this much time: "
             f"{(time.time()-save_time):.0f}"
@@ -641,11 +689,15 @@ def rasterize_channels(
         ds = rasterize_points()
         dataset = fill_no_data(ds)
         clip_ds = crop_to_cutline(dataset)
-        merged = merge(dem, clip_ds)
-        if higher_or_lower_only:
-            max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_T)
+        if burn_in_dem:
+            merged = merge(dem, clip_ds)
+            if higher_or_lower_only:
+                max_min_raster(dem, merged, profile_or_bank_level, output_raster, proj_target)
+            else:
+                write_raster_to_gtiff(merged, output_raster, proj_target)
         else:
-            write_raster_to_gtiff(merged, output_raster, proj_T)
+            write_raster_to_gtiff(clip_ds, output_raster, proj_target)
+
         logging.info(
             "Total time elapsed: " f"{(time.time()-start_script)/60:.0f}" " min."
         )

@@ -6,9 +6,10 @@ from pathlib import Path
 folder=Path(r"C:/Users/stijn.overmeen/Documents/Projecten_lokaal/Intern/Rasterize channel")
 sqlite=os.path.join(folder,'hillegersberg-schiebroek.sqlite')
 dem=os.path.join(folder,'dem.tif')
-output_raster=os.path.join(folder,'test_one_script_profile.tif')
+output_raster=os.path.join(folder,'tijdelijk3.tif')
 
 #10065 skipped (wrong geometry)
+"""
 list_of_channels=[40032,11029,11007,10903,10902,10901,10894,10893,10892,10891,10890,10885,10884,10883,10882,10881,10880,10878,10877,
                   10876,10873,10867,10866,10855,10854,10848,10844,10843,10842,10839,10838,10837,10836,10835,10834,10833,10832,10831,
                   10830,10829,10828,10824,10823,10822,10821,10820,10818,10796,10795,10794,10793,10787,10776,10775,10768,10767,10765,
@@ -20,9 +21,10 @@ list_of_channels=[40032,11029,11007,10903,10902,10901,10894,10893,10892,10891,10
                   10078,10077,10076,10075,10074,10073,10072,10071,10070,10068,10064,10063,10062,10061,10060,10059,10058,10057,10056,
                   10054,10053,10052,10051,10050,10049,10048,10047,10046,10045,10044,10043,10042,10041,10040,10039,10038,10037,10036,
                   10025,10022,10021,10020,10009,10008,10007]
-
-rasterize_channels(sqlite,dem,output_raster,'profile',True,0,28992,list_of_channels)
-    #sqlite / dem / output raster / rasterize profile or bank level? / lower (profile) or higher (bank_level) only /
+"""
+list_of_channels=[40032,11029,11007,10903,10902,10901]
+rasterize_channels(sqlite,dem,output_raster,'profile',False,False,0,28992,list_of_channels)
+    #sqlite / dem / output raster / rasterize profile or bank level? / burn in DEM/ lower (profile) or higher (bank_level) only /
     #add constant value / projection EPSG / list of channel id's
 
 '''    
