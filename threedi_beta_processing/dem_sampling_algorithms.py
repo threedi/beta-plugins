@@ -149,7 +149,11 @@ class DemSamplerQgsConnector:
     def results(self, return_features: bool = True, left: bool = True, right: bool = True, search_distance_field: str = None):
         self._get_features()
         for feature in self.features:
+            print(f'processing feature {feature.id()}')
             input_qgs_geometry = QgsGeometry(feature.geometry())
+            if input_qgs_geometry.isEmpty():
+                raise ValueError(f'Feature {feature.id()} has an empty geometry. Please fix or remove this feature and '
+                                 f'try again.')
             input_qgs_geometry.transform(self.coordinate_transform)
             input_qgs_geometry_simple = input_qgs_geometry.simplify(0.01)
             input_wkb_geometry = input_qgs_geometry_simple.asWkb()
