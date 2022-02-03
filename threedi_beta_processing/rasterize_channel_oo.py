@@ -6,16 +6,21 @@ from typing import List
 import numpy as np
 from osgeo import ogr, osr, gdal
 from shapely.geometry import LineString, Point, Polygon
-from shapely.ops import linemerge
+from shapely.ops import linemerge, nearest_points
 import sqlite3
+
+
+class WidthsNotIncreasingError(ValueError):
+    """Raised when one a width of a tabular cross section < than the previous width of that crosssection"""
+    pass
 
 
 class CrossSectionLocation:
     def __init__(self, reference_level: float, bank_level: float, widths: List[float], heights: List[float], geometry: Point):
         self.reference_level = reference_level
         self.bank_level = bank_level
-        self.widths = widths
-        self.heights = heights
+        self.widths = np.array(widths)
+        self.heights = np.array(heights)
         self.geometry = geometry
 
     @property
@@ -29,6 +34,12 @@ class CrossSectionLocation:
     def elevations(self, add_value: float) -> List[float]:
         """Return list of cross section heights + add_value, but absolute instead of relevant to reference level"""
         return [height + self.reference_level + add_value for height in self.heights]
+
+    def height_at(self, width: float) -> float:
+        """Get interpolated height at given width"""
+        if np.any(np.diff(np.array([1,2,3,3])) < 0):
+            raise WidthsNotIncreasingError
+        return np.interp(width, self.widths, self.heights)
 
 
 class Channel:
@@ -62,22 +73,20 @@ class ChannelGroup:
                 cross_section_location.position = self.geometry.project(cross_section_location.geometry, normalized=True)
                 unsorted_cross_section_locations.append(cross_section_location)
         self.cross_section_locations = sorted(unsorted_cross_section_locations, key=attrgetter('position'))
-
-    def parallel_offsets(self, distances: List[float]) -> List[LineString]:
-        """
-        Generate a set of lines parallel to the input linestring, at both sides of the line
-        """
-        parallel_offsets = []
-        for width in distances:
-            parallel_offsets.append(self.geometry.parallel_offset(width / 2, "left"))
-        for width in distances:
-            parallel_offsets.append(self.geometry.parallel_offset(width / 2, "right"))
-        return parallel_offsets
+        self.parallel_offsets = []
 
     @property
     def max_widths(self) -> np.array:
         """Array describing the max crosssectional width along the channel"""
         return np.array([x.max_width for x in self.cross_section_locations])
+
+    @property
+    def unique_widths(self) -> np.array:
+        widths = [x.width for x in self.cross_section_locations]
+        unique_widths = list(set(widths))
+        result = np.array(unique_widths)
+        result.sort()
+        return result
 
     @property
     def cross_section_location_positions(self) -> np.array:
@@ -91,26 +100,61 @@ class ChannelGroup:
         result_array = np.array(result_list)
         return result_array
 
-    def max_width_at(self, position: float) -> float:
-        """Interpolated max crosssectional width at given position"""
-        return np.interp(position, self.cross_section_location_positions, self.max_widths)
-
-
     @property
     def outline(self) -> Polygon:
         right_vertices = []
         left_vertices = []
         for i, position in enumerate(self.vertex_positions):
             width = self.max_width_at(position)
-            right_vertices.append(self.geometry.parallel_offset(width)[i])
-            left_vertices.append(self.geometry.parallel_offset(-width)[i])
+            right_vertices.append(self.geometry.parallel_offset(width/2)[i])
+            left_vertices.append(self.geometry.parallel_offset(-width/2)[i])
         right_vertices.reverse()
         all_vertices = left_vertices + right_vertices
         return Polygon(all_vertices)
 
+    def max_width_at(self, position: float) -> float:
+        """Interpolated max crosssectional width at given position"""
+        return np.interp(position, self.cross_section_location_positions, self.max_widths)
+
+    def generate_parallel_offsets(self):
+        """
+        Generate a set of lines parallel to the input linestring, at both sides of the line
+        """
+        for width in self.unique_widths:
+            self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance= - width / 2))
+            self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance=width / 2))
+
+    def as_xyz_points(self):
+        result = []
+        for po in self.parallel_offsets:
+            result += po.as_xyz_points()
+        return result
 
     def as_raster(self) -> gdal.Dataset:
         pass
+
+
+class ParallelOffset:
+    def __init__(self, parent: ChannelGroup, offset_distance):
+        self.parent = parent
+        self.geometry = parent.geometry.parallel_offset(offset_distance)
+        self.width = offset_distance
+        cross_section_location_points = []
+        for pos in self.parent.cross_section_location_positions:
+            location_xy = self.parent.geometry.interpolate(pos, normalized=True)
+            cross_section_location_points.append(nearest_points(location_xy, self.geometry)[0])
+        cross_section_location_positions = [self.geometry.project(point) for point in cross_section_location_points]
+        heights_at_cross_sections = [xsec.height_at(self.width) for xsec in self.parent.cross_section_locations]
+        vertex_positions = [self.geometry.project(vertex) for vertex in geometry]
+        self.heights_at_vertices = np.interp(
+            vertex_positions,
+            cross_section_location_positions,
+            heights_at_cross_sections
+        )
+
+    def as_xyz_points(self):
+        return [Point(vertex[0], vertex[1], self.heights_at_vertices[i]) for i, vertex in enumerate(self.geometry)]
+
 
 
 # def rasterize_channels(
