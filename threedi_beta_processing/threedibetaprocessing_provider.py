@@ -38,6 +38,7 @@ from .dem_sampling_algorithms import (
     BankLevelAlgorithm,
     SurfaceLevelAlgorithm
 )
+from .rasterize_channel_algorithms import MesherizeChannelsAlgorithm
 
 
 class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
@@ -64,6 +65,8 @@ class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
         self.addAlgorithm(DrainLevelAlgorithm())
         self.addAlgorithm(BankLevelAlgorithm())
         self.addAlgorithm(SurfaceLevelAlgorithm())
+        self.addAlgorithm(MesherizeChannelsAlgorithm())
+
     def id(self):
         """
         Returns the unique provider id, used for identifying the provider. This

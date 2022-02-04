@@ -132,11 +132,12 @@ class Channel:
         for width in self.unique_widths:
             self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance=width / 2))
 
-    def as_xyz_points(self):
+    @property
+    def points(self):
         outline = self.outline
         all_points = []
         for po in self.parallel_offsets:
-            all_points += po.as_xyz_points()
+            all_points += po.points
         result = [point for point in all_points if outline.intersects(point)]
         return result
 
@@ -162,13 +163,14 @@ class ParallelOffset:
     def __init__(self, parent: Union[Channel, ChannelGroup], offset_distance):
         self.parent = parent
         self.geometry = parent.geometry.parallel_offset(offset_distance)
-        self.width = offset_distance
+        self.offset_distance = offset_distance
+        width = np.abs(self.offset_distance * 2)
         cross_section_location_points = []
         for pos in self.parent.cross_section_location_positions:
             location_xy = self.parent.geometry.interpolate(pos, normalized=True)
             cross_section_location_points.append(nearest_points(location_xy, self.geometry)[0])
         cross_section_location_positions = [self.geometry.project(point) for point in cross_section_location_points]
-        heights_at_cross_sections = [xsec.height_at(self.width) for xsec in self.parent.cross_section_locations]
+        heights_at_cross_sections = [xsec.height_at(width) for xsec in self.parent.cross_section_locations]
         vertex_positions = [self.geometry.project(Point(vertex), normalized=True) for vertex in self.geometry.coords]
         self.heights_at_vertices = np.interp(
             vertex_positions,
@@ -176,7 +178,8 @@ class ParallelOffset:
             heights_at_cross_sections
         )
 
-    def as_xyz_points(self):
+    @property
+    def points(self):
         result = []
         for i, vertex in enumerate(self.geometry.coords):
             result.append(Point(vertex[0], vertex[1], self.heights_at_vertices[i]))
