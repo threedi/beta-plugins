@@ -1,13 +1,34 @@
-from copy import deepcopy
 from operator import attrgetter
-from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import numpy as np
 from osgeo import ogr, osr, gdal
-from shapely.geometry import LineString, Point, Polygon
-from shapely.ops import linemerge, nearest_points
-import sqlite3
+from shapely import wkt
+from shapely.geometry import LineString, Point, Polygon, MultiPoint
+from shapely.ops import linemerge, nearest_points, transform
+
+
+def parse_cross_section_table(table:str) -> Tuple[List, List]:
+    """Returns [heights], [widths]"""
+    heights = []
+    widths = []
+    for row in table.split('\n'):
+        height, width = row.split(',')
+        heights.append(float(height))
+        widths.append(float(width))
+    return heights, widths
+
+
+def reverse(geom):
+    """Source: https://gis.stackexchange.com/questions/415864/how-do-you-flip-invert-reverse-the-order-of-the-
+    coordinates-of-shapely-geometrie
+    """
+    def _reverse(x, y, z=None):
+        if z:
+            return x[::-1], y[::-1], z[::-1]
+        return x[::-1], y[::-1]
+
+    return transform(_reverse, geom)
 
 
 class WidthsNotIncreasingError(ValueError):
@@ -24,6 +45,22 @@ class CrossSectionLocation:
         self.heights = np.array(heights)
         self.geometry = geometry
         self.parent = parent
+
+    @classmethod
+    def from_qgs_feature(cls, feature):
+        qgs_geometry = feature.geometry()
+        wkt_geometry = qgs_geometry.asWkt()
+        shapely_geometry = wkt.loads(wkt_geometry)
+        table = feature.attribute('cross_section_table')
+        heights, widths = parse_cross_section_table(table)
+
+        return cls(
+            geometry=shapely_geometry,
+            reference_level=feature.attribute('reference_level'),
+            bank_level=feature.attribute('bank_level'),
+            widths=widths,
+            heights=heights
+        )
 
     @property
     def position(self):
@@ -51,10 +88,9 @@ class CrossSectionLocation:
 
 
 class Channel:
-    def __init__(self, geometry: LineString, srs: osr.SpatialReference):
+    def __init__(self, geometry: LineString):
         self.cross_section_locations = []
         self.geometry = geometry
-        self.srs = srs
         self.parallel_offsets = []
 
     @classmethod
@@ -64,6 +100,13 @@ class Channel:
     @classmethod
     def from_geopackage(cls, geopackage: ogr.DataSource, channel_id):
         pass
+
+    @classmethod
+    def from_qgs_feature(cls, feature):
+        qgs_geometry = feature.geometry()
+        wkt_geometry = qgs_geometry.asWkt()
+        shapely_geometry = wkt.loads(wkt_geometry)
+        return cls(geometry=shapely_geometry)
 
     @property
     def max_widths(self) -> np.array:
@@ -127,7 +170,8 @@ class Channel:
         """
         self.parallel_offsets = []
         for width in self.unique_widths:
-            self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance= - width / 2))
+            if width > 0:  # to prevent duplicate parallel offset in middle of channel
+                self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance= - width / 2))
         self.parallel_offsets.reverse()
         for width in self.unique_widths:
             self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance=width / 2))
@@ -141,6 +185,34 @@ class Channel:
         result = [point for point in all_points if outline.intersects(point)]
         return result
 
+    @property
+    def indexed_points(self):
+        return [po.points for po in self.parallel_offsets]
+
+    # def triangles(self):
+    #     indexed_points = self.indexed_points
+    #     for i in range(len(indexed_points) - 1):
+    #         next_po_points = MultiPoint(indexed_points[i+1])
+    #         for j in range(len(indexed_points[i]) - 1):
+    #             third_vertex_2d = nearest_points(next_po_points, indexed_points[i][j])[0]  # nearest_points loses z ord
+    #             intersecting_vertices_3d = [point for point in indexed_points[i+1] if point.intersects(third_vertex_2d)]
+    #             third_vertex = intersecting_vertices_3d[0]
+    #             triangle_vertices = [indexed_points[i][j], indexed_points[i][j+1], third_vertex]
+    #             yield Polygon(LineString(triangle_vertices))
+    #     for i in range(len(indexed_points) - 1, 0, -1):
+    #         next_po_points = MultiPoint(indexed_points[i-1])
+    #         for j in range(len(indexed_points[i]) - 1, 0, - 1):
+    #             third_vertex_2d = nearest_points(next_po_points, indexed_points[i][j])[0]  # nearest_points loses z ord
+    #             intersecting_vertices_3d = [point for point in indexed_points[i-1] if point.intersects(third_vertex_2d)]
+    #             third_vertex = intersecting_vertices_3d[0]
+    #             triangle_vertices = [indexed_points[i][j], indexed_points[i][j-1], third_vertex]
+    #             yield Polygon(LineString(triangle_vertices))
+    def triangles(self):
+        parallel_offsets = self.parallel_offsets
+        for i in range(len(parallel_offsets)-1):
+            for tri in parallel_offsets[i].triangulate(parallel_offsets[i+1]):
+                yield tri
+
 
 class ChannelGroup(Channel):
     """One or more Channels of which the geometry can be linemerged to a single linestring"""
@@ -149,7 +221,7 @@ class ChannelGroup(Channel):
         merged_geometry = linemerge(geometries)
         if not isinstance(self.geometry, LineString):
             raise ValueError('Input channel geometries cannot be merged into a single LineString')
-        super().__init__(geometry=merged_geometry, srs=channels[0].srs)  # assume all channels have same srs
+        super().__init__(geometry=merged_geometry)
 
         unsorted_cross_section_locations = []
         for channel in channels:
@@ -163,6 +235,8 @@ class ParallelOffset:
     def __init__(self, parent: Union[Channel, ChannelGroup], offset_distance):
         self.parent = parent
         self.geometry = parent.geometry.parallel_offset(offset_distance)
+        if offset_distance <= 0:
+            self.geometry = reverse(self.geometry)
         self.offset_distance = offset_distance
         width = np.abs(self.offset_distance * 2)
         cross_section_location_points = []
@@ -171,9 +245,9 @@ class ParallelOffset:
             cross_section_location_points.append(nearest_points(location_xy, self.geometry)[0])
         cross_section_location_positions = [self.geometry.project(point) for point in cross_section_location_points]
         heights_at_cross_sections = [xsec.height_at(width) for xsec in self.parent.cross_section_locations]
-        vertex_positions = [self.geometry.project(Point(vertex), normalized=True) for vertex in self.geometry.coords]
+        self.vertex_positions = [self.geometry.project(Point(vertex), normalized=True) for vertex in self.geometry.coords]
         self.heights_at_vertices = np.interp(
-            vertex_positions,
+            self.vertex_positions,
             cross_section_location_positions,
             heights_at_cross_sections
         )
@@ -184,6 +258,50 @@ class ParallelOffset:
         for i, vertex in enumerate(self.geometry.coords):
             result.append(Point(vertex[0], vertex[1], self.heights_at_vertices[i]))
         return result
+
+    def triangulate(self, other):
+        self_points = self.points
+        self_vertex_counter = 0
+        other_points = other.points
+        other_vertex_counter = 0
+        last_move = 'self'
+
+        while self_vertex_counter < len(self_points) - 1 or other_vertex_counter < len(other_points) - 1:
+            triangle_points = [self_points[self_vertex_counter], other_points[other_vertex_counter]]
+            # first we handle the case where the end of the line has been reached at one of the sides
+            if self_vertex_counter == len(self_points) - 1:
+                other_vertex_counter += 1
+                triangle_points.append(other_points[other_vertex_counter])
+            elif other_vertex_counter == len(other_points) - 1:
+                self_vertex_counter += 1
+                triangle_points.append(self_points[self_vertex_counter])
+            # then we handle the 'normal' case when we are still halfway at both sides
+            else:
+                next_self_vertex_pos = self.vertex_positions[self_vertex_counter + 1]
+                next_other_vertex_pos = other.vertex_positions[other_vertex_counter + 1]
+                if next_other_vertex_pos == next_self_vertex_pos:
+                    if last_move == 'self':
+                        # move to next vertex in other
+                        other_vertex_counter += 1
+                        triangle_points.append(other_points[other_vertex_counter])
+                        last_move = 'other'
+                    else:
+                        # move to next vertex in self
+                        self_vertex_counter += 1
+                        triangle_points.append(self_points[self_vertex_counter])
+                        last_move = 'self'
+                elif next_other_vertex_pos > next_self_vertex_pos:
+                    # move to next vertex in self
+                    self_vertex_counter += 1
+                    triangle_points.append(self_points[self_vertex_counter])
+                    last_move = 'self'
+                else:
+                    # move to next vertex in other
+                    other_vertex_counter += 1
+                    triangle_points.append(other_points[other_vertex_counter])
+                    last_move = 'other'
+            yield Polygon(LineString(triangle_points))
+
 
 
 # def rasterize_channels(
