@@ -207,6 +207,7 @@ class Channel:
     #             third_vertex = intersecting_vertices_3d[0]
     #             triangle_vertices = [indexed_points[i][j], indexed_points[i][j-1], third_vertex]
     #             yield Polygon(LineString(triangle_vertices))
+    @property
     def triangles(self):
         parallel_offsets = self.parallel_offsets
         for i in range(len(parallel_offsets)-1):

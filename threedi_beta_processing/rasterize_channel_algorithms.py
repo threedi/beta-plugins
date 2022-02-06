@@ -16,6 +16,7 @@ from qgis.core import (
     QgsMeshLayer,
     QgsVectorLayer,
     QgsPoint,
+    QgsGeometry,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
@@ -67,7 +68,7 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
                 self.tr('Channel elevation points'),
-                type=QgsProcessing.TypeVectorPoint
+                type=QgsProcessing.TypeVectorPolygon
             )
         )
 
@@ -83,7 +84,7 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             self.OUTPUT,
             context,
             fields=sink_fields,
-            geometryType=QgsWkbTypes.PointZ,
+            geometryType=QgsWkbTypes.PolygonZ,
             crs=channel_features.sourceCrs()
         )
 
@@ -96,10 +97,16 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     cross_section_location = CrossSectionLocation.from_qgs_feature(cross_section_location_feature)
                     channel.add_cross_section_location(cross_section_location)
             channel.generate_parallel_offsets()
-            points = [QgsPoint(*point.coords[0]) for point in channel.points]
-            for point in points:
+
+            # points = [QgsPoint(*point.coords[0]) for point in channel.points]
+            # for point in points:
+            #     sink_feature = QgsFeature(sink_fields)
+            #     sink_feature.setGeometry(point)
+            #     sink.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+            triangles = [QgsGeometry.fromWkt(triangle.wkt) for triangle in channel.triangles]
+            for triangle in triangles:
                 sink_feature = QgsFeature(sink_fields)
-                sink_feature.setGeometry(point)
+                sink_feature.setGeometry(triangle)
                 sink.addFeature(sink_feature, QgsFeatureSink.FastInsert)
 
         # output_layer_name = "Channel points"

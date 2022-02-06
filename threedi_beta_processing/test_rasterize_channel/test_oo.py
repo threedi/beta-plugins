@@ -80,9 +80,9 @@ def run_tests():
     channel_parallel_offsets(channel)
     # print(channel.outline)
     selects = []
-    for i, triangle in enumerate(channel.triangles()):
+    for i, triangle in enumerate(channel.triangles):
         selects.append(f"SELECT {i+1} as id, geom_from_wkt('{str(triangle)}')")
     print("\nUNION\n".join(selects))
     return channel.points
 
-run_tests()
+# run_tests()
