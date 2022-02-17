@@ -5,6 +5,9 @@ from threedigrid.admin.lines.models import Lines
 from threedigrid.admin.utils import KCUDescriptor
 
 KCU_DICT = KCUDescriptor()
+KCU_DICT._descr[-9999] = 'unknown'  # to deal with the dummy flowline/cell/node that has coords [nan, nan, nan,
+# nan] and kcu -9999
+
 NODE_TYPE_DICT = {
     1: '2D surface water',
     2: '2D groundwater',
@@ -16,8 +19,8 @@ NODE_TYPE_DICT = {
 }
 
 import numpy as np
-import ogr
-import osr
+from osgeo import ogr
+from osgeo import osr
 
 
 def threedigrid_to_ogr(threedigrid_src: Union[Nodes, Cells, Lines],
@@ -44,19 +47,16 @@ def threedigrid_to_ogr(threedigrid_src: Union[Nodes, Cells, Lines],
     if isinstance(threedigrid_src, Nodes):
         src_type = Nodes
         coords = threedigrid_src.coordinates
-        invalid_coords = np.array([-9999, -9999])
         out_layer_name = 'node'
         out_geom_type = ogr.wkbPoint
     if isinstance(threedigrid_src, Cells):
         src_type = Cells
         coords = threedigrid_src.cell_coords
-        invalid_coords = np.array([-9999, -9999, -9999, -9999])
         out_layer_name = 'cell'
         out_geom_type = ogr.wkbPolygon
     if isinstance(threedigrid_src, Lines):
         src_type = Lines
         coords = threedigrid_src.line_coords
-        invalid_coords = np.array([-9999, -9999, -9999, -9999])
         out_layer_name = 'flowline'
         out_geom_type = ogr.wkbLineString
         default_attributes['id'] = threedigrid_src.id.astype(int)
@@ -80,7 +80,8 @@ def threedigrid_to_ogr(threedigrid_src: Union[Nodes, Cells, Lines],
         default_attributes['node_type'] = threedigrid_src.node_type
         default_attr_types['node_type'] = ogr.OFTInteger
         print(threedigrid_src.node_type)
-        default_attributes['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get, otypes=[str])(threedigrid_src.node_type)
+        default_attributes['node_type_description'] = np.vectorize(NODE_TYPE_DICT.get, otypes=[str])(
+            threedigrid_src.node_type)
         default_attr_types['node_type_description'] = ogr.OFTString
         if isinstance(threedigrid_src, Cells):
             default_attributes['z_coordinate'] = threedigrid_src.z_coordinate
@@ -105,7 +106,8 @@ def threedigrid_to_ogr(threedigrid_src: Union[Nodes, Cells, Lines],
 
     # create features
     for i in range(threedigrid_src.count):
-        if np.all(np.equal(coords[:, i], invalid_coords)):  # skip if coordinates are invalid
+        if (not np.all(np.isfinite(coords[:, i]))) or (
+                not np.all(coords[:, i] != -9999)):  # skip if coordinates are invalid
             continue
         else:
             # create feature geometry
@@ -129,7 +131,9 @@ def threedigrid_to_ogr(threedigrid_src: Union[Nodes, Cells, Lines],
                 geom_ring.AddPoint(xmax, ymin)
                 geom_ring.AddPoint(xmin, ymin)
                 geom.AddGeometry(geom_ring)
-                if (not geom.IsValid()) or geom.IsEmpty():
+                if not geom.IsValid():
+                    continue
+                elif geom.IsEmpty():
                     continue
                 else:
                     feature.SetGeometry(geom)
@@ -153,5 +157,4 @@ def threedigrid_to_ogr(threedigrid_src: Union[Nodes, Cells, Lines],
             # create the actual feature
             out_layer.CreateFeature(feature)
             feature = None
-
     return
