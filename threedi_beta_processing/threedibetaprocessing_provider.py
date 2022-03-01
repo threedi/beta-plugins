@@ -39,7 +39,7 @@ from .dem_sampling_algorithms import (
     SurfaceLevelAlgorithm
 )
 from .rasterize_channel_algorithms import MesherizeChannelsAlgorithm
-from .schematisation_algorithms import MigrateAlgorithm
+
 
 class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
 
@@ -66,7 +66,6 @@ class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
         self.addAlgorithm(BankLevelAlgorithm())
         self.addAlgorithm(SurfaceLevelAlgorithm())
         self.addAlgorithm(MesherizeChannelsAlgorithm())
-        self.addAlgorithm(MigrateAlgorithm())
 
     def id(self):
         """

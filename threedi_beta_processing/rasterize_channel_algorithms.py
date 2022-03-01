@@ -10,31 +10,34 @@
 *                                                                         *
 ***************************************************************************
 """
+from typing import List, Tuple
+from uuid import uuid4
 
 from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
 from qgis.core import (
-    QgsMeshLayer,
-    QgsVectorLayer,
-    QgsPoint,
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
     QgsGeometry,
+    QgsMesh,
+    QgsMeshLayer,
+    QgsFeature,
+    QgsFeatureSink,
+    QgsField,
+    QgsFields,
+    QgsPoint,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
-    QgsCoordinateTransform,
-    QgsCoordinateReferenceSystem,
-    QgsFeature,
-    QgsFeatureSink,
-    QgsField,
-    QgsFields,
+    QgsProcessingUtils,
     QgsProject,
+    QgsProviderRegistry,
+    QgsVectorLayer,
     QgsWkbTypes
 )
 import processing
 
-from .raster_tools.dem_sampler import AttributeProcessor
-from .test_rasterize_channel.test_oo import run_tests
 from .rasterize_channel_oo import Channel, CrossSectionLocation
 
 
@@ -42,7 +45,8 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
     """
     Rasterize channels using its cross sections
     """
-    OUTPUT = 'OUTPUT'
+    OUTPUT_POLYGONS = 'OUTPUT_POLYGONS'
+    OUTPUT_POINTS = 'OUTPUT_POINTS'
     INPUT_CHANNELS = 'INPUT_CHANNELS'
     INPUT_CROSS_SECTION_LOCATIONS = 'INPUT_CROSS_SECTION_LOCATIONS'
 
@@ -66,29 +70,49 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.OUTPUT,
-                self.tr('Channel elevation points'),
+                self.OUTPUT_POLYGONS,
+                self.tr('Triangle'),
                 type=QgsProcessing.TypeVectorPolygon
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT_POINTS,
+                self.tr('Channel elevation point'),
+                type=QgsProcessing.TypeVectorPoint
             )
         )
 
     def processAlgorithm(self, parameters, context, feedback):
         channel_features = self.parameterAsSource(parameters, self.INPUT_CHANNELS, context)
         cross_section_location_features = self.parameterAsSource(parameters, self.INPUT_CROSS_SECTION_LOCATIONS, context)
+
         sink_fields = QgsFields()
         sink_fields.append(QgsField(name='id', type=QVariant.Int))
         sink_fields.append(QgsField(name='channel_id', type=QVariant.Int))
 
-        (sink, dest_id) = self.parameterAsSink(
+        (sink_polygons, dest_id_polygons) = self.parameterAsSink(
             parameters,
-            self.OUTPUT,
+            self.OUTPUT_POLYGONS,
             context,
             fields=sink_fields,
             geometryType=QgsWkbTypes.PolygonZ,
             crs=channel_features.sourceCrs()
         )
 
-        all_points = dict()
+        (sink_points, dest_id_points) = self.parameterAsSink(
+            parameters,
+            self.OUTPUT_POINTS,
+            context,
+            fields=sink_fields,
+            geometryType=QgsWkbTypes.PointZ,
+            crs=channel_features.sourceCrs()
+        )
+
+
+        mesh_layers = []
+
         for channel_feature in channel_features.getFeatures():
             channel = Channel.from_qgs_feature(channel_feature)
             channel_id = channel_feature.attribute('id')
@@ -98,16 +122,48 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     channel.add_cross_section_location(cross_section_location)
             channel.generate_parallel_offsets()
 
-            # points = [QgsPoint(*point.coords[0]) for point in channel.points]
-            # for point in points:
-            #     sink_feature = QgsFeature(sink_fields)
-            #     sink_feature.setGeometry(point)
-            #     sink.addFeature(sink_feature, QgsFeatureSink.FastInsert)
-            triangles = [QgsGeometry.fromWkt(triangle.wkt) for triangle in channel.triangles]
+            points = [QgsPoint(*point.coords[0]) for point in channel.points]
+
+            # create a mesh on disk
+            provider_meta = QgsProviderRegistry.instance().providerMetadata('mdal')
+            mesh = QgsMesh()
+            temp_mesh_filename = f"{uuid4()}.nc"
+            temp_mesh_fullpath = QgsProcessingUtils.generateTempFilename(temp_mesh_filename)
+            mesh_format = 'Ugrid'
+            crs = QgsCoordinateReferenceSystem()
+            provider_meta.createMeshData(mesh, temp_mesh_fullpath, mesh_format, crs)
+            mesh_layers.append(QgsMeshLayer(temp_mesh_fullpath, 'editable mesh', 'mdal'))
+
+            # add points to mesh
+            transform = QgsCoordinateTransform()
+            mesh_layers[-1].startFrameEditing(transform)
+            points_added = mesh_layers[-1].meshEditor().addPointsAsVertices(points, 0.0000001)
+            feedback.pushInfo(f"Added {points_added} points from a total of {len(points)}")
+
+            # add faces to mesh
+            faces_added = 0
+            total_triangles = 0
+            for triangle in channel.triangles:
+                total_triangles += 1
+                error = mesh_layers[-1].meshEditor().addFace(triangle.vertex_indices)
+                if error.errorType == 0:
+                    faces_added += 1
+            feedback.pushInfo(f"Added {faces_added} faces from a total of {total_triangles  }")
+
+            mesh_layers[-1].commitFrameEditing(transform, continueEditing=False)
+            context.temporaryLayerStore().addMapLayer(mesh_layers[-1])
+            layer_details = QgsProcessingContext.LayerDetails(temp_mesh_filename, context.project(), self.OUTPUT_POLYGONS)
+            context.addLayerToLoadOnCompletion(mesh_layers[-1].id(), layer_details)
+
+            for point in points:
+                sink_feature = QgsFeature(sink_fields)
+                sink_feature.setGeometry(point)
+                sink_points.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+            triangles = [QgsGeometry.fromWkt(triangle.geometry.wkt) for triangle in channel.triangles]
             for triangle in triangles:
                 sink_feature = QgsFeature(sink_fields)
                 sink_feature.setGeometry(triangle)
-                sink.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+                sink_polygons.addFeature(sink_feature, QgsFeatureSink.FastInsert)
 
         # output_layer_name = "Channel points"
         # points = run_tests()
@@ -120,11 +176,7 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         # features = dict()
         # for channel_id, points in all_points.items():
 
-        # layer.dataProvider().addFeatures(features.values())
-        # context.temporaryLayerStore().addMapLayer(layer)
-        # layer_details = QgsProcessingContext.LayerDetails(output_layer_name, context.project(), self.OUTPUT)
-        # context.addLayerToLoadOnCompletion(layer.id(), layer_details)
-        return {self.OUTPUT: dest_id}
+        return {self.OUTPUT_POLYGONS: dest_id_polygons}
 
     def name(self):
         """

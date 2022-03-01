@@ -36,6 +36,12 @@ class WidthsNotIncreasingError(ValueError):
     pass
 
 
+class Triangle:
+    def __init__(self, geometry: Polygon, vertex_indices: List[int]):
+        self.geometry = geometry
+        self.vertex_indices = vertex_indices
+
+
 class CrossSectionLocation:
     def __init__(self, reference_level: float, bank_level: float, widths: List[float], heights: List[float],
                  geometry: Point, parent=None):
@@ -175,15 +181,20 @@ class Channel:
         self.parallel_offsets.reverse()
         for width in self.unique_widths:
             self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance=width / 2))
+        last_vertex_index = 0
+        for po in self.parallel_offsets:
+            po.set_vertex_indices(first_vertex_index=last_vertex_index+1)
+            last_vertex_index = po.vertex_indices[-1]
 
     @property
     def points(self):
-        outline = self.outline
+        """Returns all points of all parallel offsets ordered by vertex index"""
+        # outline = self.outline
         all_points = []
         for po in self.parallel_offsets:
             all_points += po.points
-        result = [point for point in all_points if outline.intersects(point)]
-        return result
+        # result = [point for point in all_points if outline.intersects(point)]
+        return all_points
 
     @property
     def indexed_points(self):
@@ -208,7 +219,7 @@ class Channel:
     #             triangle_vertices = [indexed_points[i][j], indexed_points[i][j-1], third_vertex]
     #             yield Polygon(LineString(triangle_vertices))
     @property
-    def triangles(self):
+    def triangles(self) -> List[Triangle]:
         parallel_offsets = self.parallel_offsets
         for i in range(len(parallel_offsets)-1):
             for tri in parallel_offsets[i].triangulate(parallel_offsets[i+1]):
@@ -252,6 +263,7 @@ class ParallelOffset:
             cross_section_location_positions,
             heights_at_cross_sections
         )
+        self.vertex_indices = None
 
     @property
     def points(self):
@@ -260,49 +272,59 @@ class ParallelOffset:
             result.append(Point(vertex[0], vertex[1], self.heights_at_vertices[i]))
         return result
 
+    def set_vertex_indices(self, first_vertex_index):
+        self.vertex_indices = list(range(first_vertex_index, first_vertex_index + len(self.geometry.coords)))
+
     def triangulate(self, other):
         self_points = self.points
-        self_vertex_counter = 0
+        self_current_index = self.vertex_indices[0]
         other_points = other.points
-        other_vertex_counter = 0
+        other_current_index = other.vertex_indices[0]
         last_move = 'self'
 
-        while self_vertex_counter < len(self_points) - 1 or other_vertex_counter < len(other_points) - 1:
-            triangle_points = [self_points[self_vertex_counter], other_points[other_vertex_counter]]
+        while self_current_index < self.vertex_indices[-1] or other_current_index < other.vertex_indices[-1]:
+            triangle_points = [self_points[self_current_index-self.vertex_indices[0]],
+                               other_points[other_current_index-other.vertex_indices[0]]]
+            triangle_indices = [self_current_index, other_current_index]
             # first we handle the case where the end of the line has been reached at one of the sides
-            if self_vertex_counter == len(self_points) - 1:
-                other_vertex_counter += 1
-                triangle_points.append(other_points[other_vertex_counter])
-            elif other_vertex_counter == len(other_points) - 1:
-                self_vertex_counter += 1
-                triangle_points.append(self_points[self_vertex_counter])
+            if self_current_index == self.vertex_indices[-1]:
+                other_current_index += 1
+                triangle_points.append(other_points[other_current_index-other.vertex_indices[0]])
+                triangle_indices.append(other_current_index)
+            elif other_current_index == other.vertex_indices[-1]:
+                self_current_index += 1
+                triangle_points.append(self_points[self_current_index-self.vertex_indices[0]])
+                triangle_indices.append(self_current_index)
             # then we handle the 'normal' case when we are still halfway at both sides
             else:
-                next_self_vertex_pos = self.vertex_positions[self_vertex_counter + 1]
-                next_other_vertex_pos = other.vertex_positions[other_vertex_counter + 1]
+                next_self_vertex_pos = self.vertex_positions[self_current_index-self.vertex_indices[0] + 1]
+                next_other_vertex_pos = other.vertex_positions[other_current_index-other.vertex_indices[0] + 1]
                 if next_other_vertex_pos == next_self_vertex_pos:
                     if last_move == 'self':
                         # move to next vertex in other
-                        other_vertex_counter += 1
-                        triangle_points.append(other_points[other_vertex_counter])
+                        other_current_index += 1
+                        triangle_points.append(other_points[other_current_index-other.vertex_indices[0]])
+                        triangle_indices.append(other_current_index)
                         last_move = 'other'
                     else:
                         # move to next vertex in self
-                        self_vertex_counter += 1
-                        triangle_points.append(self_points[self_vertex_counter])
+                        self_current_index += 1
+                        triangle_points.append(self_points[self_current_index-other.vertex_indices[0]])
+                        triangle_indices.append(self_current_index)
                         last_move = 'self'
                 elif next_other_vertex_pos > next_self_vertex_pos:
                     # move to next vertex in self
-                    self_vertex_counter += 1
-                    triangle_points.append(self_points[self_vertex_counter])
+                    self_current_index += 1
+                    triangle_points.append(self_points[self_current_index-other.vertex_indices[0]])
+                    triangle_indices.append(self_current_index)
                     last_move = 'self'
                 else:
                     # move to next vertex in other
-                    other_vertex_counter += 1
-                    triangle_points.append(other_points[other_vertex_counter])
+                    other_current_index += 1
+                    triangle_points.append(other_points[other_current_index-other.vertex_indices[0]])
+                    triangle_indices.append(other_current_index)
                     last_move = 'other'
-            yield Polygon(LineString(triangle_points))
-
+            yield Triangle(geometry=Polygon(LineString(triangle_points)), vertex_indices=triangle_indices)
 
 
 # def rasterize_channels(
