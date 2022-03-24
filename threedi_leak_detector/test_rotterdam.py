@@ -1,4 +1,4 @@
-# ------------- TEST AMSTELSTATION
+# ------------- TEST ROTTERDAM
 from leak_detector import *
 
 dem_fn = 'C:/3Di/w0127-rotterdam-3d-obstacle-detection/rasters/dem_01x01_new.tif'
@@ -13,9 +13,9 @@ topo = Topology(gr, [test_cell_id], dem=dem)
 xmin_i, ymin_i, xmax_i, ymax_i = topo.cell_coords[test_cell_id]
 my_cell = Cell(parent=topo, id=test_cell_id, coords=topo.cell_coords[test_cell_id])
 for side in ['top', 'left', 'bottom', 'right']:
-    edge = my_cell.edge(side)
+    edge = my_cell.get_edges(side)
     if edge:
-        print(f'exchange_levels {side}: ', my_cell.edge(side).exchange_levels)
+        print(f'exchange_levels {side}: ', my_cell.get_edges(side).exchange_levels)
 my_cell.find_maxima(min_peak_prominence=0.3)
 # print('minima: ', my_cell.minima)
 print('maxima: ', my_cell.maxima)
