@@ -181,7 +181,7 @@ class Channel:
         self.parallel_offsets.reverse()
         for width in self.unique_widths:
             self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance=width / 2))
-        last_vertex_index = 0
+        last_vertex_index = -1  # so that we have 0-based indexing, because QgsMesh vertices have 0-based indices too
         for po in self.parallel_offsets:
             po.set_vertex_indices(first_vertex_index=last_vertex_index+1)
             last_vertex_index = po.vertex_indices[-1]
@@ -275,6 +275,15 @@ class ParallelOffset:
     def set_vertex_indices(self, first_vertex_index):
         self.vertex_indices = list(range(first_vertex_index, first_vertex_index + len(self.geometry.coords)))
 
+    def triangle_is_valid(self, triangle_points, other_parallel_offset):
+        """Return True if none of the sides of the triangle crosses the parallel offsets that should enclose it"""
+        valid = True
+        for start, end in [(0, 1), (0, 2), (1, 2)]:
+            line = LineString([triangle_points[start], triangle_points[end]])
+            if self.geometry.crosses(line) or other_parallel_offset.geometry.crosses(line):
+                valid = False
+        return valid
+
     def triangulate(self, other):
         self_points = self.points
         self_current_index = self.vertex_indices[0]
@@ -282,7 +291,7 @@ class ParallelOffset:
         other_current_index = other.vertex_indices[0]
         last_move = 'self'
 
-        while self_current_index < self.vertex_indices[-1] or other_current_index < other.vertex_indices[-1]:
+        while (self_current_index < self.vertex_indices[-1]) or (other_current_index < other.vertex_indices[-1]):
             triangle_points = [self_points[self_current_index-self.vertex_indices[0]],
                                other_points[other_current_index-other.vertex_indices[0]]]
             triangle_indices = [self_current_index, other_current_index]
@@ -300,30 +309,35 @@ class ParallelOffset:
                 next_self_vertex_pos = self.vertex_positions[self_current_index-self.vertex_indices[0] + 1]
                 next_other_vertex_pos = other.vertex_positions[other_current_index-other.vertex_indices[0] + 1]
                 if next_other_vertex_pos == next_self_vertex_pos:
-                    if last_move == 'self':
-                        # move to next vertex in other
-                        other_current_index += 1
-                        triangle_points.append(other_points[other_current_index-other.vertex_indices[0]])
-                        triangle_indices.append(other_current_index)
-                        last_move = 'other'
-                    else:
-                        # move to next vertex in self
-                        self_current_index += 1
-                        triangle_points.append(self_points[self_current_index-other.vertex_indices[0]])
-                        triangle_indices.append(self_current_index)
-                        last_move = 'self'
+                    move = 'other' if last_move == 'self' else 'self'
                 elif next_other_vertex_pos > next_self_vertex_pos:
-                    # move to next vertex in self
-                    self_current_index += 1
-                    triangle_points.append(self_points[self_current_index-other.vertex_indices[0]])
-                    triangle_indices.append(self_current_index)
-                    last_move = 'self'
+                    move = 'self'
                 else:
-                    # move to next vertex in other
+                    move = 'other'
+
+                # switch move side if moving on that side results in invalid triangle
+                if move == 'other':
+                    additional_point = other_points[other_current_index + 1 - other.vertex_indices[0]]
+                    test_triangle_points = triangle_points + [additional_point]
+                    if not self.triangle_is_valid(triangle_points=test_triangle_points, other_parallel_offset=other):
+                        move = 'self'
+                else:
+                    additional_point = self_points[self_current_index + 1 - self.vertex_indices[0]]
+                    test_triangle_points = triangle_points + [additional_point]
+                    if not self.triangle_is_valid(triangle_points=test_triangle_points, other_parallel_offset=other):
+                        move = 'other'
+
+                if move == 'other':
                     other_current_index += 1
-                    triangle_points.append(other_points[other_current_index-other.vertex_indices[0]])
+                    triangle_points.append(other_points[other_current_index - other.vertex_indices[0]])
                     triangle_indices.append(other_current_index)
                     last_move = 'other'
+                else:
+                    self_current_index += 1
+                    triangle_points.append(self_points[self_current_index-self.vertex_indices[0]])
+                    triangle_indices.append(self_current_index)
+                    last_move = 'self'
+
             yield Triangle(geometry=Polygon(LineString(triangle_points)), vertex_indices=triangle_indices)
 
 

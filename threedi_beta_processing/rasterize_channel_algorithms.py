@@ -47,6 +47,7 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
     """
     OUTPUT_POLYGONS = 'OUTPUT_POLYGONS'
     OUTPUT_POINTS = 'OUTPUT_POINTS'
+    OUTPUT_LINES = 'OUTPUT_LINES'
     INPUT_CHANNELS = 'INPUT_CHANNELS'
     INPUT_CROSS_SECTION_LOCATIONS = 'INPUT_CROSS_SECTION_LOCATIONS'
 
@@ -84,6 +85,15 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT_LINES,
+                self.tr('Parallel Offset'),
+                type=QgsProcessing.TypeVectorLine
+            )
+        )
+
+
     def processAlgorithm(self, parameters, context, feedback):
         channel_features = self.parameterAsSource(parameters, self.INPUT_CHANNELS, context)
         cross_section_location_features = self.parameterAsSource(parameters, self.INPUT_CROSS_SECTION_LOCATIONS, context)
@@ -92,11 +102,16 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         sink_fields.append(QgsField(name='id', type=QVariant.Int))
         sink_fields.append(QgsField(name='channel_id', type=QVariant.Int))
 
+        triangle_fields = QgsFields()
+        triangle_fields.append(QgsField(name='id', type=QVariant.Int))
+        triangle_fields.append(QgsField(name='channel_id', type=QVariant.Int))
+        triangle_fields.append(QgsField(name='vertex_indices', type=QVariant.String))
+
         (sink_polygons, dest_id_polygons) = self.parameterAsSink(
             parameters,
             self.OUTPUT_POLYGONS,
             context,
-            fields=sink_fields,
+            fields=triangle_fields,
             geometryType=QgsWkbTypes.PolygonZ,
             crs=channel_features.sourceCrs()
         )
@@ -107,6 +122,15 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             context,
             fields=sink_fields,
             geometryType=QgsWkbTypes.PointZ,
+            crs=channel_features.sourceCrs()
+        )
+
+        (sink_lines, dest_id_lines) = self.parameterAsSink(
+            parameters,
+            self.OUTPUT_LINES,
+            context,
+            fields=sink_fields,
+            geometryType=QgsWkbTypes.LineString,
             crs=channel_features.sourceCrs()
         )
 
@@ -123,6 +147,12 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             channel.generate_parallel_offsets()
 
             points = [QgsPoint(*point.coords[0]) for point in channel.points]
+
+            # for debugging only
+            for po_id, po in enumerate(channel.parallel_offsets):
+                feedback.pushInfo(f"vertex_indices for parallel offset {po_id}: {po.vertex_indices}")
+            for tri_id, tri in enumerate(channel.triangles):
+                feedback.pushInfo(f"vertex_indices for triangle {tri_id}: {tri.vertex_indices}")
 
             # create a mesh on disk
             provider_meta = QgsProviderRegistry.instance().providerMetadata('mdal')
@@ -146,24 +176,58 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             for triangle in channel.triangles:
                 total_triangles += 1
                 error = mesh_layers[-1].meshEditor().addFace(triangle.vertex_indices)
+
+                #       Error types:
+                #       https://api.qgis.org/api/classQgis.html#a69496edec4c420185984d9a2a63702dc
+                #      enum class MeshEditingErrorType : int
+                #      {
+                #        0 NoError,
+                #        1 InvalidFace,
+                #        2 TooManyVerticesInFace,
+                #        3 FlatFace,
+                #        4 UniqueSharedVertex,
+                #        5 InvalidVertex,
+                #        6 ManifoldFace,
+                #      };
+                #      Q_ENUM( MeshEditingErrorType )
+                #
+
                 if error.errorType == 0:
                     faces_added += 1
-            feedback.pushInfo(f"Added {faces_added} faces from a total of {total_triangles  }")
+                else:
+                    feedback.pushInfo(f"Error when adding triangle as face. "
+                                      f"triangle.geometry.wkt: {triangle.geometry.wkt}."
+                                      f"triangle.vertex_indices: {triangle.vertex_indices}"
+                                      f"error.elementIndex: {error.elementIndex}. error.errorType: {error.errorType}")
+            feedback.pushInfo(f"Added {faces_added} faces from a total of {total_triangles}")
 
             mesh_layers[-1].commitFrameEditing(transform, continueEditing=False)
             context.temporaryLayerStore().addMapLayer(mesh_layers[-1])
             layer_details = QgsProcessingContext.LayerDetails(temp_mesh_filename, context.project(), self.OUTPUT_POLYGONS)
             context.addLayerToLoadOnCompletion(mesh_layers[-1].id(), layer_details)
 
-            for point in points:
+            for point_id, point in enumerate(points):
                 sink_feature = QgsFeature(sink_fields)
+                sink_feature[0] = point_id
+                sink_feature[1] = channel_id
                 sink_feature.setGeometry(point)
                 sink_points.addFeature(sink_feature, QgsFeatureSink.FastInsert)
-            triangles = [QgsGeometry.fromWkt(triangle.geometry.wkt) for triangle in channel.triangles]
-            for triangle in triangles:
-                sink_feature = QgsFeature(sink_fields)
-                sink_feature.setGeometry(triangle)
+
+            for triangle_id, triangle in enumerate(channel.triangles):
+                sink_feature = QgsFeature(triangle_fields)
+                sink_feature[0] = triangle_id
+                sink_feature[1] = channel_id
+                sink_feature[2] = str(triangle.vertex_indices)
+                sink_feature.setGeometry(QgsGeometry.fromWkt(triangle.geometry.wkt))
                 sink_polygons.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+
+            parallel_offsets = [QgsGeometry.fromWkt(po.geometry.wkt) for po in channel.parallel_offsets]
+            for po_id, po in enumerate(parallel_offsets):
+                sink_feature = QgsFeature(sink_fields)
+                sink_feature[0] = po_id
+                sink_feature[1] = channel_id
+                sink_feature.setGeometry(po)
+                sink_lines.addFeature(sink_feature, QgsFeatureSink.FastInsert)
 
         # output_layer_name = "Channel points"
         # points = run_tests()
