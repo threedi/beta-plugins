@@ -1,5 +1,5 @@
 # TODO: alles van v1 verwijderen
-# TODO: op de jusite manier rekening houden met nodata in raster
+# TODO: op de juiste manier rekening houden met nodata in raster
 # TODO: aansluiten op QGIS plugin
 # TODO: add support for cell that extend beyond dem (fill with nodata?)
 # TODO: support for grid refinement
@@ -555,6 +555,8 @@ class ObstacleSegment:
 
     @edges.setter
     def edges(self, edge: Edge):
+        # TODO [HIER VERDER GAAN] met grid refinement kan een obstacle segment aan twee edges toebehoren die in elkaars
+        #  verlengde liggen. Omzetting van `edge` naar `edges` is halverwege
         self._edges = edge
 
     def is_valid(self, min_obstacle_height: float):
