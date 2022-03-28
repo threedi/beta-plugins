@@ -31,13 +31,13 @@ __copyright__ = '(C) 2021 by Nelen & Schuurmans'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .dem_sampling_algorithms import (
-    CrestLevelAlgorithm,
-    MaxBreachDepthAlgorithm,
-    DrainLevelAlgorithm,
-    BankLevelAlgorithm,
-    SurfaceLevelAlgorithm
-)
+# from .dem_sampling_algorithms import (
+#     CrestLevelAlgorithm,
+#     MaxBreachDepthAlgorithm,
+#     DrainLevelAlgorithm,
+#     BankLevelAlgorithm,
+#     SurfaceLevelAlgorithm
+# )
 from .rasterize_channel_algorithms import MesherizeChannelsAlgorithm
 
 
@@ -60,11 +60,11 @@ class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
-        self.addAlgorithm(CrestLevelAlgorithm())
-        self.addAlgorithm(MaxBreachDepthAlgorithm())
-        self.addAlgorithm(DrainLevelAlgorithm())
-        self.addAlgorithm(BankLevelAlgorithm())
-        self.addAlgorithm(SurfaceLevelAlgorithm())
+        # self.addAlgorithm(CrestLevelAlgorithm())
+        # self.addAlgorithm(MaxBreachDepthAlgorithm())
+        # self.addAlgorithm(DrainLevelAlgorithm())
+        # self.addAlgorithm(BankLevelAlgorithm())
+        # self.addAlgorithm(SurfaceLevelAlgorithm())
         self.addAlgorithm(MesherizeChannelsAlgorithm())
 
     def id(self):

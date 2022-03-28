@@ -13,6 +13,7 @@
 from typing import List, Tuple
 from uuid import uuid4
 
+import numpy as np
 from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -134,7 +135,6 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             crs=channel_features.sourceCrs()
         )
 
-
         mesh_layers = []
 
         for channel_feature in channel_features.getFeatures():
@@ -167,38 +167,35 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             # add points to mesh
             transform = QgsCoordinateTransform()
             mesh_layers[-1].startFrameEditing(transform)
-            points_added = mesh_layers[-1].meshEditor().addPointsAsVertices(points, 0.0000001)
+            editor = mesh_layers[-1].meshEditor()
+            points_added = editor.addPointsAsVertices(points, 0.0000001)
             feedback.pushInfo(f"Added {points_added} points from a total of {len(points)}")
 
             # add faces to mesh
             faces_added = 0
+            triangles_dict = {k: v for k, v in enumerate(channel.triangles)}
             total_triangles = 0
-            for triangle in channel.triangles:
-                total_triangles += 1
-                error = mesh_layers[-1].meshEditor().addFace(triangle.vertex_indices)
-
-                #       Error types:
-                #       https://api.qgis.org/api/classQgis.html#a69496edec4c420185984d9a2a63702dc
-                #      enum class MeshEditingErrorType : int
-                #      {
-                #        0 NoError,
-                #        1 InvalidFace,
-                #        2 TooManyVerticesInFace,
-                #        3 FlatFace,
-                #        4 UniqueSharedVertex,
-                #        5 InvalidVertex,
-                #        6 ManifoldFace,
-                #      };
-                #      Q_ENUM( MeshEditingErrorType )
-                #
-
-                if error.errorType == 0:
-                    faces_added += 1
-                else:
-                    feedback.pushInfo(f"Error when adding triangle as face. "
-                                      f"triangle.geometry.wkt: {triangle.geometry.wkt}."
-                                      f"triangle.vertex_indices: {triangle.vertex_indices}"
-                                      f"error.elementIndex: {error.elementIndex}. error.errorType: {error.errorType}")
+            occupied_vertices = np.array([], dtype=int)
+            finished = False
+            first_round = True
+            processed_triangles = []
+            while not finished:
+                finished = True
+                for k in processed_triangles:
+                    triangles_dict.pop(k)
+                processed_triangles = []
+                for i, triangle in triangles_dict.items():
+                    if first_round:
+                        total_triangles += 1
+                    if i == 0 or np.sum(np.in1d(triangle.vertex_indices, occupied_vertices)) >= 2:
+                        error = editor.addFace(triangle.vertex_indices)
+                        # Error types: https://api.qgis.org/api/classQgis.html#a69496edec4c420185984d9a2a63702dc
+                        if error.errorType == 0:
+                            finished = False
+                            processed_triangles.append(i)
+                            faces_added += 1
+                            occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
+                first_round = False
             feedback.pushInfo(f"Added {faces_added} faces from a total of {total_triangles}")
 
             mesh_layers[-1].commitFrameEditing(transform, continueEditing=False)
