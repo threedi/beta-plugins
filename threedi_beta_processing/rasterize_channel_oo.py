@@ -178,9 +178,9 @@ class Channel:
         for width in self.unique_widths:
             if width > 0:  # to prevent duplicate parallel offset in middle of channel
                 self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance= - width / 2))
-        self.parallel_offsets.reverse()
         for width in self.unique_widths:
             self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance=width / 2))
+        self.parallel_offsets.reverse()
         last_vertex_index = -1  # so that we have 0-based indexing, because QgsMesh vertices have 0-based indices too
         for po in self.parallel_offsets:
             po.set_vertex_indices(first_vertex_index=last_vertex_index+1)
