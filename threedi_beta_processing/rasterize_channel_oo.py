@@ -1,10 +1,10 @@
 from operator import attrgetter
-from typing import List, Union, Tuple
+from typing import List, Union, Set, Tuple
 
 import numpy as np
 from osgeo import ogr, osr, gdal
 from shapely import wkt
-from shapely.geometry import LineString, Point, Polygon, MultiPoint
+from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import linemerge, nearest_points, transform
 
 
@@ -94,10 +94,18 @@ class CrossSectionLocation:
 
 
 class Channel:
-    def __init__(self, geometry: LineString):
+    def __init__(self,
+                 geometry: LineString,
+                 connection_node_start_id: Union[int, None],
+                 connection_node_end_id: Union[int, None]
+                 ):
+        self.connection_node_start_id = connection_node_start_id
+        self.connection_node_end_id = connection_node_end_id
         self.cross_section_locations = []
         self.geometry = geometry
         self.parallel_offsets = []
+        self._wedge_fill_points = []
+        self._wedge_fill_triangles = []
 
     @classmethod
     def from_spatialite(cls, spatialite: ogr.DataSource, channel_id):
@@ -112,7 +120,9 @@ class Channel:
         qgs_geometry = feature.geometry()
         wkt_geometry = qgs_geometry.asWkt()
         shapely_geometry = wkt.loads(wkt_geometry)
-        return cls(geometry=shapely_geometry)
+        start_id = feature.attribute('connection_node_start_id')
+        end_id = feature.attribute('connection_node_end_id')
+        return cls(geometry=shapely_geometry, connection_node_start_id=start_id, connection_node_end_id=end_id)
 
     @property
     def max_widths(self) -> np.array:
@@ -186,44 +196,112 @@ class Channel:
             po.set_vertex_indices(first_vertex_index=last_vertex_index+1)
             last_vertex_index = po.vertex_indices[-1]
 
+    def parallel_offset_at(self, offset_distance):
+        if offset_distance not in self.unique_widths and offset_distance not in -1*self.unique_widths:
+            raise ValueError("Offset distance not available for this Channel")
+        for po in self.parallel_offsets:
+            if po.offset_distance == offset_distance:
+                return po
+        raise ValueError(f"Parallel offset not found at offset distance {offset_distance}")
+
     @property
     def points(self):
         """Returns all points of all parallel offsets ordered by vertex index"""
-        # outline = self.outline
         all_points = []
         for po in self.parallel_offsets:
             all_points += po.points
-        # result = [point for point in all_points if outline.intersects(point)]
+        all_points += self._wedge_fill_points
         return all_points
 
     @property
     def indexed_points(self):
         return [po.points for po in self.parallel_offsets]
 
-    # def triangles(self):
-    #     indexed_points = self.indexed_points
-    #     for i in range(len(indexed_points) - 1):
-    #         next_po_points = MultiPoint(indexed_points[i+1])
-    #         for j in range(len(indexed_points[i]) - 1):
-    #             third_vertex_2d = nearest_points(next_po_points, indexed_points[i][j])[0]  # nearest_points loses z ord
-    #             intersecting_vertices_3d = [point for point in indexed_points[i+1] if point.intersects(third_vertex_2d)]
-    #             third_vertex = intersecting_vertices_3d[0]
-    #             triangle_vertices = [indexed_points[i][j], indexed_points[i][j+1], third_vertex]
-    #             yield Polygon(LineString(triangle_vertices))
-    #     for i in range(len(indexed_points) - 1, 0, -1):
-    #         next_po_points = MultiPoint(indexed_points[i-1])
-    #         for j in range(len(indexed_points[i]) - 1, 0, - 1):
-    #             third_vertex_2d = nearest_points(next_po_points, indexed_points[i][j])[0]  # nearest_points loses z ord
-    #             intersecting_vertices_3d = [point for point in indexed_points[i-1] if point.intersects(third_vertex_2d)]
-    #             third_vertex = intersecting_vertices_3d[0]
-    #             triangle_vertices = [indexed_points[i][j], indexed_points[i][j-1], third_vertex]
-    #             yield Polygon(LineString(triangle_vertices))
     @property
     def triangles(self) -> List[Triangle]:
         parallel_offsets = self.parallel_offsets
         for i in range(len(parallel_offsets)-1):
             for tri in parallel_offsets[i].triangulate(parallel_offsets[i+1]):
                 yield tri
+        for tri in self._wedge_fill_triangles:
+            yield tri
+
+    def find_vertex(self, connection_node_id, n: int) -> Point:
+        """Starting from the given connection node, find the nth vertex"""
+        if connection_node_id == self.connection_node_start_id:
+            return Point(self.geometry.coords[n])
+        elif connection_node_id == self.connection_node_end_id:
+            return Point(self.geometry.coords[-(n+1)])
+        else:
+            raise ValueError(f'connection_node_id {connection_node_id} is not a start or end connection node of this '
+                             f'channel')
+
+    def azimuth_at(self, connection_node_id: int) -> float:
+        """Return the azimuth of the segment of the channel's geometry that links to given connection node"""
+        connection_node_geometry = self.find_vertex(connection_node_id, 0)
+        second_point = self.find_vertex(connection_node_id, 1)
+        return azimuth(connection_node_geometry, second_point)
+
+    def fill_wedge(self, other):
+        """Add points and triangles to fill the wedge-shaped gap between self and other"""
+        # Find out if and how self and other_channel are connected
+        # -->-->
+        if self.connection_node_end_id == other.connection_node_start_id:
+            channel_to_update = self
+            if ccw_angle(self, other) > 180:
+                channel_to_update_side = 1  # right
+                wedge_fill_points_source_side = 1  # right
+            else:
+                channel_to_update_side = -1  # left
+                wedge_fill_points_source_side = -1  # left
+            wedge_fill_points_source = other
+            wedge_fill_points_source_idx = 0
+        # --><--
+        elif self.connection_node_end_id == other.connection_node_end_id:
+            channel_to_update = self
+            if ccw_angle(self, other) > 180:
+                channel_to_update_side = 1  # right
+                wedge_fill_points_source_side = -1  # left
+            else:
+                channel_to_update_side = -1  # left
+                wedge_fill_points_source_side = 1  # right
+            wedge_fill_points_source = other
+            wedge_fill_points_source_idx = -1
+        # <---->
+        elif self.connection_node_start_id == other.connection_node_start_id:
+            channel_to_update = self
+            if ccw_angle(self, other) > 180:
+                channel_to_update_side = -1  # left
+                wedge_fill_points_source_side = 1  # right
+            else:
+                channel_to_update_side = 1  # right
+                wedge_fill_points_source_side = -1  # left
+            wedge_fill_points_source = other
+            wedge_fill_points_source_idx = 0
+        # <--<--
+        elif self.connection_node_start_id == other.connection_node_end_id:
+            channel_to_update = other
+            if ccw_angle(self, other) > 180:
+                channel_to_update_side = -1  # left
+                wedge_fill_points_source_side = -1  # left
+            else:
+                channel_to_update_side = 1  # right
+                wedge_fill_points_source_side = 1  # right
+            wedge_fill_points_source = self
+            wedge_fill_points_source_idx = 0
+        # -->                               -->
+        else:
+            raise ValueError("Channels are not connected")
+
+        # Append start or end vertices of all other_channel's parallel offsets to self._wedge_fill_points
+        # left is negative, right is positive
+        for width in wedge_fill_points_source.unique_widths:
+            po = wedge_fill_points_source.parallel_offset_at(width * wedge_fill_points_source_side)
+            self._wedge_fill_points.append(po.points[wedge_fill_points_source_idx])
+
+        # Generate triangles to connect the added points to the existing points
+        # TODO Hier verder gaan
+        self._wedge_fill_triangles.append()
 
 
 class ChannelGroup(Channel):
@@ -233,7 +311,7 @@ class ChannelGroup(Channel):
         merged_geometry = linemerge(geometries)
         if not isinstance(self.geometry, LineString):
             raise ValueError('Input channel geometries cannot be merged into a single LineString')
-        super().__init__(geometry=merged_geometry)
+        super().__init__(geometry=merged_geometry, connection_node_start_id=None, connection_node_end_id=None)
 
         unsorted_cross_section_locations = []
         for channel in channels:
@@ -341,205 +419,71 @@ class ParallelOffset:
             yield Triangle(geometry=Polygon(LineString(triangle_points)), vertex_indices=triangle_indices)
 
 
-# def rasterize_channels(
-#         sqlite,
-#         dem,
-#         output_raster,
-#         profile_or_bank_level,
-#         burn_in_dem,
-#         higher_or_lower_only,
-#         add_value,
-#         proj_target,
-#         ids=None
-# ):
-#     """
-#     Main function calling other functions
-#
-#     First channel and cross section data is gathered
-#
-#     Channel in channels loops over all channels:
-#         Get cross-sectional data
-#         Create line-strings over length channel
-#         Get interpolated heigths over these lines
-#         loop loops over all channel lines in the length of the channel:
-#             Loop2 loops over points in the length of channel:
-#                 Interpolated height is described to point
-#                 Points that are within a previously defined channel outline are skipped to prevent messy interpolation
-#                 Boundary points are gathered to form the channel outline polygon (which will be used for cropping the
-#                 channel raster)
-#
-#     After the loop over channels:
-#         Dissolve and buffering (twice) of the channel outline to create a valid cropping layer
-#         Points are rasterized
-#         Interpolation between heights of points
-#         Cropping interpolated raster to channel outline
-#         Merging with dem
-#         Write this to raster or write minimum/maximum to raster
-#     """
-#     try:
-#         if os.path.exists(output_raster):
-#             os.remove(output_raster)
-#             logging.info("Found existing raster named " f"{output_raster}")
-#             logging.info("Removed it to create a new one...")
-#
-#         channels = features_from_sqlite(proj_target, sqlite, "v2_channel")
-#         logging.info("List of enriched shapely geometries gained for: channels")
-#         cross_section_locations = features_from_sqlite(
-#             proj_target, sqlite, "v2_cross_section_location"
-#         )
-#         logging.info(
-#             "List of enriched shapely geometries gained for: cross_section_locations"
-#         )
-#
-#         conn = create_connection(sqlite)
-#         cur = conn.cursor()
-#
-#         count = 0
-#         save_time = time.time()
-#         for channel in channels:
-#             if channel.id in ids or ids is None:
-#                 logging.info("")
-#                 logging.info("Channel id = " f"{channel.id}")
-#                 count = count + 1
-#                 if count != 1:  # if count == 1 polygon layer does not exist yet
-#                     polygons = [
-#                         pol for pol in fiona.open("/vsimem/tmp/channel_outline.shp")
-#                     ]
-#                 channel_xsecs = []
-#                 for xsec_loc in cross_section_locations:
-#                     if xsec_loc.channel_id == channel.id:
-#                         xsec_loc.position = channel.project(xsec_loc, normalized=True)
-#                         channel_xsecs.append(xsec_loc)
-#
-#                 (
-#                     channel_max_widths,
-#                     channel_all_widths_flat,
-#                 ) = get_channel_widths_and_heigths(
-#                     cur,
-#                     add_value,
-#                     profile_or_bank_level,
-#                     channel=channel,
-#                     cross_section_locations=channel_xsecs
-#                 )
-#                 channel_offsets = two_sided_parallel_offsets(
-#                     channel, channel_all_widths_flat
-#                 )
-#                 all_profiles_interpolated = {}
-#                 for xsec in channel_xsecs:
-#                     interpolated_height = []
-#                     for width in channel_all_widths_flat:
-#                         interpolated_height.append(
-#                             np.interp(width, xsec.widths, xsec.heights)
-#                         )
-#                     all_profiles_interpolated[xsec.position] = interpolated_height
-#                 all_profiles_interpolated[float(0)] = all_profiles_interpolated[
-#                     min(all_profiles_interpolated.keys())
-#                 ]
-#                 all_profiles_interpolated[float(1)] = all_profiles_interpolated[
-#                     max(all_profiles_interpolated.keys())
-#                 ]
-#                 positions = list(all_profiles_interpolated.keys())
-#                 positions.sort()
-#
-#                 all_points = []
-#                 first_boundary_points = []
-#                 last_boundary_points = []
-#                 boundary_points = []
-#                 loop = range(1, len(channel_offsets))
-#                 for offset_counter in range(1, len(channel_offsets)):
-#                     channel_offset_i = channel_offsets[offset_counter]
-#                     y = []
-#                     for position_counter in range(0, len(positions)):
-#                         if offset_counter > len(all_profiles_interpolated[positions[0]]) - 1:
-#                             chn2 = offset_counter - len(all_profiles_interpolated[positions[0]])
-#                             y.append(all_profiles_interpolated[positions[position_counter]][chn2])
-#                         else:
-#                             y.append(all_profiles_interpolated[positions[position_counter]][offset_counter])
-#                     if offset_counter > len(all_profiles_interpolated[0]):
-#                         channel_offset_i = LineString(channel_offset_i.coords[::-1])
-#
-#                     loop2 = range(1, round(channel_offset_i.length / 2))
-#                     for offset_counter2 in loop2:
-#                         if profile_or_bank_level == "bank_level":
-#                             if (
-#                                     offset_counter2 == loop[int(len(loop) / 2 - 1.5)] or offset_counter == loop[-1]
-#                             ):  # lines along banks of channel
-#                                 skip_point = False
-#                                 point = channel_offset_i.interpolate(
-#                                     2 * offset_counter / channel_offset_i.length, normalized=True
-#                                 )
-#                                 point.height = np.interp(
-#                                     channel.project(point, normalized=True), positions, y
-#                                 )
-#                                 if count != 1:
-#                                     if offset_counter <= 10 or offset_counter >= (len(loop2) - 10):
-#                                         for polygon in polygons:
-#                                             if point.within(shape(polygon["geometry"])):
-#                                                 skip_point = True
-#                                 if skip_point:
-#                                     logging.info(
-#                                         "One of the points is within another channel outline, so is skipped"
-#                                     )
-#                                 else:
-#                                     all_points.append(point)
-#                                 if offset_counter == loop[int(len(loop) / 2 - 1.5)]:
-#                                     if offset_counter == loop2[0]:
-#                                         first_boundary_points.append(
-#                                             Point(channel_offset_i.coords[0][0], channel_offset_i.coords[0][1])
-#                                         )
-#                                     first_boundary_points.append(point)
-#                                     boundary_points.append(point)
-#                                     if offset_counter == loop2[-1]:
-#                                         first_boundary_points.append(
-#                                             Point(
-#                                                 channel_offset_i.coords[-1][0], channel_offset_i.coords[-1][1]
-#                                             )
-#                                         )
-#                                 elif offset_counter == loop[-1]:
-#                                     if offset_counter == loop2[0]:
-#                                         last_boundary_points.append(
-#                                             Point(channel_offset_i.coords[0][0], channel_offset_i.coords[0][1])
-#                                         )
-#                                     last_boundary_points.append(point)
-#                                     boundary_points.append(point)
-#                                     if offset_counter == loop2[-1]:
-#                                         last_boundary_points.append(
-#                                             Point(
-#                                                 channel_offset_i.coords[-1][0], channel_offset_i.coords[-1][1]
-#                                             )
-#                                         )
-#                             else:  # we do not need to gather other points than the boundary points for the bank
-#                                 # level tool
-#                                 continue
-#                         else:
-#                             skip_point = False
-#                             point = channel_offset_i.interpolate(
-#                                 2 * offset_counter / channel_offset_i.length, normalized=True
-#                             )
-#                             point.height = np.interp(
-#                                 channel.project(point, normalized=True), positions, y
-#                             )
-#                             if count != 1:
-#                                 if offset_counter <= 10 or offset_counter >= (len(loop2) - 10):
-#                                     for polygon in polygons:
-#                                         if point.within(shape(polygon["geometry"])):
-#                                             skip_point = True
-#                             if skip_point:
-#                                 logging.info(
-#                                     "One of the points is within another channel outline, so is skipped"
-#                                 )
-#                             else:
-#                                 all_points.append(point)
-#                             if (
-#                                     offset_counter == loop[int(len(loop) / 2 - 1.5)]
-#                             ):  # line along one of the banks
-#                                 if offset_counter == loop2[0]:
-#                                     first_boundary_points.append(
-#                                         Point(channel_offset_i.coords[0][0], channel_offset_i.coords[0][1])
-#                                     )
-#                                 first_boundary_points.append(point)
-#                                 boundary_points.append(point)
-#                                 if offset_counter == loop2[-1]:
-#                                     first_boundary_points.append(
-#                                         Point(channel_offset_i.coords[-1][0], channel_offset_i.coords[-1][1])
-#                                     )
+def unique_connection_node_ids(channels: List[Channel]) -> Set[int]:
+    result = set([channel.connection_node_start_id for channel in channels])
+    result |= set([channel.connection_node_end_id for channel in channels])
+    return result
+
+
+def get_channels_per_connection_node(channels: List[Channel]) -> dict:
+    result = dict()
+    connection_node_ids = unique_connection_node_ids(channels)
+    for connection_node_id in connection_node_ids:
+        current_node_channels = []
+        for channel in channels:
+            if connection_node_id in [channel.connection_node_start_id, channel.connection_node_end_id]:
+                current_node_channels.append(channel)
+        result[connection_node_id] = current_node_channels
+    return result
+
+
+def azimuth(point1, point2):
+    """azimuth between 2 shapely points (interval 0 - 360)"""
+    angle = np.arctan2(point2.x - point1.x, point2.y - point1.y)
+    return np.degrees(angle) if angle >= 0 else np.degrees(angle) + 360
+
+
+def ccw_angle(channel1: Channel, channel2: Channel) -> float:
+    """Calculate the CCW angle in degrees between a line from `point1` to `reference`
+    and a line between `point2` and `reference`"""
+    connection_node_ids = unique_connection_node_ids([channel1, channel2])
+    for connection_node_id in connection_node_ids:
+        if connection_node_id in [channel1.connection_node_start_id, channel1.connection_node_end_id] \
+                and connection_node_id in [channel2.connection_node_start_id, channel2.connection_node_end_id]:
+            break
+    connection_node_geometry = channel1.find_vertex(connection_node_id, 0)
+    channel1_point = channel1.find_vertex(connection_node_id, 1)
+    channel2_point = channel2.find_vertex(connection_node_id, 1)
+    azimuth1 = azimuth(connection_node_geometry, channel1_point)
+    azimuth2 = azimuth(connection_node_geometry, channel2_point)
+    if azimuth2 > azimuth1:
+        return azimuth1 + (360 - azimuth2)
+    else:
+        return azimuth1 - azimuth2
+
+
+def find_wedge_channels(channels: List[Channel], connection_node_id: int) -> \
+        Union[Tuple[Channel, Channel], Tuple[None, None]]:
+    """In a list of channels that connect to the same connection node, find a pair of channels that connect at
+    a > 180 degree angle, so that there is a wedge-shaped gap between them"""
+    azimuth_channel_dict = {}
+    for channel in channels:
+        key = round(channel.azimuth_at(connection_node_id))
+        azimuth_channel_dict[key] = channel
+    sorted_azimuths = list(azimuth_channel_dict.keys())
+    sorted_azimuths.sort()
+    sorted_azimuths = [sorted_azimuths[-1]] + sorted_azimuths
+    for i in range(len(sorted_azimuths)):
+        channel_1 = azimuth_channel_dict[sorted_azimuths[i]]
+        channel_2 = azimuth_channel_dict[sorted_azimuths[i + 1]]
+        if ccw_angle(channel_1, channel_2) > 180:
+            return channel_1, channel_2
+    return None, None
+
+
+def fill_wedges(channels: List[Channel]):
+    connection_node_channels_dict = get_channels_per_connection_node(channels)
+    for connection_node_id, channels in connection_node_channels_dict.items():
+        channel1, channel2 = find_wedge_channels(channels=channels, connection_node_id=connection_node_id)
+        if channel1 and channel2:
+            channel1.fill_wedge(channel2)

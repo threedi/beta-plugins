@@ -10,6 +10,8 @@
 *                                                                         *
 ***************************************************************************
 """
+# TODO Only add faces that are within the channel's outline
+
 from typing import List, Tuple
 from uuid import uuid4
 
