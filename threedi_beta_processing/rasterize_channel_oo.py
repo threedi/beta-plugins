@@ -1,5 +1,5 @@
 from operator import attrgetter
-from typing import List, Union, Set, Tuple
+from typing import Iterator, List, Union, Set, Tuple
 
 import numpy as np
 from osgeo import ogr, osr, gdal
@@ -36,10 +36,27 @@ class WidthsNotIncreasingError(ValueError):
     pass
 
 
+class IndexedPoint(Point):
+    def __init__(self, *args, index: int):
+        super().__init__(*args)
+        self.index = index
+
+
 class Triangle:
-    def __init__(self, geometry: Polygon, vertex_indices: List[int]):
-        self.geometry = geometry
-        self.vertex_indices = vertex_indices
+    def __init__(self, points: List[IndexedPoint]):
+        self.points = points
+        self.geometry = Polygon(LineString(points))
+        self.vertex_indices = [point.index for point in points]
+
+    def is_between(self, line_1: LineString, line_2: LineString):
+        if not (self.geometry.touches(line_1) and self.geometry.touches(line_2)):
+            return False
+        valid = True
+        for start, end in [(0, 1), (0, 2), (1, 2)]:
+            line = LineString([self.points[start], self.points[end]])
+            if line.crosses(line_1) or line.crosses(line_2):
+                valid = False
+        return valid
 
 
 class CrossSectionLocation:
@@ -138,6 +155,15 @@ class Channel:
         return result
 
     @property
+    def offset_distances(self) -> np.array:
+        negatives = [- width / 2 for width in self.unique_widths if width > 0]
+        negatives.reverse()
+        positives = [width / 2 for width in self.unique_widths]
+        result = negatives + positives
+        result.reverse()
+        return np.array(result)
+
+    @property
     def cross_section_location_positions(self) -> np.array:
         """Array of normalized (0-1) cross section location positions along the channel"""
         return np.array([x.position for x in self.cross_section_locations])
@@ -185,24 +211,29 @@ class Channel:
         Offsets are sorted from left to right
         """
         self.parallel_offsets = []
-        for width in self.unique_widths:
-            if width > 0:  # to prevent duplicate parallel offset in middle of channel
-                self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance= - width / 2))
-        for width in self.unique_widths:
-            self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance=width / 2))
-        self.parallel_offsets.reverse()
+        for offset_distance in self.offset_distances:
+            self.parallel_offsets.append(ParallelOffset(parent=self, offset_distance=offset_distance))
+
         last_vertex_index = -1  # so that we have 0-based indexing, because QgsMesh vertices have 0-based indices too
         for po in self.parallel_offsets:
             po.set_vertex_indices(first_vertex_index=last_vertex_index+1)
             last_vertex_index = po.vertex_indices[-1]
 
     def parallel_offset_at(self, offset_distance):
-        if offset_distance not in self.unique_widths and offset_distance not in -1*self.unique_widths:
-            raise ValueError("Offset distance not available for this Channel")
+        if offset_distance not in self.offset_distances:
+            raise ValueError(
+                f"Parallel offset not found at offset distance {offset_distance}. "
+                f"Channel between nodes {self.connection_node_start_id} and "
+                f"{self.connection_node_end_id}. Available offset distances: {self.offset_distances}"
+            )
         for po in self.parallel_offsets:
             if po.offset_distance == offset_distance:
                 return po
-        raise ValueError(f"Parallel offset not found at offset distance {offset_distance}")
+        raise ValueError(
+            f"Parallel offset not found at offset distance {offset_distance}. "
+            f"Channel between nodes {self.connection_node_start_id} and "
+            f"{self.connection_node_end_id}. Available offset distances: {self.offset_distances}"
+        )
 
     @property
     def points(self):
@@ -214,14 +245,9 @@ class Channel:
         return all_points
 
     @property
-    def indexed_points(self):
-        return [po.points for po in self.parallel_offsets]
-
-    @property
     def triangles(self) -> List[Triangle]:
-        parallel_offsets = self.parallel_offsets
-        for i in range(len(parallel_offsets)-1):
-            for tri in parallel_offsets[i].triangulate(parallel_offsets[i+1]):
+        for i in range(len(self.parallel_offsets)-1):
+            for tri in self.parallel_offsets[i].triangulate(self.parallel_offsets[i+1]):
                 yield tri
         for tri in self._wedge_fill_triangles:
             yield tri
@@ -248,6 +274,7 @@ class Channel:
         # -->-->
         if self.connection_node_end_id == other.connection_node_start_id:
             channel_to_update = self
+            channel_to_update_idx = -1  # end
             if ccw_angle(self, other) > 180:
                 channel_to_update_side = 1  # right
                 wedge_fill_points_source_side = 1  # right
@@ -255,10 +282,11 @@ class Channel:
                 channel_to_update_side = -1  # left
                 wedge_fill_points_source_side = -1  # left
             wedge_fill_points_source = other
-            wedge_fill_points_source_idx = 0
+            wedge_fill_points_source_idx = 0  # start
         # --><--
         elif self.connection_node_end_id == other.connection_node_end_id:
             channel_to_update = self
+            channel_to_update_idx = -1  # end
             if ccw_angle(self, other) > 180:
                 channel_to_update_side = 1  # right
                 wedge_fill_points_source_side = -1  # left
@@ -266,10 +294,11 @@ class Channel:
                 channel_to_update_side = -1  # left
                 wedge_fill_points_source_side = 1  # right
             wedge_fill_points_source = other
-            wedge_fill_points_source_idx = -1
+            wedge_fill_points_source_idx = -1  # end
         # <---->
         elif self.connection_node_start_id == other.connection_node_start_id:
             channel_to_update = self
+            channel_to_update_idx = 0  # start
             if ccw_angle(self, other) > 180:
                 channel_to_update_side = -1  # left
                 wedge_fill_points_source_side = 1  # right
@@ -277,10 +306,11 @@ class Channel:
                 channel_to_update_side = 1  # right
                 wedge_fill_points_source_side = -1  # left
             wedge_fill_points_source = other
-            wedge_fill_points_source_idx = 0
+            wedge_fill_points_source_idx = 0  # start
         # <--<--
         elif self.connection_node_start_id == other.connection_node_end_id:
             channel_to_update = other
+            channel_to_update_idx = 0  # start
             if ccw_angle(self, other) > 180:
                 channel_to_update_side = -1  # left
                 wedge_fill_points_source_side = -1  # left
@@ -288,20 +318,46 @@ class Channel:
                 channel_to_update_side = 1  # right
                 wedge_fill_points_source_side = 1  # right
             wedge_fill_points_source = self
-            wedge_fill_points_source_idx = 0
+            wedge_fill_points_source_idx = -1  # end
         # -->                               -->
         else:
             raise ValueError("Channels are not connected")
 
+        channel_to_update_offsets = []
+        channel_to_update_point_indices = []
+        channel_to_update_points = []
+        for i, width in enumerate(channel_to_update.unique_widths):
+            channel_to_update_offsets.append(width / 2)
+            offset = width * channel_to_update_side / 2
+            po = channel_to_update.parallel_offset_at(offset)
+            channel_to_update_points.append(po.points[channel_to_update_idx])
+            channel_to_update_point_indices.append(po.vertex_indices[channel_to_update_idx])
+
         # Append start or end vertices of all other_channel's parallel offsets to self._wedge_fill_points
         # left is negative, right is positive
+        wedge_fill_points_source_offsets = []
+        wedge_fill_point_indices = []
+        last_index = self.parallel_offsets[-1].vertex_indices[-1]
+        i = 0
         for width in wedge_fill_points_source.unique_widths:
-            po = wedge_fill_points_source.parallel_offset_at(width * wedge_fill_points_source_side)
-            self._wedge_fill_points.append(po.points[wedge_fill_points_source_idx])
+            if width > 0:
+                wedge_fill_points_source_offsets.append(width/2)
+                offset = width * wedge_fill_points_source_side / 2
+                po = wedge_fill_points_source.parallel_offset_at(offset)
+                existing_point = po.points[wedge_fill_points_source_idx]
+                wedge_fill_point = IndexedPoint(existing_point, index=existing_point.index)
+                wedge_fill_point.index = last_index + 1 + i
+                self._wedge_fill_points.append(wedge_fill_point)
+                i += 1
 
         # Generate triangles to connect the added points to the existing points
-        # TODO Hier verder gaan
-        self._wedge_fill_triangles.append()
+        for triangle in triangulate_between(
+                side_1_points=channel_to_update_points,
+                side_1_distances=channel_to_update_offsets,
+                side_2_points=self._wedge_fill_points,
+                side_2_distances=wedge_fill_points_source_offsets
+        ):
+            self._wedge_fill_triangles.append(triangle)
 
 
 class ChannelGroup(Channel):
@@ -346,8 +402,8 @@ class ParallelOffset:
     @property
     def points(self):
         result = []
-        for i, vertex in enumerate(self.geometry.coords):
-            result.append(Point(vertex[0], vertex[1], self.heights_at_vertices[i]))
+        for i, (x, y) in enumerate(self.geometry.coords):
+            result.append(IndexedPoint(x, y, self.heights_at_vertices[i], index=self.vertex_indices[i]))
         return result
 
     def set_vertex_indices(self, first_vertex_index):
@@ -363,60 +419,78 @@ class ParallelOffset:
         return valid
 
     def triangulate(self, other):
-        self_points = self.points
-        self_current_index = self.vertex_indices[0]
-        other_points = other.points
-        other_current_index = other.vertex_indices[0]
-        last_move = 'self'
+        return triangulate_between(
+            side_1_points=self.points,
+            side_1_distances=self.vertex_positions,
+            side_2_points=other.points,
+            side_2_distances=other.vertex_positions
+        )
 
-        while (self_current_index < self.vertex_indices[-1]) or (other_current_index < other.vertex_indices[-1]):
-            triangle_points = [self_points[self_current_index-self.vertex_indices[0]],
-                               other_points[other_current_index-other.vertex_indices[0]]]
-            triangle_indices = [self_current_index, other_current_index]
-            # first we handle the case where the end of the line has been reached at one of the sides
-            if self_current_index == self.vertex_indices[-1]:
-                other_current_index += 1
-                triangle_points.append(other_points[other_current_index-other.vertex_indices[0]])
-                triangle_indices.append(other_current_index)
-            elif other_current_index == other.vertex_indices[-1]:
-                self_current_index += 1
-                triangle_points.append(self_points[self_current_index-self.vertex_indices[0]])
-                triangle_indices.append(self_current_index)
-            # then we handle the 'normal' case when we are still halfway at both sides
+
+def triangulate_between(
+        side_1_points: List[IndexedPoint], side_1_distances: List[float],
+        side_2_points: List[IndexedPoint], side_2_distances: List[float]
+) -> Iterator[Triangle]:
+    """
+    Generate a set of triangles that fills the space between two lines (side 1 and side 2)
+
+    :param side_1_points: list of points located along a line on side 1
+    :param side_1_distances: distance along the line on which these points are located
+    :param side_2_points: list of points located along a line on side 2
+    :param side_2_distances: distance along the line on which these points are located
+    """
+    side_1_line = LineString(side_1_points)
+    side_2_line = LineString(side_2_points)
+    side_1_idx = 0
+    side_2_idx = 0
+    side_1_last_idx = len(side_1_points) - 1
+    side_2_last_idx = len(side_2_points) - 1
+    last_move = 1
+
+    while (side_1_idx < side_1_last_idx) or (side_2_idx < side_2_last_idx):
+        triangle_points = [side_1_points[side_1_idx],
+                           side_2_points[side_2_idx]]
+        # first we handle the case where the end of the line has been reached at one of the sides
+        if side_1_idx == side_1_last_idx:
+            side_2_idx += 1
+            triangle_points.append(side_2_points[side_2_idx])
+        elif side_2_idx == side_2_last_idx:
+            side_1_idx += 1
+            triangle_points.append(side_1_points[side_1_idx])
+
+        # then we handle the 'normal' case when we are still halfway at both sides
+        else:
+            next_side_1_vertex_pos = side_1_distances[side_1_idx + 1]
+            next_side_2_vertex_pos = side_2_distances[side_2_idx + 1]
+            if next_side_2_vertex_pos == next_side_1_vertex_pos:
+                move = 2 if last_move == 1 else 1
+            elif next_side_2_vertex_pos > next_side_1_vertex_pos:
+                move = 1
             else:
-                next_self_vertex_pos = self.vertex_positions[self_current_index-self.vertex_indices[0] + 1]
-                next_other_vertex_pos = other.vertex_positions[other_current_index-other.vertex_indices[0] + 1]
-                if next_other_vertex_pos == next_self_vertex_pos:
-                    move = 'other' if last_move == 'self' else 'self'
-                elif next_other_vertex_pos > next_self_vertex_pos:
-                    move = 'self'
-                else:
-                    move = 'other'
+                move = 2
 
-                # switch move side if moving on that side results in invalid triangle
-                if move == 'other':
-                    additional_point = other_points[other_current_index + 1 - other.vertex_indices[0]]
-                    test_triangle_points = triangle_points + [additional_point]
-                    if not self.triangle_is_valid(triangle_points=test_triangle_points, other_parallel_offset=other):
-                        move = 'self'
-                else:
-                    additional_point = self_points[self_current_index + 1 - self.vertex_indices[0]]
-                    test_triangle_points = triangle_points + [additional_point]
-                    if not self.triangle_is_valid(triangle_points=test_triangle_points, other_parallel_offset=other):
-                        move = 'other'
+            # switch move side if moving on that side results in invalid triangle
+            if move == 2:
+                additional_point = side_2_points[side_2_idx + 1]
+                test_triangle = Triangle(triangle_points + [additional_point])
+                if not test_triangle.is_between(side_1_line, side_2_line):
+                    move = 1
+            else:
+                additional_point = side_1_points[side_1_idx + 1]
+                test_triangle = Triangle(triangle_points + [additional_point])
+                if not test_triangle.is_between(side_1_line, side_2_line):
+                    move = 2
 
-                if move == 'other':
-                    other_current_index += 1
-                    triangle_points.append(other_points[other_current_index - other.vertex_indices[0]])
-                    triangle_indices.append(other_current_index)
-                    last_move = 'other'
-                else:
-                    self_current_index += 1
-                    triangle_points.append(self_points[self_current_index-self.vertex_indices[0]])
-                    triangle_indices.append(self_current_index)
-                    last_move = 'self'
+            if move == 2:
+                side_2_idx += 1
+                triangle_points.append(side_2_points[side_2_idx])
+                last_move = 2
+            else:
+                side_1_idx += 1
+                triangle_points.append(side_1_points[side_1_idx])
+                last_move = 1
 
-            yield Triangle(geometry=Polygon(LineString(triangle_points)), vertex_indices=triangle_indices)
+        yield Triangle(points=triangle_points)
 
 
 def unique_connection_node_ids(channels: List[Channel]) -> Set[int]:
@@ -468,15 +542,16 @@ def find_wedge_channels(channels: List[Channel], connection_node_id: int) -> \
     a > 180 degree angle, so that there is a wedge-shaped gap between them"""
     azimuth_channel_dict = {}
     for channel in channels:
-        key = round(channel.azimuth_at(connection_node_id))
+        key = round(channel.azimuth_at(connection_node_id), 6)
         azimuth_channel_dict[key] = channel
     sorted_azimuths = list(azimuth_channel_dict.keys())
-    sorted_azimuths.sort()
-    sorted_azimuths = [sorted_azimuths[-1]] + sorted_azimuths
-    for i in range(len(sorted_azimuths)):
+    sorted_azimuths.sort(reverse=True)
+    sorted_azimuths = [sorted_azimuths[-1]] + sorted_azimuths + [sorted_azimuths[0]]
+    for i in range(len(sorted_azimuths)-1):
         channel_1 = azimuth_channel_dict[sorted_azimuths[i]]
         channel_2 = azimuth_channel_dict[sorted_azimuths[i + 1]]
-        if ccw_angle(channel_1, channel_2) > 180:
+        angle = ccw_angle(channel_1, channel_2)
+        if angle > 180:
             return channel_1, channel_2
     return None, None
 

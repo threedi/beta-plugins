@@ -41,7 +41,7 @@ from qgis.core import (
 )
 import processing
 
-from .rasterize_channel_oo import Channel, CrossSectionLocation
+from .rasterize_channel_oo import Channel, CrossSectionLocation, fill_wedges
 
 
 class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
@@ -138,7 +138,7 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         )
 
         mesh_layers = []
-
+        channels = []
         for channel_feature in channel_features.getFeatures():
             channel = Channel.from_qgs_feature(channel_feature)
             channel_id = channel_feature.attribute('id')
@@ -147,7 +147,11 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     cross_section_location = CrossSectionLocation.from_qgs_feature(cross_section_location_feature)
                     channel.add_cross_section_location(cross_section_location)
             channel.generate_parallel_offsets()
+            channels.append(channel)
 
+        fill_wedges(channels)
+
+        for channel in channels:
             points = [QgsPoint(*point.coords[0]) for point in channel.points]
 
             # for debugging only
