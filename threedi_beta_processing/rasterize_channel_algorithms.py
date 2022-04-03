@@ -31,11 +31,15 @@ from qgis.core import (
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
+    QgsProcessingParameterBoolean,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
+    QgsProcessingParameterRasterDestination,
     QgsProcessingUtils,
     QgsProject,
     QgsProviderRegistry,
+    QgsRasterLayer,
+    QgsRectangle,
     QgsVectorLayer,
     QgsWkbTypes
 )
@@ -48,11 +52,14 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
     """
     Rasterize channels using its cross sections
     """
+    INPUT_CHANNELS = 'INPUT_CHANNELS'
+    INPUT_CROSS_SECTION_LOCATIONS = 'INPUT_CROSS_SECTION_LOCATIONS'
+
     OUTPUT_POLYGONS = 'OUTPUT_POLYGONS'
     OUTPUT_POINTS = 'OUTPUT_POINTS'
     OUTPUT_LINES = 'OUTPUT_LINES'
-    INPUT_CHANNELS = 'INPUT_CHANNELS'
-    INPUT_CROSS_SECTION_LOCATIONS = 'INPUT_CROSS_SECTION_LOCATIONS'
+    OUTPUT_RASTER = 'OUTPUT_RASTER'
+    ADD_MESH_LAYERS_TO_PROJECT = 'ADD_MESH_LAYERS_TO_PROJECT'
 
     def initAlgorithm(self, config):
 
@@ -76,7 +83,8 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_POLYGONS,
                 self.tr('Triangle'),
-                type=QgsProcessing.TypeVectorPolygon
+                type=QgsProcessing.TypeVectorPolygon,
+                createByDefault=False
             )
         )
 
@@ -84,7 +92,8 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_POINTS,
                 self.tr('Channel elevation point'),
-                type=QgsProcessing.TypeVectorPoint
+                type=QgsProcessing.TypeVectorPoint,
+                createByDefault=False
             )
         )
 
@@ -92,14 +101,32 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_LINES,
                 self.tr('Parallel Offset'),
-                type=QgsProcessing.TypeVectorLine
+                type=QgsProcessing.TypeVectorLine,
+                createByDefault=False
             )
         )
 
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.ADD_MESH_LAYERS_TO_PROJECT,
+                self.tr('Add mesh layers to project'),
+                defaultValue=False
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterRasterDestination(
+                self.OUTPUT_RASTER,
+                self.tr('Rasterized channels'),
+                createByDefault=True,
+                defaultValue=None
+            )
+        )
 
     def processAlgorithm(self, parameters, context, feedback):
         channel_features = self.parameterAsSource(parameters, self.INPUT_CHANNELS, context)
-        cross_section_location_features = self.parameterAsSource(parameters, self.INPUT_CROSS_SECTION_LOCATIONS, context)
+        cross_section_location_features = self.parameterAsSource(parameters, self.INPUT_CROSS_SECTION_LOCATIONS,
+                                                                 context)
 
         sink_fields = QgsFields()
         sink_fields.append(QgsField(name='id', type=QVariant.Int))
@@ -137,7 +164,16 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             crs=channel_features.sourceCrs()
         )
 
+        add_mesh_layers = self.parameterAsBoolean(
+            parameters,
+            self.ADD_MESH_LAYERS_TO_PROJECT,
+            context
+        )
+
+        output_raster = self.parameterAsOutputLayer(parameters, self.OUTPUT_RASTER, context)
+
         mesh_layers = []
+        rasters = []
         channels = []
         for channel_feature in channel_features.getFeatures():
             channel = Channel.from_qgs_feature(channel_feature)
@@ -155,10 +191,10 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             points = [QgsPoint(*point.coords[0]) for point in channel.points]
 
             # for debugging only
-            for po_id, po in enumerate(channel.parallel_offsets):
-                feedback.pushInfo(f"vertex_indices for parallel offset {po_id}: {po.vertex_indices}")
-            for tri_id, tri in enumerate(channel.triangles):
-                feedback.pushInfo(f"vertex_indices for triangle {tri_id}: {tri.vertex_indices}")
+            # for po_id, po in enumerate(channel.parallel_offsets):
+            #     feedback.pushInfo(f"vertex_indices for parallel offset {po_id}: {po.vertex_indices}")
+            # for tri_id, tri in enumerate(channel.triangles):
+            #     feedback.pushInfo(f"vertex_indices for triangle {tri_id}: {tri.vertex_indices}")
 
             # create a mesh on disk
             provider_meta = QgsProviderRegistry.instance().providerMetadata('mdal')
@@ -206,8 +242,10 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
 
             mesh_layers[-1].commitFrameEditing(transform, continueEditing=False)
             context.temporaryLayerStore().addMapLayer(mesh_layers[-1])
-            layer_details = QgsProcessingContext.LayerDetails(temp_mesh_filename, context.project(), self.OUTPUT_POLYGONS)
-            context.addLayerToLoadOnCompletion(mesh_layers[-1].id(), layer_details)
+
+            if add_mesh_layers:
+                layer_details = QgsProcessingContext.LayerDetails(temp_mesh_filename, context.project())
+                context.addLayerToLoadOnCompletion(mesh_layers[-1].id(), layer_details)
 
             for point_id, point in enumerate(points):
                 sink_feature = QgsFeature(sink_fields)
@@ -232,18 +270,60 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 sink_feature.setGeometry(po)
                 sink_lines.addFeature(sink_feature, QgsFeatureSink.FastInsert)
 
-        # output_layer_name = "Channel points"
-        # points = run_tests()
-        # qgs_points = [QgsPoint(*point.coords[0]) for point in points]
-        # uri = "pointz?crs=epsg:28992&field=id:integer"
-        # layer = QgsVectorLayer(uri, output_layer_name, "memory")
-        # fields = QgsFields()
-        # id_field = QgsField(name='id', type=QVariant.Int)
-        # fields.append(id_field)
-        # features = dict()
-        # for channel_id, points in all_points.items():
+            rasterize_mesh_params = {
+                'INPUT': mesh_layers[-1].id(),
+                'DATASET_GROUPS': [0],
+                'DATASET_TIME': {'type': 'static'},
+                'EXTENT': None,
+                'PIXEL_SIZE': 0.5,
+                'CRS_OUTPUT': QgsCoordinateReferenceSystem('EPSG:28992'),
+                'OUTPUT': 'TEMPORARY_OUTPUT'
+            }
 
-        return {self.OUTPUT_POLYGONS: dest_id_polygons}
+            rasterized = processing.run(
+                "native:meshrasterize",
+                rasterize_mesh_params,
+                context=context,
+                feedback=feedback,
+                is_child_algorithm=True
+            )["OUTPUT"]
+
+            rasters.append(rasterized)
+
+        # calculate shared extent of all output rasters
+        extent = QgsRectangle()
+        extent.setMinimal()
+
+        for raster in rasters:
+            raster_layer = QgsRasterLayer(raster)
+            extent.combineExtentWith(raster_layer.extent())
+
+        # Create dummy reference raster of shared extent
+        reference_layer = processing.run("native:createconstantrasterlayer",
+                                         {
+                                             'EXTENT': extent,
+                                             'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:28992'),
+                                             'PIXEL_SIZE': 0.5,
+                                             'NUMBER': 1,
+                                             'OUTPUT_TYPE': 5,
+                                             'OUTPUT': 'TEMPORARY_OUTPUT'
+                                         },
+                                         is_child_algorithm=True
+                                         )["OUTPUT"]
+
+        output_raster = processing.run("native:cellstatistics",
+                                       {
+                                           'INPUT': rasters,
+                                           'STATISTIC': 6,  # MINIMUM
+                                           'IGNORE_NODATA': True,
+                                           'REFERENCE_LAYER': reference_layer,
+                                           'OUTPUT_NODATA_VALUE': -9999,
+                                           'OUTPUT': output_raster
+                                       },
+                                       is_child_algorithm=True
+                                       )["OUTPUT"]
+
+        return {self.OUTPUT_RASTER: output_raster}
 
     def name(self):
         """
