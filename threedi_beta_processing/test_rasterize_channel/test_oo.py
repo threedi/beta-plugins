@@ -30,7 +30,6 @@ def triangle():
 
 
 def test_find_wedge_channels():
-
     # channel_1: last segment pointing north (azimuth = 0)
     channel_1 = Channel(
         geometry=LineString([Point(20, -100), Point(0, -50), Point(0, 0)]),
@@ -68,6 +67,23 @@ def test_find_wedge_channels():
         print(chn.__dict__)
     assert wedge_channels[0].connection_node_start_id == 2
     assert wedge_channels[1].connection_node_end_id == 2
+    return wedge_channels
+
+
+def fill_wedge():
+    channel_1, channel_2 = test_find_wedge_channels()
+    channel_1.generate_parallel_offsets()
+    channel_2.generate_parallel_offsets()
+    channel_1.fill_wedge(channel_2)
+    # print("channel 1 triangles:")
+    # print(channel_1.as_query())
+    # print("channel 2 triangles:")
+    # print(channel_2.as_query())
+    assert len(channel_1._wedge_fill_triangles) == 3
+    assert len(channel_2._wedge_fill_triangles) == 0
+    assert channel_1._wedge_fill_triangles[0].geometry.wkt == 'POLYGON Z ((0 0 0, -0.9805806756909201 0.196116135138184 1, -1 0 1, 0 0 0))'
+    assert channel_1._wedge_fill_triangles[1].geometry.wkt == 'POLYGON Z ((-1 0 1, -0.9805806756909201 0.196116135138184 1, -1.96116135138184 0.3922322702763681 2, -1 0 1))'
+    assert channel_1._wedge_fill_triangles[2].geometry.wkt == 'POLYGON Z ((-1 0 1, -1.96116135138184 0.3922322702763681 2, -2 0 2, -1 0 1))'
 
 def channel_init():
     channel_geom = LineString([[0, 0], [1, 1], [2, 2]])
@@ -149,6 +165,7 @@ def run_tests():
     channel_max_width_at(channel)
     channel.generate_parallel_offsets()
     test_find_wedge_channels()
+    fill_wedge()
     # channel_parallel_offsets(channel)
     # for tri in channel.triangles:
     #     print(tri)

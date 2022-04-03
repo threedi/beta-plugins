@@ -310,35 +310,56 @@ class Channel:
         # <--<--
         elif self.connection_node_start_id == other.connection_node_end_id:
             channel_to_update = other
-            channel_to_update_idx = 0  # start
+            channel_to_update_idx = -1  # end
+            wedge_fill_points_source = self
+            wedge_fill_points_source_idx = 0  # start
             if ccw_angle(self, other) > 180:
                 channel_to_update_side = -1  # left
                 wedge_fill_points_source_side = -1  # left
             else:
                 channel_to_update_side = 1  # right
                 wedge_fill_points_source_side = 1  # right
-            wedge_fill_points_source = self
-            wedge_fill_points_source_idx = -1  # end
         # -->                               -->
         else:
             raise ValueError("Channels are not connected")
 
         channel_to_update_offsets = []
-        channel_to_update_point_indices = []
+        wedge_fill_points_source_offsets = [0]
         channel_to_update_points = []
+        last_index = channel_to_update.parallel_offsets[-1].vertex_indices[-1]
+
+        # the point where the two channels meet (connection node) has to be included in the wedge fill points
+        # if any of the channels does have a width starting at 0, we use that point
+        # if neither channel has a width starting at 0, the x, y, z and index have to be calculated
+        if 0 in channel_to_update.unique_widths:
+            po = channel_to_update.parallel_offset_at(0)
+            channel_to_update._wedge_fill_points.append(po.points[channel_to_update_idx])
+        elif 0 in wedge_fill_points_source.unique_widths:
+            po = wedge_fill_points_source.parallel_offset_at(0)
+            channel_to_update._wedge_fill_points.append(po.points[wedge_fill_points_source_idx])
+        else:
+            first_width = channel_to_update.unique_widths[0]
+            po_1 = channel_to_update.parallel_offset_at(first_width / 2)
+            point_1 = po_1.points[channel_to_update_idx]
+            po_2 = channel_to_update.parallel_offset_at(-1 * first_width / 2)
+            point_2 = po_2.points[channel_to_update_idx]
+            x = (point_1.x + point_2.x) / 2
+            y = (point_1.y + point_2.y) / 2
+            z = (point_1.z + point_2.z) / 2
+            point_to_add = IndexedPoint(x, y, z, index=last_index + 1)
+            channel_to_update._wedge_fill_points.append(point_to_add)
+            last_index += 1
+
         for i, width in enumerate(channel_to_update.unique_widths):
-            channel_to_update_offsets.append(width / 2)
-            offset = width * channel_to_update_side / 2
-            po = channel_to_update.parallel_offset_at(offset)
-            channel_to_update_points.append(po.points[channel_to_update_idx])
-            channel_to_update_point_indices.append(po.vertex_indices[channel_to_update_idx])
+            if width > 0:
+                channel_to_update_offsets.append(width / 2)
+                offset = width * channel_to_update_side / 2
+                po = channel_to_update.parallel_offset_at(offset)
+                channel_to_update_points.append(po.points[channel_to_update_idx])
 
         # Append start or end vertices of all other_channel's parallel offsets to self._wedge_fill_points
         # left is negative, right is positive
-        wedge_fill_points_source_offsets = []
-        wedge_fill_point_indices = []
-        last_index = self.parallel_offsets[-1].vertex_indices[-1]
-        i = 0
+
         for width in wedge_fill_points_source.unique_widths:
             if width > 0:
                 wedge_fill_points_source_offsets.append(width/2)
@@ -346,18 +367,36 @@ class Channel:
                 po = wedge_fill_points_source.parallel_offset_at(offset)
                 existing_point = po.points[wedge_fill_points_source_idx]
                 wedge_fill_point = IndexedPoint(existing_point, index=existing_point.index)
-                wedge_fill_point.index = last_index + 1 + i
-                self._wedge_fill_points.append(wedge_fill_point)
-                i += 1
+                wedge_fill_point.index = last_index + 1
+                channel_to_update._wedge_fill_points.append(wedge_fill_point)
+                last_index += 1
 
         # Generate triangles to connect the added points to the existing points
+        print("channel_to_update_points:")
+        for pnt in channel_to_update_points:
+            print(pnt.index, pnt.wkt)
+        print("channel_to_update_offsets:")
+        print(channel_to_update_offsets)
+
+        print("channel_to_update._wedge_fill_points:")
+        for pnt in channel_to_update._wedge_fill_points:
+            print(pnt.index, pnt.wkt)
+        print("channel_to_update_offsets:")
+        print(wedge_fill_points_source_offsets)
+
         for triangle in triangulate_between(
                 side_1_points=channel_to_update_points,
                 side_1_distances=channel_to_update_offsets,
-                side_2_points=self._wedge_fill_points,
+                side_2_points=channel_to_update._wedge_fill_points,
                 side_2_distances=wedge_fill_points_source_offsets
         ):
             self._wedge_fill_triangles.append(triangle)
+
+    def as_query(self):
+        selects = []
+        for i, tri in enumerate(self.triangles):
+            selects.append(f"SELECT {i + 1} as id, geom_from_wkt('{str(tri.geometry.wkt)}')")
+        return "\nUNION\n".join(selects)
 
 
 class ChannelGroup(Channel):
@@ -381,7 +420,7 @@ class ParallelOffset:
     def __init__(self, parent: Union[Channel, ChannelGroup], offset_distance):
         self.parent = parent
         self.geometry = parent.geometry.parallel_offset(offset_distance)
-        if offset_distance <= 0:
+        if offset_distance > 0:
             self.geometry = reverse(self.geometry)
         self.offset_distance = offset_distance
         width = np.abs(self.offset_distance * 2)
