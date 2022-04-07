@@ -133,6 +133,7 @@ class Channel:
         self.parallel_offsets = []
         self._wedge_fill_points = []
         self._wedge_fill_triangles = []
+        self._extra_outline = None
 
     @classmethod
     def from_spatialite(cls, spatialite: ogr.DataSource, channel_id):
@@ -188,7 +189,10 @@ class Channel:
     @property
     def outline(self) -> Polygon:
         radii = [self.max_width_at(position) / 2 for position in self.vertex_positions]
-        return variable_buffer(self.geometry, radii)
+        result = variable_buffer(self.geometry, radii)
+        if self._extra_outline:
+            result = result.union(self._extra_outline)
+        return result
 
     def add_cross_section_location(self, cross_section_location: CrossSectionLocation):
         """Become the parent of the cross section location"""
@@ -264,7 +268,7 @@ class Channel:
         return azimuth(connection_node_geometry, second_point)
 
     def fill_wedge(self, other):
-        """Add points and triangles to fill the wedge-shaped gap between self and other"""
+        """Add points and triangles to fill the wedge-shaped gap between self and other. Also updates self.outline"""
         # Find out if and how self and other_channel are connected
         # -->-->
         if self.connection_node_end_id == other.connection_node_start_id:
@@ -387,6 +391,13 @@ class Channel:
         ):
             self._wedge_fill_triangles.append(triangle)
 
+
+
+        extra_point = Point(wedge_fill_points_source.geometry.coords[wedge_fill_points_source_idx])
+        position = 0 if wedge_fill_points_source_idx == 0 else wedge_fill_points_source.geometry.length
+        width_at_extra_point = wedge_fill_points_source.max_width_at(position)
+        self._extra_outline = extra_point.buffer(width_at_extra_point/2)
+        
     def as_query(self):
         selects = []
         for i, tri in enumerate(self.triangles):
