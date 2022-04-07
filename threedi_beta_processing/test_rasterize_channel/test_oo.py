@@ -106,16 +106,16 @@ def cross_section_location():
 
 
 def cross_section_location_height_at(xsec):
-    assert xsec.height_at(0.0) == 0.0
-    assert xsec.height_at(1.0) == 0.5
-    assert xsec.height_at(2.0) == 1.0
-    assert xsec.height_at(3.0) == 1.5
-    assert xsec.height_at(5.0) == 2.0
+    assert xsec.height_at(0.0) == 10 + 0.0
+    assert xsec.height_at(1.0) == 10 + 0.5
+    assert xsec.height_at(2.0) == 10 + 1.0
+    assert xsec.height_at(3.0) == 10 + 1.5
+    assert xsec.height_at(5.0) == 10 + 2.0
 
 
 def channel_vertex_positions(channel):
     vp = channel.vertex_positions
-    assert (vp == np.array([0, 0.5, 1])).all()
+    assert (vp == np.array([0, 0.5, 1]) * channel.geometry.length).all()
     assert len(vp) == 3
 
 
@@ -127,9 +127,8 @@ def channel_add_cross_section_location(channel, xsec):
 def channel_properties(channel):
     assert (channel.max_widths == np.array([4.0, 4.0, 4.0])).all()
     assert (channel.unique_widths == np.array([0.0, 2.0, 4.0])).all()
-    assert (channel.cross_section_location_positions == np.array([0.5])).all()
+    assert (channel.cross_section_location_positions == np.array([0.5*channel.geometry.length])).all()
     assert str(channel.outline) == 'POLYGON ((-1.414213562373095 1.414213562373095, -0.4142135623730949 2.414213562373095, 0.5857864376269051 3.414213562373095, 3.414213562373095 0.5857864376269051, 2.414213562373095 -0.4142135623730949, 1.414213562373095 -1.414213562373095, -1.414213562373095 1.414213562373095))'
-
 
 def channel_parallel_offsets(channel):
     assert len(channel.parallel_offsets) == 5
@@ -150,7 +149,66 @@ def channel_parallel_offsets(channel):
 
 
 def channel_max_width_at(channel):
+    channel_geom = LineString([[0, 0], [0, 1], [0, 2], [0, 3]])
+    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2)
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 4.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(0, 1)
+    )
+    channel.add_cross_section_location(cross_section_loc)
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 8.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(0, 2)
+    )
+    channel.add_cross_section_location(cross_section_loc)
+
     assert channel.max_width_at(0.2) == 4.0
+    assert channel.max_width_at(0*channel.geometry.length) == 4.0
+    assert channel.max_width_at(0.25*channel.geometry.length) == 4.0
+    assert channel.max_width_at(0.5*channel.geometry.length) == 6.0
+    assert channel.max_width_at(0.75*channel.geometry.length) == 8.0
+    assert channel.max_width_at(1*channel.geometry.length) == 8.0
+    print("Channel outline:")
+    print(channel.outline.wkt)
+
+
+def parallel_offset_heights_at_vertices():
+    """Test method heights_at_vertices of ParallelOffset"""
+    channel_geom = LineString([[0, 0], [5, 1], [7, 1], [18, 2], [20, 2], [35, 3]])
+    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2)
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=2.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 4.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(5, 1)
+    )
+    channel.add_cross_section_location(cross_section_loc)
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=4.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 8.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(20, 2)
+    )
+    channel.add_cross_section_location(cross_section_loc)
+    channel.generate_parallel_offsets()
+    po = channel.parallel_offset_at(1.0)
+    print(f"po.geometry.wkt: {po.geometry.wkt}")
+    print(f"po.vertex_positions: {po.vertex_positions}")
+    print(f"po.heights_at_vertices: {po.heights_at_vertices}")
+    print([vertex for vertex in po.geometry.coords])
+    print(po.points[4].z)
 
 
 def run_tests():
@@ -164,8 +222,10 @@ def run_tests():
     channel_properties(channel)
     channel_max_width_at(channel)
     channel.generate_parallel_offsets()
-    test_find_wedge_channels()
-    fill_wedge()
+    parallel_offset_heights_at_vertices()
+    # test_find_wedge_channels()
+    # fill_wedge()
+
     # channel_parallel_offsets(channel)
     # for tri in channel.triangles:
     #     print(tri)

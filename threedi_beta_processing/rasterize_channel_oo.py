@@ -4,11 +4,11 @@ from typing import Iterator, List, Union, Set, Tuple
 import numpy as np
 from osgeo import ogr, osr, gdal
 from shapely import wkt
-from shapely.geometry import LineString, Point, Polygon
-from shapely.ops import linemerge, nearest_points, transform
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon
+from shapely.ops import cascaded_union, nearest_points, transform
 
 
-def parse_cross_section_table(table:str) -> Tuple[List, List]:
+def parse_cross_section_table(table: str) -> Tuple[List, List]:
     """Returns [heights], [widths]"""
     heights = []
     widths = []
@@ -29,6 +29,16 @@ def reverse(geom):
         return x[::-1], y[::-1]
 
     return transform(_reverse, geom)
+
+
+def variable_buffer(linestring: LineString, radii: List[float]) -> Polygon:
+    """Create a buffer around a Linestring, for which the (> 0) buffer distance varies per vertex"""
+    assert len(linestring.coords) == len(radii)
+    assert np.all(np.array(radii) >= 0)
+    buffered_points = [Point(coord).buffer(radii[i]) for i, coord in enumerate(linestring.coords)]
+    convex_hulls = [MultiPolygon([buffered_points[i], buffered_points[i+1]]).convex_hull for i in range(len(buffered_points)-1)]
+    result = cascaded_union(convex_hulls)
+    return result
 
 
 class WidthsNotIncreasingError(ValueError):
@@ -65,7 +75,7 @@ class CrossSectionLocation:
         self.reference_level = reference_level
         self.bank_level = bank_level
         self.widths = np.array(widths)
-        self.heights = np.array(heights)
+        self.heights = np.array(heights) + reference_level
         self.geometry = geometry
         self.parent = parent
 
@@ -89,7 +99,7 @@ class CrossSectionLocation:
     def position(self):
         if self.parent is None:
             return
-        return self.parent.geometry.project(self.geometry, normalized=True)
+        return self.parent.geometry.project(self.geometry)
 
     @property
     def max_width(self):
@@ -105,7 +115,7 @@ class CrossSectionLocation:
 
     def height_at(self, width: float) -> float:
         """Get interpolated height at given width"""
-        if np.any(np.diff(np.array([1,2,3,3])) < 0):
+        if np.any(np.diff(self.widths) < 0):
             raise WidthsNotIncreasingError
         return np.interp(width, self.widths, self.heights)
 
@@ -165,41 +175,26 @@ class Channel:
 
     @property
     def cross_section_location_positions(self) -> np.array:
-        """Array of normalized (0-1) cross section location positions along the channel"""
+        """Array of cross section location positions along the channel"""
         return np.array([x.position for x in self.cross_section_locations])
 
     @property
     def vertex_positions(self) -> np.array:
-        """Array of normalized (0-1) cross section location positions along the channel"""
-        result_list = [self.geometry.project(Point(vertex), normalized=True) for vertex in self.geometry.coords]
+        """Array of channel vertex positions along the channel"""
+        result_list = [self.geometry.project(Point(vertex)) for vertex in self.geometry.coords]
         result_array = np.array(result_list)
         return result_array
 
     @property
     def outline(self) -> Polygon:
-        right_vertices = []
-        left_vertices = []
-        for i, position in enumerate(self.vertex_positions):
-            width = self.max_width_at(position)
-
-            #left
-            parallel_offset_left = self.geometry.parallel_offset(-width/2)
-            vertex_left = nearest_points(parallel_offset_left, Point(self.geometry.coords[i]))[0]
-            left_vertices.append(vertex_left)
-
-            #right
-            parallel_offset_right = self.geometry.parallel_offset(width/2)
-            vertex_right = nearest_points(parallel_offset_right, Point(self.geometry.coords[i]))[0]
-            right_vertices.append(vertex_right)
-
-        right_vertices.reverse()
-        vertices = left_vertices + right_vertices
-        return Polygon(LineString(vertices))
+        radii = [self.max_width_at(position) / 2 for position in self.vertex_positions]
+        return variable_buffer(self.geometry, radii)
 
     def add_cross_section_location(self, cross_section_location: CrossSectionLocation):
         """Become the parent of the cross section location"""
         cross_section_location.parent = self
         self.cross_section_locations.append(cross_section_location)
+        self.cross_section_locations.sort(key=lambda x: x.position)
 
     def max_width_at(self, position: float) -> float:
         """Interpolated max crosssectional width at given position"""
@@ -399,25 +394,25 @@ class Channel:
         return "\nUNION\n".join(selects)
 
 
-class ChannelGroup(Channel):
-    """One or more Channels of which the geometry can be linemerged to a single linestring"""
-    def __init__(self, channels: List[Channel]):
-        geometries = [channel.geometry for channel in channels]
-        merged_geometry = linemerge(geometries)
-        if not isinstance(self.geometry, LineString):
-            raise ValueError('Input channel geometries cannot be merged into a single LineString')
-        super().__init__(geometry=merged_geometry, connection_node_start_id=None, connection_node_end_id=None)
-
-        unsorted_cross_section_locations = []
-        for channel in channels:
-            for cross_section_location in channel.cross_section_locations:
-                cross_section_location.position = self.geometry.project(cross_section_location.geometry, normalized=True)
-                unsorted_cross_section_locations.append(cross_section_location)
-        self.cross_section_locations = sorted(unsorted_cross_section_locations, key=attrgetter('position'))
+# class ChannelGroup(Channel):
+#     """One or more Channels of which the geometry can be linemerged to a single linestring"""
+#     def __init__(self, channels: List[Channel]):
+#         geometries = [channel.geometry for channel in channels]
+#         merged_geometry = linemerge(geometries)
+#         if not isinstance(self.geometry, LineString):
+#             raise ValueError('Input channel geometries cannot be merged into a single LineString')
+#         super().__init__(geometry=merged_geometry, connection_node_start_id=None, connection_node_end_id=None)
+#
+#         unsorted_cross_section_locations = []
+#         for channel in channels:
+#             for cross_section_location in channel.cross_section_locations:
+#                 cross_section_location.position = self.geometry.project(cross_section_location.geometry, normalized=True)
+#                 unsorted_cross_section_locations.append(cross_section_location)
+#         self.cross_section_locations = sorted(unsorted_cross_section_locations, key=attrgetter('position'))
 
 
 class ParallelOffset:
-    def __init__(self, parent: Union[Channel, ChannelGroup], offset_distance):
+    def __init__(self, parent: Channel, offset_distance):
         self.parent = parent
         self.geometry = parent.geometry.parallel_offset(offset_distance)
         if offset_distance > 0:
@@ -426,11 +421,11 @@ class ParallelOffset:
         width = np.abs(self.offset_distance * 2)
         cross_section_location_points = []
         for pos in self.parent.cross_section_location_positions:
-            location_xy = self.parent.geometry.interpolate(pos, normalized=True)
+            location_xy = self.parent.geometry.interpolate(pos)
             cross_section_location_points.append(nearest_points(location_xy, self.geometry)[0])
         cross_section_location_positions = [self.geometry.project(point) for point in cross_section_location_points]
         heights_at_cross_sections = [xsec.height_at(width) for xsec in self.parent.cross_section_locations]
-        self.vertex_positions = [self.geometry.project(Point(vertex), normalized=True) for vertex in self.geometry.coords]
+        self.vertex_positions = [self.geometry.project(Point(vertex)) for vertex in self.geometry.coords]
         self.heights_at_vertices = np.interp(
             self.vertex_positions,
             cross_section_location_positions,

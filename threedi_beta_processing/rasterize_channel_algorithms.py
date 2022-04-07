@@ -55,7 +55,8 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
     INPUT_CHANNELS = 'INPUT_CHANNELS'
     INPUT_CROSS_SECTION_LOCATIONS = 'INPUT_CROSS_SECTION_LOCATIONS'
 
-    OUTPUT_POLYGONS = 'OUTPUT_POLYGONS'
+    OUTPUT_TRIANGLES = 'OUTPUT_TRIANGLES'
+    OUTPUT_OUTLINES = 'OUTPUT_OUTLINES'
     OUTPUT_POINTS = 'OUTPUT_POINTS'
     OUTPUT_LINES = 'OUTPUT_LINES'
     OUTPUT_RASTER = 'OUTPUT_RASTER'
@@ -81,8 +82,17 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.OUTPUT_POLYGONS,
+                self.OUTPUT_TRIANGLES,
                 self.tr('Triangle'),
+                type=QgsProcessing.TypeVectorPolygon,
+                createByDefault=False
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT_OUTLINES,
+                self.tr('Outline'),
                 type=QgsProcessing.TypeVectorPolygon,
                 createByDefault=False
             )
@@ -137,12 +147,21 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         triangle_fields.append(QgsField(name='channel_id', type=QVariant.Int))
         triangle_fields.append(QgsField(name='vertex_indices', type=QVariant.String))
 
-        (sink_polygons, dest_id_polygons) = self.parameterAsSink(
+        (sink_triangles, dest_id_polygons) = self.parameterAsSink(
             parameters,
-            self.OUTPUT_POLYGONS,
+            self.OUTPUT_TRIANGLES,
             context,
             fields=triangle_fields,
             geometryType=QgsWkbTypes.PolygonZ,
+            crs=channel_features.sourceCrs()
+        )
+
+        (sink_outlines, dest_id_polygons) = self.parameterAsSink(
+            parameters,
+            self.OUTPUT_OUTLINES,
+            context,
+            fields=sink_fields,
+            geometryType=QgsWkbTypes.Polygon,
             crs=channel_features.sourceCrs()
         )
 
@@ -260,7 +279,15 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 sink_feature[1] = channel_id
                 sink_feature[2] = str(triangle.vertex_indices)
                 sink_feature.setGeometry(QgsGeometry.fromWkt(triangle.geometry.wkt))
-                sink_polygons.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+                sink_triangles.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+
+            # Add outline to outlines layer
+            outline_geometry = QgsGeometry.fromWkt(channel.outline.wkt)
+            sink_feature = QgsFeature(sink_fields)
+            sink_feature[0] = channel_id
+            sink_feature[1] = channel_id
+            sink_feature.setGeometry(outline_geometry)
+            sink_outlines.addFeature(sink_feature, QgsFeatureSink.FastInsert)
 
             parallel_offsets = [QgsGeometry.fromWkt(po.geometry.wkt) for po in channel.parallel_offsets]
             for po_id, po in enumerate(parallel_offsets):
@@ -288,7 +315,41 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 is_child_algorithm=True
             )["OUTPUT"]
 
-            rasters.append(rasterized)
+            channels_crs_auth_id = channel_features.sourceCrs().authid()
+            uri = f"polygon?crs={channels_crs_auth_id}"
+            clip_extent_layer = QgsVectorLayer(uri, "Clip extent", "memory")
+            clip_feature = QgsFeature(QgsFields())
+            clip_feature.setGeometry(outline_geometry)
+            clip_extent_layer.dataProvider().addFeatures([clip_feature])
+
+            clip_parameters = {
+                'INPUT': rasterized,
+                'MASK': clip_extent_layer,
+                'SOURCE_CRS': None,
+                'TARGET_CRS': None,
+                'NODATA': -9999,
+                'ALPHA_BAND': False,
+                'CROP_TO_CUTLINE': False,
+                'KEEP_RESOLUTION': True,
+                'SET_RESOLUTION': False,
+                'X_RESOLUTION': None,
+                'Y_RESOLUTION': None,
+                'MULTITHREADING': False,
+                'OPTIONS': 'COMPRESS=DEFLATE|PREDICTOR=2|ZLEVEL=9',
+                'DATA_TYPE': 6,  # Float32
+                'EXTRA': '-tap',
+                'OUTPUT': 'TEMPORARY_OUTPUT'
+            }
+
+            clipped = processing.run(
+                "gdal:cliprasterbymasklayer",
+                clip_parameters,
+                context=context,
+                feedback=feedback,
+                is_child_algorithm=True
+            )["OUTPUT"]
+
+            rasters.append(clipped)
 
         # calculate shared extent of all output rasters
         extent = QgsRectangle()
