@@ -41,6 +41,11 @@ def variable_buffer(linestring: LineString, radii: List[float]) -> Polygon:
     return result
 
 
+class EmptyOffsetError(ValueError):
+    """Raised when the parallel offset at given offset distance results in an empty geometry"""
+    pass
+
+
 class WidthsNotIncreasingError(ValueError):
     """Raised when one a width of a tabular cross section < than the previous width of that crosssection"""
     pass
@@ -122,10 +127,12 @@ class CrossSectionLocation:
 
 class Channel:
     def __init__(self,
-                 geometry: LineString,
+                 id: int,
                  connection_node_start_id: Union[int, None],
-                 connection_node_end_id: Union[int, None]
+                 connection_node_end_id: Union[int, None],
+                 geometry: LineString
                  ):
+        self.id = id
         self.connection_node_start_id = connection_node_start_id
         self.connection_node_end_id = connection_node_end_id
         self.cross_section_locations = []
@@ -136,21 +143,14 @@ class Channel:
         self._extra_outline = None
 
     @classmethod
-    def from_spatialite(cls, spatialite: ogr.DataSource, channel_id):
-        pass
-
-    @classmethod
-    def from_geopackage(cls, geopackage: ogr.DataSource, channel_id):
-        pass
-
-    @classmethod
     def from_qgs_feature(cls, feature):
         qgs_geometry = feature.geometry()
         wkt_geometry = qgs_geometry.asWkt()
         shapely_geometry = wkt.loads(wkt_geometry)
         start_id = feature.attribute('connection_node_start_id')
         end_id = feature.attribute('connection_node_end_id')
-        return cls(geometry=shapely_geometry, connection_node_start_id=start_id, connection_node_end_id=end_id)
+        id = feature.attribute('id')
+        return cls(geometry=shapely_geometry, connection_node_start_id=start_id, connection_node_end_id=end_id, id=id)
 
     @property
     def max_widths(self) -> np.array:
@@ -160,7 +160,7 @@ class Channel:
     @property
     def unique_widths(self) -> np.array:
         widths_list = [x.widths for x in self.cross_section_locations]
-        widths = np.vstack(widths_list)
+        widths = np.hstack(widths_list)
         unique_widths = np.unique(widths)
         result = np.array(unique_widths)
         return result
@@ -426,6 +426,8 @@ class ParallelOffset:
     def __init__(self, parent: Channel, offset_distance):
         self.parent = parent
         self.geometry = parent.geometry.parallel_offset(offset_distance)
+        if self.geometry.is_empty:
+            raise EmptyOffsetError
         if offset_distance > 0:
             self.geometry = reverse(self.geometry)
         self.offset_distance = offset_distance

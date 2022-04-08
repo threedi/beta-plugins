@@ -34,7 +34,8 @@ def test_find_wedge_channels():
     channel_1 = Channel(
         geometry=LineString([Point(20, -100), Point(0, -50), Point(0, 0)]),
         connection_node_start_id=1,
-        connection_node_end_id=2
+        connection_node_end_id=2,
+        id=1
     )
     xsec = cross_section_location()
     xsec.geometry = Point(0, -50)
@@ -44,7 +45,8 @@ def test_find_wedge_channels():
     channel_2 = Channel(
         geometry=LineString([Point(0, 0), Point(10, 50), Point(10, 100)]),
         connection_node_start_id=2,
-        connection_node_end_id=3
+        connection_node_end_id=3,
+        id=2
     )
     xsec = cross_section_location()
     xsec.geometry = Point(10, 50)
@@ -55,7 +57,8 @@ def test_find_wedge_channels():
     channel_3 = Channel(
         geometry=LineString([Point(0, 0), Point(50, 0), Point(100, 10)]),
         connection_node_start_id=2,
-        connection_node_end_id=4
+        connection_node_end_id=4,
+        id=3
     )
     xsec = cross_section_location()
     xsec.geometry = Point(50, 0)
@@ -90,7 +93,7 @@ def channel_init():
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(28992)
 
-    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2)
+    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2, id=1)
     return channel
 
 
@@ -148,9 +151,24 @@ def channel_parallel_offsets(channel):
     assert [str(point) for point in po5.points] == ['POINT Z (3.414213562373095 0.5857864376269051 2)', 'POINT Z (1.414213562373095 -1.414213562373095 2)']
 
 
+def cross_section_starting_at_0_0():
+    wkt_geometry = "LineString (94066.74041438 441349.75156281, 94060.74041445 441355.7515628, 94064.24041445 441359.75156275, 94074.24041445 441372.25156263)"
+    channel_geom = wkt.loads(wkt_geometry)
+    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2, id=1)
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[0, 15.13, 16.666, 17.413, 24.984, 32],
+        heights=[0, 0.53, 1.06, 1.59, 2.12, 2.65],
+        geometry=Point(0, 1)
+    )
+    channel.add_cross_section_location(cross_section_loc)
+    channel.generate_parallel_offsets()
+
 def channel_max_width_at(channel):
     channel_geom = LineString([[0, 0], [0, 1], [0, 2], [0, 3]])
-    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2)
+    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2, id=1)
 
     cross_section_loc = CrossSectionLocation(
         reference_level=10.0,
@@ -183,7 +201,7 @@ def channel_max_width_at(channel):
 def parallel_offset_heights_at_vertices():
     """Test method heights_at_vertices of ParallelOffset"""
     channel_geom = LineString([[0, 0], [5, 1], [7, 1], [18, 2], [20, 2], [35, 3]])
-    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2)
+    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2, id=1)
 
     cross_section_loc = CrossSectionLocation(
         reference_level=2.0,
@@ -223,6 +241,7 @@ def run_tests():
     channel_max_width_at(channel)
     channel.generate_parallel_offsets()
     parallel_offset_heights_at_vertices()
+    cross_section_starting_at_0_0()
     # test_find_wedge_channels()
     # fill_wedge()
 

@@ -45,7 +45,7 @@ from qgis.core import (
 )
 import processing
 
-from .rasterize_channel_oo import Channel, CrossSectionLocation, fill_wedges
+from .rasterize_channel_oo import Channel, CrossSectionLocation, EmptyOffsetError, fill_wedges
 
 
 class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
@@ -195,196 +195,207 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         rasters = []
         channels = []
         for channel_feature in channel_features.getFeatures():
-            channel = Channel.from_qgs_feature(channel_feature)
             channel_id = channel_feature.attribute('id')
+            feedback.pushInfo(f"Reading channel {channel_id}")
+            channel = Channel.from_qgs_feature(channel_feature)
             for cross_section_location_feature in cross_section_location_features.getFeatures():
                 if channel_id == cross_section_location_feature.attribute('channel_id'):
                     cross_section_location = CrossSectionLocation.from_qgs_feature(cross_section_location_feature)
                     channel.add_cross_section_location(cross_section_location)
-            channel.generate_parallel_offsets()
-            channels.append(channel)
+            try:
+                channel.generate_parallel_offsets()
+                channels.append(channel)
+            except EmptyOffsetError:
+                feedback.pushWarning(f"Could not read channel with id {channel.id}: no valid parallel offset can be "
+                                  f"generated for some cross-sectional widths")
 
         fill_wedges(channels)
 
-        for channel in channels:
-            points = [QgsPoint(*point.coords[0]) for point in channel.points]
+        if len(channels) > 0:
+            for channel in channels:
+                feedback.pushInfo(f"Processing channel {channel.id}")
+                points = [QgsPoint(*point.coords[0]) for point in channel.points]
 
-            # for debugging only
-            # for po_id, po in enumerate(channel.parallel_offsets):
-            #     feedback.pushInfo(f"vertex_indices for parallel offset {po_id}: {po.vertex_indices}")
-            # for tri_id, tri in enumerate(channel.triangles):
-            #     feedback.pushInfo(f"vertex_indices for triangle {tri_id}: {tri.vertex_indices}")
+                # for debugging only
+                # for po_id, po in enumerate(channel.parallel_offsets):
+                #     feedback.pushInfo(f"vertex_indices for parallel offset {po_id}: {po.vertex_indices}")
+                # for tri_id, tri in enumerate(channel.triangles):
+                #     feedback.pushInfo(f"vertex_indices for triangle {tri_id}: {tri.vertex_indices}")
 
-            # create a mesh on disk
-            provider_meta = QgsProviderRegistry.instance().providerMetadata('mdal')
-            mesh = QgsMesh()
-            temp_mesh_filename = f"{uuid4()}.nc"
-            temp_mesh_fullpath = QgsProcessingUtils.generateTempFilename(temp_mesh_filename)
-            mesh_format = 'Ugrid'
-            crs = QgsCoordinateReferenceSystem()
-            provider_meta.createMeshData(mesh, temp_mesh_fullpath, mesh_format, crs)
-            mesh_layers.append(QgsMeshLayer(temp_mesh_fullpath, 'editable mesh', 'mdal'))
+                # create a mesh on disk
+                provider_meta = QgsProviderRegistry.instance().providerMetadata('mdal')
+                mesh = QgsMesh()
+                temp_mesh_filename = f"{uuid4()}.nc"
+                temp_mesh_fullpath = QgsProcessingUtils.generateTempFilename(temp_mesh_filename)
+                mesh_format = 'Ugrid'
+                crs = QgsCoordinateReferenceSystem()
+                provider_meta.createMeshData(mesh, temp_mesh_fullpath, mesh_format, crs)
+                mesh_layers.append(QgsMeshLayer(temp_mesh_fullpath, 'editable mesh', 'mdal'))
 
-            # add points to mesh
-            transform = QgsCoordinateTransform()
-            mesh_layers[-1].startFrameEditing(transform)
-            editor = mesh_layers[-1].meshEditor()
-            points_added = editor.addPointsAsVertices(points, 0.0000001)
-            feedback.pushInfo(f"Added {points_added} points from a total of {len(points)}")
+                # add points to mesh
+                transform = QgsCoordinateTransform()
+                mesh_layers[-1].startFrameEditing(transform)
+                editor = mesh_layers[-1].meshEditor()
+                points_added = editor.addPointsAsVertices(points, 0.0000001)
+                if points_added != len(points):
+                    feedback.pushWarning(f"Added only {points_added} points from a total of {len(points)}!")
 
-            # add faces to mesh
-            faces_added = 0
-            triangles_dict = {k: v for k, v in enumerate(channel.triangles)}
-            total_triangles = 0
-            occupied_vertices = np.array([], dtype=int)
-            finished = False
-            first_round = True
-            processed_triangles = []
-            while not finished:
-                finished = True
-                for k in processed_triangles:
-                    triangles_dict.pop(k)
+                # add faces to mesh
+                faces_added = 0
+                triangles_dict = {k: v for k, v in enumerate(channel.triangles)}
+                total_triangles = 0
+                occupied_vertices = np.array([], dtype=int)
+                finished = False
+                first_round = True
                 processed_triangles = []
-                for i, triangle in triangles_dict.items():
-                    if first_round:
-                        total_triangles += 1
-                    if i == 0 or np.sum(np.in1d(triangle.vertex_indices, occupied_vertices)) >= 2:
-                        error = editor.addFace(triangle.vertex_indices)
-                        # Error types: https://api.qgis.org/api/classQgis.html#a69496edec4c420185984d9a2a63702dc
-                        if error.errorType == 0:
-                            finished = False
-                            processed_triangles.append(i)
-                            faces_added += 1
-                            occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
-                first_round = False
-            feedback.pushInfo(f"Added {faces_added} faces from a total of {total_triangles}")
+                while not finished:
+                    finished = True
+                    for k in processed_triangles:
+                        triangles_dict.pop(k)
+                    processed_triangles = []
+                    for i, triangle in triangles_dict.items():
+                        if first_round:
+                            total_triangles += 1
+                        if i == 0 or np.sum(np.in1d(triangle.vertex_indices, occupied_vertices)) >= 2:
+                            error = editor.addFace(triangle.vertex_indices)
+                            # Error types: https://api.qgis.org/api/classQgis.html#a69496edec4c420185984d9a2a63702dc
+                            if error.errorType == 0:
+                                finished = False
+                                processed_triangles.append(i)
+                                faces_added += 1
+                                occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
+                    first_round = False
+                if faces_added != total_triangles:
+                    feedback.pushWarning(f"Added only {faces_added} out of {total_triangles} triangles to mesh!")
 
-            mesh_layers[-1].commitFrameEditing(transform, continueEditing=False)
-            context.temporaryLayerStore().addMapLayer(mesh_layers[-1])
+                mesh_layers[-1].commitFrameEditing(transform, continueEditing=False)
+                context.temporaryLayerStore().addMapLayer(mesh_layers[-1])
 
-            if add_mesh_layers:
-                layer_details = QgsProcessingContext.LayerDetails(temp_mesh_filename, context.project())
-                context.addLayerToLoadOnCompletion(mesh_layers[-1].id(), layer_details)
+                if add_mesh_layers:
+                    layer_details = QgsProcessingContext.LayerDetails(temp_mesh_filename, context.project())
+                    context.addLayerToLoadOnCompletion(mesh_layers[-1].id(), layer_details)
 
-            for point_id, point in enumerate(points):
+                for point_id, point in enumerate(points):
+                    sink_feature = QgsFeature(sink_fields)
+                    sink_feature[0] = point_id
+                    sink_feature[1] = channel_id
+                    sink_feature.setGeometry(point)
+                    sink_points.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+
+                for triangle_id, triangle in enumerate(channel.triangles):
+                    sink_feature = QgsFeature(triangle_fields)
+                    sink_feature[0] = triangle_id
+                    sink_feature[1] = channel_id
+                    sink_feature[2] = str(triangle.vertex_indices)
+                    sink_feature.setGeometry(QgsGeometry.fromWkt(triangle.geometry.wkt))
+                    sink_triangles.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+
+                # Add outline to outlines layer
+                outline_geometry = QgsGeometry.fromWkt(channel.outline.wkt)
                 sink_feature = QgsFeature(sink_fields)
-                sink_feature[0] = point_id
+                sink_feature[0] = channel_id
                 sink_feature[1] = channel_id
-                sink_feature.setGeometry(point)
-                sink_points.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+                sink_feature.setGeometry(outline_geometry)
+                sink_outlines.addFeature(sink_feature, QgsFeatureSink.FastInsert)
 
-            for triangle_id, triangle in enumerate(channel.triangles):
-                sink_feature = QgsFeature(triangle_fields)
-                sink_feature[0] = triangle_id
-                sink_feature[1] = channel_id
-                sink_feature[2] = str(triangle.vertex_indices)
-                sink_feature.setGeometry(QgsGeometry.fromWkt(triangle.geometry.wkt))
-                sink_triangles.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+                parallel_offsets = [QgsGeometry.fromWkt(po.geometry.wkt) for po in channel.parallel_offsets]
+                for po_id, po in enumerate(parallel_offsets):
+                    sink_feature = QgsFeature(sink_fields)
+                    sink_feature[0] = po_id
+                    sink_feature[1] = channel_id
+                    sink_feature.setGeometry(po)
+                    sink_lines.addFeature(sink_feature, QgsFeatureSink.FastInsert)
 
-            # Add outline to outlines layer
-            outline_geometry = QgsGeometry.fromWkt(channel.outline.wkt)
-            sink_feature = QgsFeature(sink_fields)
-            sink_feature[0] = channel_id
-            sink_feature[1] = channel_id
-            sink_feature.setGeometry(outline_geometry)
-            sink_outlines.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+                rasterize_mesh_params = {
+                    'INPUT': mesh_layers[-1].id(),
+                    'DATASET_GROUPS': [0],
+                    'DATASET_TIME': {'type': 'static'},
+                    'EXTENT': None,
+                    'PIXEL_SIZE': 0.5,
+                    'CRS_OUTPUT': QgsCoordinateReferenceSystem('EPSG:28992'),
+                    'OUTPUT': 'TEMPORARY_OUTPUT'
+                }
 
-            parallel_offsets = [QgsGeometry.fromWkt(po.geometry.wkt) for po in channel.parallel_offsets]
-            for po_id, po in enumerate(parallel_offsets):
-                sink_feature = QgsFeature(sink_fields)
-                sink_feature[0] = po_id
-                sink_feature[1] = channel_id
-                sink_feature.setGeometry(po)
-                sink_lines.addFeature(sink_feature, QgsFeatureSink.FastInsert)
+                rasterized = processing.run(
+                    "native:meshrasterize",
+                    rasterize_mesh_params,
+                    context=context,
+                    feedback=feedback,
+                    is_child_algorithm=True
+                )["OUTPUT"]
 
-            rasterize_mesh_params = {
-                'INPUT': mesh_layers[-1].id(),
-                'DATASET_GROUPS': [0],
-                'DATASET_TIME': {'type': 'static'},
-                'EXTENT': None,
-                'PIXEL_SIZE': 0.5,
-                'CRS_OUTPUT': QgsCoordinateReferenceSystem('EPSG:28992'),
-                'OUTPUT': 'TEMPORARY_OUTPUT'
-            }
+                channels_crs_auth_id = channel_features.sourceCrs().authid()
+                uri = f"polygon?crs={channels_crs_auth_id}"
+                clip_extent_layer = QgsVectorLayer(uri, "Clip extent", "memory")
+                clip_feature = QgsFeature(QgsFields())
+                clip_feature.setGeometry(outline_geometry)
+                clip_extent_layer.dataProvider().addFeatures([clip_feature])
 
-            rasterized = processing.run(
-                "native:meshrasterize",
-                rasterize_mesh_params,
-                context=context,
-                feedback=feedback,
-                is_child_algorithm=True
-            )["OUTPUT"]
+                clip_parameters = {
+                    'INPUT': rasterized,
+                    'MASK': clip_extent_layer,
+                    'SOURCE_CRS': None,
+                    'TARGET_CRS': None,
+                    'NODATA': -9999,
+                    'ALPHA_BAND': False,
+                    'CROP_TO_CUTLINE': False,
+                    'KEEP_RESOLUTION': True,
+                    'SET_RESOLUTION': False,
+                    'X_RESOLUTION': None,
+                    'Y_RESOLUTION': None,
+                    'MULTITHREADING': False,
+                    'OPTIONS': 'COMPRESS=DEFLATE|PREDICTOR=2|ZLEVEL=9',
+                    'DATA_TYPE': 6,  # Float32
+                    'EXTRA': '-tap',
+                    'OUTPUT': 'TEMPORARY_OUTPUT'
+                }
 
-            channels_crs_auth_id = channel_features.sourceCrs().authid()
-            uri = f"polygon?crs={channels_crs_auth_id}"
-            clip_extent_layer = QgsVectorLayer(uri, "Clip extent", "memory")
-            clip_feature = QgsFeature(QgsFields())
-            clip_feature.setGeometry(outline_geometry)
-            clip_extent_layer.dataProvider().addFeatures([clip_feature])
+                clipped = processing.run(
+                    "gdal:cliprasterbymasklayer",
+                    clip_parameters,
+                    context=context,
+                    feedback=feedback,
+                    is_child_algorithm=True
+                )["OUTPUT"]
 
-            clip_parameters = {
-                'INPUT': rasterized,
-                'MASK': clip_extent_layer,
-                'SOURCE_CRS': None,
-                'TARGET_CRS': None,
-                'NODATA': -9999,
-                'ALPHA_BAND': False,
-                'CROP_TO_CUTLINE': False,
-                'KEEP_RESOLUTION': True,
-                'SET_RESOLUTION': False,
-                'X_RESOLUTION': None,
-                'Y_RESOLUTION': None,
-                'MULTITHREADING': False,
-                'OPTIONS': 'COMPRESS=DEFLATE|PREDICTOR=2|ZLEVEL=9',
-                'DATA_TYPE': 6,  # Float32
-                'EXTRA': '-tap',
-                'OUTPUT': 'TEMPORARY_OUTPUT'
-            }
+                rasters.append(clipped)
 
-            clipped = processing.run(
-                "gdal:cliprasterbymasklayer",
-                clip_parameters,
-                context=context,
-                feedback=feedback,
-                is_child_algorithm=True
-            )["OUTPUT"]
+            # calculate shared extent of all output rasters
+            extent = QgsRectangle()
+            extent.setMinimal()
 
-            rasters.append(clipped)
+            for raster in rasters:
+                raster_layer = QgsRasterLayer(raster)
+                extent.combineExtentWith(raster_layer.extent())
 
-        # calculate shared extent of all output rasters
-        extent = QgsRectangle()
-        extent.setMinimal()
+            # Create dummy reference raster of shared extent
+            reference_layer = processing.run("native:createconstantrasterlayer",
+                                             {
+                                                 'EXTENT': extent,
+                                                 'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:28992'),
+                                                 'PIXEL_SIZE': 0.5,
+                                                 'NUMBER': 1,
+                                                 'OUTPUT_TYPE': 5,
+                                                 'OUTPUT': 'TEMPORARY_OUTPUT'
+                                             },
+                                             is_child_algorithm=True
+                                             )["OUTPUT"]
 
-        for raster in rasters:
-            raster_layer = QgsRasterLayer(raster)
-            extent.combineExtentWith(raster_layer.extent())
+            output_raster = processing.run("native:cellstatistics",
+                                           {
+                                               'INPUT': rasters,
+                                               'STATISTIC': 6,  # MINIMUM
+                                               'IGNORE_NODATA': True,
+                                               'REFERENCE_LAYER': reference_layer,
+                                               'OUTPUT_NODATA_VALUE': -9999,
+                                               'OUTPUT': output_raster
+                                           },
+                                           is_child_algorithm=True
+                                           )["OUTPUT"]
 
-        # Create dummy reference raster of shared extent
-        reference_layer = processing.run("native:createconstantrasterlayer",
-                                         {
-                                             'EXTENT': extent,
-                                             'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:28992'),
-                                             'PIXEL_SIZE': 0.5,
-                                             'NUMBER': 1,
-                                             'OUTPUT_TYPE': 5,
-                                             'OUTPUT': 'TEMPORARY_OUTPUT'
-                                         },
-                                         is_child_algorithm=True
-                                         )["OUTPUT"]
-
-        output_raster = processing.run("native:cellstatistics",
-                                       {
-                                           'INPUT': rasters,
-                                           'STATISTIC': 6,  # MINIMUM
-                                           'IGNORE_NODATA': True,
-                                           'REFERENCE_LAYER': reference_layer,
-                                           'OUTPUT_NODATA_VALUE': -9999,
-                                           'OUTPUT': output_raster
-                                       },
-                                       is_child_algorithm=True
-                                       )["OUTPUT"]
-
-        return {self.OUTPUT_RASTER: output_raster}
+            return {self.OUTPUT_RASTER: output_raster}
+        else:
+            return {self.OUTPUT_RASTER: None}
 
     def name(self):
         """
