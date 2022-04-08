@@ -18,11 +18,13 @@ from uuid import uuid4
 import numpy as np
 from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
 from qgis.core import (
+    QgsApplication,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsGeometry,
     QgsMesh,
     QgsMeshLayer,
+    QgsProcessingMultiStepFeedback,
     QgsFeature,
     QgsFeatureSink,
     QgsField,
@@ -31,6 +33,8 @@ from qgis.core import (
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
+    QgsProcessingException,
+    QgsProcessingFeedback,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
@@ -134,6 +138,12 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
+        # We report progress in three steps:
+        # preparation phase (10%),
+        # loop through the channels (60%)
+        # merging the output rasters (30%)
+        multi_step_feedback = QgsProcessingMultiStepFeedback(3, feedback)
+        reg = QgsApplication.processingRegistry()
         channel_features = self.parameterAsSource(parameters, self.INPUT_CHANNELS, context)
         cross_section_location_features = self.parameterAsSource(parameters, self.INPUT_CROSS_SECTION_LOCATIONS,
                                                                  context)
@@ -194,7 +204,7 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         mesh_layers = []
         rasters = []
         channels = []
-        for channel_feature in channel_features.getFeatures():
+        for i, channel_feature in enumerate(channel_features.getFeatures()):
             channel_id = channel_feature.attribute('id')
             feedback.pushInfo(f"Reading channel {channel_id}")
             channel = Channel.from_qgs_feature(channel_feature)
@@ -206,13 +216,21 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 channel.generate_parallel_offsets()
                 channels.append(channel)
             except EmptyOffsetError:
-                feedback.pushWarning(f"Could not read channel with id {channel.id}: no valid parallel offset can be "
-                                  f"generated for some cross-sectional widths")
+                feedback.pushWarning(
+                    f"Could not read channel with id {channel.id}: no valid parallel offset can be generated for some "
+                    f"cross-sectional widths"
+                )
+            multi_step_feedback.setProgress(100 * i / channel_features.featureCount())
 
         fill_wedges(channels)
 
-        if len(channels) > 0:
-            for channel in channels:
+        multi_step_feedback.setCurrentStep(1)
+        if len(channels) == 0:
+            multi_step_feedback.reportError(
+                f"No valid channels to process", fatalError=True)
+            raise QgsProcessingException()
+        else:
+            for i, channel in enumerate(channels):
                 feedback.pushInfo(f"Processing channel {channel.id}")
                 points = [QgsPoint(*point.coords[0]) for point in channel.points]
 
@@ -316,13 +334,18 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     'OUTPUT': 'TEMPORARY_OUTPUT'
                 }
 
-                rasterized = processing.run(
-                    "native:meshrasterize",
-                    rasterize_mesh_params,
+                # use QgsProcessingAlgorithm.run() instead of processing.run() to be able to hide feedback but still be
+                # able to check if algorithm ran succesfully (ok == True)
+                alg_meshrasterize = reg.algorithmById("native:meshrasterize")
+                results, ok = alg_meshrasterize.run(
+                    parameters=rasterize_mesh_params,
                     context=context,
-                    feedback=feedback,
-                    is_child_algorithm=True
-                )["OUTPUT"]
+                    feedback=QgsProcessingFeedback()
+                )
+                if not ok:
+                    multi_step_feedback.pushError(f"Error when rasterizing mesh for channel {channel.id}")
+                    continue
+                rasterized = results["OUTPUT"]
 
                 channels_crs_auth_id = channel_features.sourceCrs().authid()
                 uri = f"polygon?crs={channels_crs_auth_id}"
@@ -350,16 +373,26 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     'OUTPUT': 'TEMPORARY_OUTPUT'
                 }
 
-                clipped = processing.run(
-                    "gdal:cliprasterbymasklayer",
+                # use QgsProcessingAlgorithm.run() instead of processing.run() to be able to hide feedback but still be
+                # able to check if algorithm ran succesfully (ok == True)
+                alg_cliprasterbymasklayer = reg.algorithmById("gdal:cliprasterbymasklayer")
+                results, ok = alg_cliprasterbymasklayer.run(
                     clip_parameters,
                     context=context,
-                    feedback=feedback,
-                    is_child_algorithm=True
-                )["OUTPUT"]
+                    feedback=QgsProcessingFeedback()
+                )
+                if not ok:
+                    multi_step_feedback.reportError(
+                        f"Error when clipping channel raster by outline for channel {channel.id}",
+                        fatalError=False
+                    )
+                    continue
+                rasters.append(results["OUTPUT"])
 
-                rasters.append(clipped)
+                multi_step_feedback.setProgress(100 * i / len(channels))
 
+            multi_step_feedback.setCurrentStep(2)
+            multi_step_feedback.setProgress(0)
             # calculate shared extent of all output rasters
             extent = QgsRectangle()
             extent.setMinimal()
@@ -369,33 +402,50 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 extent.combineExtentWith(raster_layer.extent())
 
             # Create dummy reference raster of shared extent
-            reference_layer = processing.run("native:createconstantrasterlayer",
-                                             {
-                                                 'EXTENT': extent,
-                                                 'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:28992'),
-                                                 'PIXEL_SIZE': 0.5,
-                                                 'NUMBER': 1,
-                                                 'OUTPUT_TYPE': 5,
-                                                 'OUTPUT': 'TEMPORARY_OUTPUT'
-                                             },
-                                             is_child_algorithm=True
-                                             )["OUTPUT"]
+            # use QgsProcessingAlgorithm.run() instead of processing.run() to be able to hide feedback but still be
+            # able to check if algorithm ran succesfully (ok == True)
+            createconstantrasterlayer_parameters = {
+                'EXTENT': extent,
+                'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:28992'),
+                'PIXEL_SIZE': 0.5,
+                'NUMBER': 1,
+                'OUTPUT_TYPE': 5,
+                'OUTPUT': 'TEMPORARY_OUTPUT'
+            }
+            alg_createconstantrasterlayer = reg.algorithmById("native:createconstantrasterlayer")
+            results, ok = alg_createconstantrasterlayer.run(
+                parameters=createconstantrasterlayer_parameters,
+                context=context,
+                feedback=QgsProcessingFeedback()
+            )
+            if not ok:
+                multi_step_feedback.reportError(
+                    f"Error when creating base raster for merging outputs", fatalError=True)
+                raise QgsProcessingException
 
-            output_raster = processing.run("native:cellstatistics",
-                                           {
-                                               'INPUT': rasters,
-                                               'STATISTIC': 6,  # MINIMUM
-                                               'IGNORE_NODATA': True,
-                                               'REFERENCE_LAYER': reference_layer,
-                                               'OUTPUT_NODATA_VALUE': -9999,
-                                               'OUTPUT': output_raster
-                                           },
-                                           is_child_algorithm=True
-                                           )["OUTPUT"]
+            reference_layer = results["OUTPUT"]
 
-            return {self.OUTPUT_RASTER: output_raster}
-        else:
-            return {self.OUTPUT_RASTER: None}
+            cellstatistics_parameters = {
+                'INPUT': rasters,
+                'STATISTIC': 6,  # MINIMUM
+                'IGNORE_NODATA': True,
+                'REFERENCE_LAYER': reference_layer,
+                'OUTPUT_NODATA_VALUE': -9999,
+                'OUTPUT': output_raster
+            }
+            alg_cellstatistics = reg.algorithmById("native:cellstatistics")
+
+            results, ok = alg_cellstatistics.run(
+                parameters=cellstatistics_parameters,
+                context=context,
+                feedback=multi_step_feedback
+            )
+            if not ok:
+                multi_step_feedback.reportError(
+                    f"Error when merging raster outputs", fatalError=True)
+                raise QgsProcessingException
+
+            return {self.OUTPUT_RASTER: results['OUTPUT']}
 
     def name(self):
         """
