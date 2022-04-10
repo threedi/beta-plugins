@@ -371,18 +371,6 @@ class Channel:
                 last_index += 1
 
         # Generate triangles to connect the added points to the existing points
-        print("channel_to_update_points:")
-        for pnt in channel_to_update_points:
-            print(pnt.index, pnt.wkt)
-        print("channel_to_update_offsets:")
-        print(channel_to_update_offsets)
-
-        print("channel_to_update._wedge_fill_points:")
-        for pnt in channel_to_update._wedge_fill_points:
-            print(pnt.index, pnt.wkt)
-        print("channel_to_update_offsets:")
-        print(wedge_fill_points_source_offsets)
-
         for triangle in triangulate_between(
                 side_1_points=channel_to_update_points,
                 side_1_distances=channel_to_update_offsets,
@@ -390,8 +378,6 @@ class Channel:
                 side_2_distances=wedge_fill_points_source_offsets
         ):
             self._wedge_fill_triangles.append(triangle)
-
-
 
         extra_point = Point(wedge_fill_points_source.geometry.coords[wedge_fill_points_source_idx])
         position = 0 if wedge_fill_points_source_idx == 0 else wedge_fill_points_source.geometry.length
