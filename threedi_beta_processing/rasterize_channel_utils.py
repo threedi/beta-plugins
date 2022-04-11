@@ -92,16 +92,25 @@ def bounding_box(raster: gdal.Dataset) -> Polygon:
     return box(lrx, lry, ulx, uly)
 
 
-def tile_aggregate(rasters: List[gdal.Dataset], bbox: Tuple[float, float, float, float],
-                   aggregation_method: str) -> np.array:
+def tile_aggregate(rasters: List[gdal.Dataset],
+                   bbox: Tuple[float, float, float, float],
+                   aggregation_method: str,
+                   output_nodatavalue: float
+                   ) -> np.array:
     assert len(rasters) > 0
     methods = {
         'min': np.nanmin,
         'max': np.nanmax
     }
     method = methods[aggregation_method]
-    arrays = [read_as_array(raster=raster, bbox=bbox, pad=True) for raster in rasters]
+    arrays = []
+    for raster in rasters:
+        raster_array = read_as_array(raster=raster, bbox=bbox, pad=True)
+        ndv = raster.GetRasterBand(1).GetNoDataValue()
+        raster_array[raster_array == ndv] = np.nan
+        arrays.append(raster_array)
     result = method(np.array(arrays), axis=0)
+    result[np.isnan(result)] = output_nodatavalue
     return result
 
 
@@ -122,19 +131,19 @@ def merge_rasters(rasters: List[gdal.Dataset], tile_size: int, aggregation_metho
     geo_tile_size_y = (tile_size * abs(yres))
     rows = []
     for tile_row in range(nrows):
-        print(f"tile_row: {tile_row}")
+        # print(f"tile_row: {tile_row}")
         tiles = []
-        tile_miny = miny + tile_row * geo_tile_size_y
+        tile_maxy = maxy - tile_row * geo_tile_size_y
         for tile_col in range(ncols):
-            print(f"    tile_col: {tile_col}")
+            # print(f"    tile_col: {tile_col}")
             tile_minx = minx + tile_col * geo_tile_size_x
             tile_polygon = box(
                 tile_minx,
-                tile_miny,
+                tile_maxy - geo_tile_size_y,
                 tile_minx + geo_tile_size_x,
-                tile_miny + geo_tile_size_y
+                tile_maxy
             )
-            print(f"    tile_polygon.bounds: {tile_polygon.bounds}")
+            # print(f"    tile_polygon.bounds: {tile_polygon.bounds}")
             intersecting_rasters = [raster for i, raster in enumerate(rasters) if tile_polygon.intersects(bboxes[i])]
             if len(intersecting_rasters) == 0:
                 tile = np.full((tile_size, tile_size), nodatavalue)
@@ -145,9 +154,10 @@ def merge_rasters(rasters: List[gdal.Dataset], tile_size: int, aggregation_metho
                     aggregation_method=aggregation_method
                 )
             tiles.append(tile)
-            print(f"    tile.shape: {tile.shape}")
+            # print(f"    tile.shape: {tile.shape}")
         row = np.hstack(tiles)
         rows.append(row)
+    # rows.reverse()
     result_array = np.vstack(rows)
 
     geotransform = (minx, xres, xskew, maxy, yskew, yres)
@@ -158,5 +168,6 @@ def merge_rasters(rasters: List[gdal.Dataset], tile_size: int, aggregation_metho
         srs=srs,
         data=result_array
     )
+
 
 

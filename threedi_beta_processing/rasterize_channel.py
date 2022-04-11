@@ -367,6 +367,7 @@ def crop_to_cutline(dataset):
     )
     return clip_ds
 
+
 def merge(dem, clip_ds):
 
     time4 = time.time()

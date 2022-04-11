@@ -39,6 +39,7 @@ from qgis.core import (
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
+    QgsProcessingParameterNumber,
     QgsProcessingParameterRasterDestination,
     QgsProcessingUtils,
     QgsProject,
@@ -53,12 +54,23 @@ from .rasterize_channel_oo import Channel, CrossSectionLocation, EmptyOffsetErro
 from .rasterize_channel_utils import merge_rasters
 
 
+def align_qgs_rectangle(extent: QgsRectangle, xres, yres):
+    """round the coordinates of an extent tuple (minx, miny, maxx, maxy) to a multiple of the resolution (pixel size) in
+    such a way that the new extent contains the input extent"""
+    minx = float(np.trunc(extent.xMinimum() / xres) * xres)
+    miny = float(np.trunc(extent.yMinimum() / yres) * yres)
+    maxx = float(np.ceil(extent.xMaximum() / xres) * xres)
+    maxy = float(np.ceil(extent.yMaximum() / yres) * yres)
+    return QgsRectangle(minx, miny, maxx, maxy)
+
+
 class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
     """
     Rasterize channels using its cross sections
     """
     INPUT_CHANNELS = 'INPUT_CHANNELS'
     INPUT_CROSS_SECTION_LOCATIONS = 'INPUT_CROSS_SECTION_LOCATIONS'
+    INPUT_PIXEL_SIZE = 'PIXEL_SIZE'
 
     OUTPUT = 'OUTPUT'
 
@@ -80,6 +92,14 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        pixel_size_param = QgsProcessingParameterNumber(
+            self.INPUT_PIXEL_SIZE,
+            self.tr('Pixel size'),
+            type=QgsProcessingParameterNumber.Double
+        )
+        pixel_size_param.setMetadata({'widget_wrapper':{'decimals': 2}})
+        self.addParameter(pixel_size_param)
+
         self.addParameter(
             QgsProcessingParameterRasterDestination(
                 self.OUTPUT,
@@ -99,6 +119,7 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                                                                  context)
 
         output_raster = self.parameterAsOutputLayer(parameters, self.OUTPUT, context)
+        pixel_size = self.parameterAsDouble(parameters, self.INPUT_PIXEL_SIZE, context)
 
         rasters = []
         channels = []
@@ -177,12 +198,13 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 mesh_layer.commitFrameEditing(transform, continueEditing=False)
                 context.temporaryLayerStore().addMapLayer(mesh_layer)  # otherwise it cannot be used in processing alg
 
+                extent = align_qgs_rectangle(mesh_layer.extent(), xres=pixel_size, yres=pixel_size)
                 rasterize_mesh_params = {
                     'INPUT': mesh_layer.id(),
                     'DATASET_GROUPS': [0],
                     'DATASET_TIME': {'type': 'static'},
-                    'EXTENT': None,
-                    'PIXEL_SIZE': 0.5,
+                    'EXTENT': extent,
+                    'PIXEL_SIZE': pixel_size,
                     'CRS_OUTPUT': QgsCoordinateReferenceSystem('EPSG:28992'),
                     'OUTPUT': 'TEMPORARY_OUTPUT'
                 }
@@ -248,8 +270,11 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             multi_step_feedback.setCurrentStep(2)
             multi_step_feedback.setProgressText("Merging rasters...")
 
+            for raster in rasters:
+                multi_step_feedback.pushInfo(raster)
+
             rasters_datasets = [gdal.Open(raster) for raster in rasters]
-            merged = merge_rasters(
+            merge_rasters(
                 rasters_datasets,
                 tile_size=1000,
                 aggregation_method='min',
