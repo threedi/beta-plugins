@@ -119,7 +119,8 @@ def merge_rasters(
         tile_size: int,
         aggregation_method: str,
         output_filename: Path,
-        output_nodatavalue: float
+        output_nodatavalue: float,
+        feedback=None
 ):
     """Assumes that all input rasters have the same SRS, resolution, skew, and pixels are
     aligned (as in gdal.Warp's targetAlignedPixels)
@@ -132,6 +133,7 @@ def merge_rasters(
     minx, miny, maxx, maxy = MultiPolygon(bboxes).bounds
     ncols = int(np.ceil(((maxx - minx) / abs(xres)) / tile_size))
     nrows = int(np.ceil(((maxy - miny) / abs(yres)) / tile_size))
+    ntiles = ncols * nrows
     print(nrows, ncols)
     geo_tile_size_x = (tile_size * abs(xres))
     geo_tile_size_y = (tile_size * abs(yres))
@@ -162,6 +164,8 @@ def merge_rasters(
                 )
             tiles.append(tile)
             # print(f"    tile.shape: {tile.shape}")
+            if feedback:
+                feedback.setProgress((tile_row * ncols + tile_col + 1) / ntiles * 100)
         row = np.hstack(tiles)
         rows.append(row)
     result_array = np.vstack(rows)

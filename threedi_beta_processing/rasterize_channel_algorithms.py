@@ -270,69 +270,15 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
             multi_step_feedback.setCurrentStep(2)
             multi_step_feedback.setProgressText("Merging rasters...")
 
-            for raster in rasters:
-                multi_step_feedback.pushInfo(raster)
-
             rasters_datasets = [gdal.Open(raster) for raster in rasters]
             merge_rasters(
                 rasters_datasets,
                 tile_size=1000,
                 aggregation_method='min',
                 output_filename=output_raster,
-                output_nodatavalue=-9999    
+                output_nodatavalue=-9999,
+                feedback=multi_step_feedback
             )
-            rasters_datasets = None
-
-            # # calculate shared extent of all output rasters
-            # extent = QgsRectangle()
-            # extent.setMinimal()
-            # for raster in rasters:
-            #     raster_layer = QgsRasterLayer(raster)
-            #     extent.combineExtentWith(raster_layer.extent())
-            #
-            # # Create dummy reference raster of shared extent
-            # # use QgsProcessingAlgorithm.run() instead of processing.run() to be able to hide feedback but still be
-            # # able to check if algorithm ran succesfully (ok == True)
-            # createconstantrasterlayer_parameters = {
-            #     'EXTENT': extent,
-            #     'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:28992'),
-            #     'PIXEL_SIZE': 0.5,
-            #     'NUMBER': 1,
-            #     'OUTPUT_TYPE': 5,
-            #     'OUTPUT': 'TEMPORARY_OUTPUT'
-            # }
-            # alg_createconstantrasterlayer = reg.algorithmById("native:createconstantrasterlayer")
-            # results, ok = alg_createconstantrasterlayer.run(
-            #     parameters=createconstantrasterlayer_parameters,
-            #     context=context,
-            #     feedback=QgsProcessingFeedback()
-            # )
-            # if not ok:
-            #     multi_step_feedback.reportError(
-            #         f"Error when creating base raster for merging outputs", fatalError=True)
-            #     raise QgsProcessingException
-            #
-            # reference_layer = results["OUTPUT"]
-            #
-            # cellstatistics_parameters = {
-            #     'INPUT': rasters,
-            #     'STATISTIC': 6,  # MINIMUM
-            #     'IGNORE_NODATA': True,
-            #     'REFERENCE_LAYER': reference_layer,
-            #     'OUTPUT_NODATA_VALUE': -9999,
-            #     'OUTPUT': output_raster
-            # }
-            # alg_cellstatistics = reg.algorithmById("native:cellstatistics")
-            #
-            # results, ok = alg_cellstatistics.run(
-            #     parameters=cellstatistics_parameters,
-            #     context=context,
-            #     feedback=multi_step_feedback
-            # )
-            # if not ok:
-            #     multi_step_feedback.reportError(
-            #         f"Error when merging raster outputs", fatalError=True)
-            #     raise QgsProcessingException
 
             return {self.OUTPUT: output_raster}
 
