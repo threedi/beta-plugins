@@ -114,7 +114,13 @@ def tile_aggregate(rasters: List[gdal.Dataset],
     return result
 
 
-def merge_rasters(rasters: List[gdal.Dataset], tile_size: int, aggregation_method: str, output_filename: Path):
+def merge_rasters(
+        rasters: List[gdal.Dataset],
+        tile_size: int,
+        aggregation_method: str,
+        output_filename: Path,
+        output_nodatavalue: float
+):
     """Assumes that all input rasters have the same SRS, resolution, skew, and pixels are
     aligned (as in gdal.Warp's targetAlignedPixels)
 
@@ -122,11 +128,11 @@ def merge_rasters(rasters: List[gdal.Dataset], tile_size: int, aggregation_metho
     """
     # GeoTransform: (ulx, xres, xskew, uly, yskew, yres)
     ulx, xres, xskew, uly, yskew, yres = rasters[0].GetGeoTransform()
-    nodatavalue = rasters[0].GetRasterBand(1).GetNoDataValue()
     bboxes = [bounding_box(raster) for raster in rasters]
     minx, miny, maxx, maxy = MultiPolygon(bboxes).bounds
-    ncols = int(np.ceil((maxx - minx) / tile_size))
-    nrows = int(np.ceil((maxy - miny) / tile_size))
+    ncols = int(np.ceil(((maxx - minx) / abs(xres)) / tile_size))
+    nrows = int(np.ceil(((maxy - miny) / abs(yres)) / tile_size))
+    print(nrows, ncols)
     geo_tile_size_x = (tile_size * abs(xres))
     geo_tile_size_y = (tile_size * abs(yres))
     rows = []
@@ -146,18 +152,18 @@ def merge_rasters(rasters: List[gdal.Dataset], tile_size: int, aggregation_metho
             # print(f"    tile_polygon.bounds: {tile_polygon.bounds}")
             intersecting_rasters = [raster for i, raster in enumerate(rasters) if tile_polygon.intersects(bboxes[i])]
             if len(intersecting_rasters) == 0:
-                tile = np.full((tile_size, tile_size), nodatavalue)
+                tile = np.full((tile_size, tile_size), output_nodatavalue)
             else:
                 tile = tile_aggregate(
                     rasters=intersecting_rasters,
                     bbox=tile_polygon.bounds,
-                    aggregation_method=aggregation_method
+                    aggregation_method=aggregation_method,
+                    output_nodatavalue=output_nodatavalue
                 )
             tiles.append(tile)
             # print(f"    tile.shape: {tile.shape}")
         row = np.hstack(tiles)
         rows.append(row)
-    # rows.reverse()
     result_array = np.vstack(rows)
 
     geotransform = (minx, xres, xskew, maxy, yskew, yres)
@@ -168,6 +174,3 @@ def merge_rasters(rasters: List[gdal.Dataset], tile_size: int, aggregation_metho
         srs=srs,
         data=result_array
     )
-
-
-

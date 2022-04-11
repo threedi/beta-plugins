@@ -17,7 +17,8 @@ def test_merge_rasters():
         rasters,
         tile_size=50,
         aggregation_method='min',
-        output_filename=output_filename
+        output_filename=output_filename,
+        output_nodatavalue=-9999
     )
 
 # def test_align_extent():

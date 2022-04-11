@@ -278,7 +278,8 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 rasters_datasets,
                 tile_size=1000,
                 aggregation_method='min',
-                output_filename=output_raster
+                output_filename=output_raster,
+                output_nodatavalue=-9999    
             )
             rasters_datasets = None
 
