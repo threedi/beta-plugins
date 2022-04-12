@@ -11,8 +11,9 @@
 ***************************************************************************
 """
 # TODO Only add faces that are within the channel's outline
+# TODO Fix channel 10157
+# TODO Replace cliprasterbyextent by call to gdal.Warp()
 
-from typing import List, Tuple
 from uuid import uuid4
 
 import numpy as np
@@ -49,6 +50,7 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes
 )
+import processing
 
 from .rasterize_channel_oo import Channel, CrossSectionLocation, EmptyOffsetError, fill_wedges
 from .rasterize_channel_utils import merge_rasters
@@ -64,7 +66,7 @@ def align_qgs_rectangle(extent: QgsRectangle, xres, yres):
     return QgsRectangle(minx, miny, maxx, maxy)
 
 
-class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
+class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
     """
     Rasterize channels using its cross sections
     """
@@ -193,7 +195,11 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                                 faces_added += 1
                                 occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
                 if faces_added != total_triangles:
-                    feedback.pushWarning(f"Warning: Added only {faces_added} out of {total_triangles} triangles to mesh!")
+                    missing_area = np.sum(np.array([tri.geometry.area for tri in triangles_dict.values()]))
+                    if missing_area > (pixel_size**2):
+                        feedback.pushWarning(
+                            f"Warning: Up to {int(missing_area/(pixel_size**2))} pixel(s) may be missing from the "
+                            f"raster for channel {channel.id} !")
 
                 mesh_layer.commitFrameEditing(transform, continueEditing=False)
                 context.temporaryLayerStore().addMapLayer(mesh_layer)  # otherwise it cannot be used in processing alg
@@ -205,22 +211,16 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     'DATASET_TIME': {'type': 'static'},
                     'EXTENT': extent,
                     'PIXEL_SIZE': pixel_size,
-                    'CRS_OUTPUT': QgsCoordinateReferenceSystem('EPSG:28992'),
+                    'CRS_OUTPUT': channel_features.sourceCrs(),
                     'OUTPUT': 'TEMPORARY_OUTPUT'
                 }
 
-                # use QgsProcessingAlgorithm.run() instead of processing.run() to be able to hide feedback but still be
-                # able to check if algorithm ran succesfully (ok == True)
-                alg_meshrasterize = reg.algorithmById("native:meshrasterize")
-                results, ok = alg_meshrasterize.run(
-                    parameters=rasterize_mesh_params,
-                    context=context,
-                    feedback=QgsProcessingFeedback()
-                )
-                if not ok:
-                    multi_step_feedback.pushError(f"Error when rasterizing mesh for channel {channel.id}")
-                    continue
-                rasterized = results["OUTPUT"]
+                # Do not pass feedback to child algorithm to keep the logging clean
+                rasterized = processing.run(
+                    "native:meshrasterize",
+                    rasterize_mesh_params,
+                    context=context
+                )["OUTPUT"]
 
                 channels_crs_auth_id = channel_features.sourceCrs().authid()
                 uri = f"polygon?crs={channels_crs_auth_id}"
@@ -290,14 +290,14 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'mesherize_channels'
+        return 'rasterize_channels'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr('Channels as mesh layers')
+        return self.tr('Rasterize channels')
 
     def group(self):
         """
@@ -320,4 +320,4 @@ class MesherizeChannelsAlgorithm(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return MesherizeChannelsAlgorithm()
+        return RasterizeChannelsAlgorithm()
