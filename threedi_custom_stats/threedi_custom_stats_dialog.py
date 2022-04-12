@@ -23,9 +23,7 @@
  ***************************************************************************/
 """
 
-import os
 import sys
-from collections import namedtuple
 from types import MethodType
 
 from qgis.PyQt import QtWidgets

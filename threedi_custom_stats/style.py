@@ -1,6 +1,5 @@
 import os
 import numpy as np
-from typing import List
 
 from qgis.core import QgsSymbolLayer, QgsMarkerSymbol, QgsProperty, QgsExpression, \
     QgsExpressionContext, QgsExpressionContextUtils

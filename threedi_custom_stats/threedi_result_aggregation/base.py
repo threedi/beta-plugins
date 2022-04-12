@@ -11,10 +11,10 @@ from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 from threedigrid.admin.nodes.models import Nodes, Cells
 from threedigrid.admin.lines.models import Lines
 
-import gdal
+from osgeo import gdal
 import numpy as np
-import ogr
-import osr
+from osgeo import ogr
+from osgeo import osr
 
 try:
     from constants import *

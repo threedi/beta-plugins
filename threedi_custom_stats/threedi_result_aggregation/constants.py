@@ -2,7 +2,7 @@
 import numpy as np
 
 # custom
-import ogr
+from osgeo import ogr
 from threedigrid.admin.utils import KCUDescriptor
 
 # local

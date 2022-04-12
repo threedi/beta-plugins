@@ -6,7 +6,6 @@ from qgis.core import (
     QgsWkbTypes,
     QgsGeometry
 )
-import time
 
 FIELD_TYPES = {
     ogr.OFTInteger: 'integer',  # OFTInteger, Simple 32bit integer
