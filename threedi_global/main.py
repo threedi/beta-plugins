@@ -33,8 +33,8 @@ import shutil
 
 dem_uuid =  "eae92c48-cd68-4820-9d82-f86f763b4186"
 headers = {
-    "username": 'kizje.marif',
-    "password": '@Northgo93',
+    "username": 'user.name',
+    "password": 'password',
     "Content-Type": "application/json",
 }
 
@@ -181,10 +181,29 @@ def main(dir_Home: str, shape_path: str, name_model: str):
     spatialiteFile_src = f'{dir_home}\leeg.sqlite'
     spatialiteFile_dst = f'{dir_model}\{name_model}.sqlite'
     shutil.copyfile(spatialiteFile_src, spatialiteFile_dst)
-    update_spatialite(spatialiteFile_dst):
+    update_spatialite(spatialiteFile_dst)
     
     #Let op update ook de naam van het raster vo
     
     #4. Make revision and schematisation
+    """
+    Workflow upload:
+    1. Create schematisation
+    2. 
     
-    
+    """
+    raster_names = {"dem_file": "elevation"}
+    tags = ["W0176", "Global", "demomodel"]
+  #  sqlite_path = "C:/Temp/utrecht/dummy_data/schematisation.sqlite"
+    schematisation_name = "Test voor 3Di goes global"
+
+    upload_and_process(
+        schematisation_name=schematisation_name,
+        sqlite_path=spatialiteFile_dst,
+        raster_names=raster_names,
+        schematisation_create_tags=tags
+    )
+
+
+
+dir_home = r'C:\Users\kizje.marif\Documents\3Di goes global'
