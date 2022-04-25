@@ -39,6 +39,8 @@ from .ogr2qgis import *
 from .resources import *
 # Import the code for the dialog
 from .threedi_custom_stats_dialog import ThreeDiCustomStatsDialog
+from .processing.provider import ThreeDiCustomStatisticsProvider
+
 import os.path
 
 
@@ -245,6 +247,12 @@ class ThreeDiCustomStats:
         self.first_start = None
 
         self.tm = QgsApplication.taskManager()
+        self.provider = None
+
+    def initProcessing(self):
+        """Create the Qgis Processing Toolbox provider and its algorithms"""
+        self.provider = ThreeDiCustomStatisticsProvider()
+        QgsApplication.processingRegistry().addProvider(self.provider)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -347,6 +355,7 @@ class ThreeDiCustomStats:
 
         # will be set False in run()
         self.first_start = True
+        self.initProcessing()
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -355,6 +364,7 @@ class ThreeDiCustomStats:
                 self.tr(u'&3Di Custom Statistics'),
                 action)
             self.iface.removeToolBarIcon(action)
+        QgsApplication.processingRegistry().removeProvider(self.provider)
 
     def run(self):
         """Run method that performs all the real work"""

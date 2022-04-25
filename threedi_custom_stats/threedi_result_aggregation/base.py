@@ -5,7 +5,7 @@
 
 import argparse
 import warnings
-from typing import List
+from typing import List, Tuple
 
 from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 from threedigrid.admin.nodes.models import Nodes, Cells
@@ -94,23 +94,33 @@ def find_finite_1d(x: np.array, index: int):
         return np.nan
 
 
-def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregation,
-                   cfl_strictness=1):
+def prepare_timeseries(
+        nodes_or_lines: Union[Nodes, Lines],
+        start_time: float,
+        end_time: float,
+        aggregation: Aggregation,
+        cfl_strictness=1
+) -> Tuple[np.array, np.array]:
     """
-    Aggregate the variable with method using threshold within time frame
-
-        :rtype: np.ndarray
+    Return a timeseries of the variable specified by `aggregation`, with some fixes to facilitate further processing
 
     This method implicitly assumes that the discharge at a specific timestamp remains the same until the next
     timestamp, i.e. if there are timestamps at every 300 s, and the user inputs '450' as end_time, the discharge at
     300 s is multiplied by 150 s for the last 'broken' time interval. In this case, the first timestamp after
     end_time is also required. For that reason, temporal filtering is done within this function, while other types
     of filtering (spatial, typological, id-based) are not.
-    """
 
-    ts_start_time, ts_end_time, tintervals = time_intervals(nodes_or_lines=nodes_or_lines,
-                                                            start_time=start_time,
-                                                            end_time=end_time)
+    -9999 values are replaced with np.nan
+
+    flow direction in 1D2D links is reversed to match the drawing direction
+
+    :return: tuple of timeseries values, time intervals
+    """
+    ts_start_time, ts_end_time, tintervals = time_intervals(
+        nodes_or_lines=nodes_or_lines,
+        start_time=start_time,
+        end_time=end_time
+    )
     ts = nodes_or_lines.timeseries(ts_start_time, ts_end_time)
 
     raw_values = np.ndarray((0, 0))
@@ -193,38 +203,46 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
     else:
         raw_values_signed = raw_values
 
-    # Apply method
+    return raw_values_signed, tintervals
+
+
+def aggregate_prepared_timeseries(
+        timeseries,
+        tintervals,
+        start_time,
+        aggregation: Aggregation
+):
     if aggregation.method.short_name == 'sum':
-        raw_values_per_time_interval = np.multiply(raw_values_signed.T, tintervals).T
+        raw_values_per_time_interval = np.multiply(timeseries.T, tintervals).T
         result = np.sum(raw_values_per_time_interval, axis=0)
     elif aggregation.method.short_name == 'min':
-        result = np.nanmin(raw_values_signed, axis=0)
+        result = np.nanmin(timeseries, axis=0)
     elif aggregation.method.short_name == 'max':
-        result = np.nanmax(raw_values_signed, axis=0)
+        result = np.nanmax(timeseries, axis=0)
     elif aggregation.method.short_name == 'max_time':
-        raw_values_signed[np.isnan(raw_values_signed)] = -9999
-        first_max_pos = np.nanargmax(raw_values_signed, axis=0)
+        timeseries[np.isnan(timeseries)] = -9999
+        first_max_pos = np.nanargmax(timeseries, axis=0)
         time_steps = np.cumsum(np.insert(tintervals[0:-1], 0, start_time))
         result = time_steps[first_max_pos]
     elif aggregation.method.short_name == 'mean':
-        result = np.nanmean(raw_values_signed, axis=0)
+        result = np.nanmean(timeseries, axis=0)
     elif aggregation.method.short_name == 'median':
-        result = np.nanmedian(raw_values_signed, axis=0)
+        result = np.nanmedian(timeseries, axis=0)
     elif aggregation.method.short_name == 'first':
-        result = raw_values_signed[0, :]
+        result = timeseries[0, :]
     elif aggregation.method.short_name == 'first_non_empty':
-        result = np.array([find_finite_1d(col, index=0) for col in raw_values_signed.T])
+        result = np.array([find_finite_1d(col, index=0) for col in timeseries.T])
     elif aggregation.method.short_name == 'last':
-        result = raw_values_signed[-1, :]
+        result = timeseries[-1, :]
     elif aggregation.method.short_name == 'last_non_empty':
-        result = np.array([find_finite_1d(col, index=-1) for col in raw_values_signed.T])
+        result = np.array([find_finite_1d(col, index=-1) for col in timeseries.T])
     elif aggregation.method.short_name == 'above_thres':
-        raw_values_above_threshold = np.greater(raw_values_signed, aggregation.threshold)
+        raw_values_above_threshold = np.greater(timeseries, aggregation.threshold)
         time_above_treshold = np.sum(np.multiply(raw_values_above_threshold.T, tintervals).T, axis=0)
         total_time = np.sum(tintervals)
         result = np.multiply(np.divide(time_above_treshold, total_time), 100.0)
     elif aggregation.method.short_name == 'below_thres':
-        raw_values_below_threshold = np.less(raw_values_signed, aggregation.threshold)
+        raw_values_below_threshold = np.less(timeseries, aggregation.threshold)
         time_below_treshold = np.sum(np.multiply(raw_values_below_threshold.T, tintervals).T, axis=0)
         total_time = np.sum(tintervals)
         result = np.multiply(np.divide(time_below_treshold, total_time), 100.0)
@@ -232,8 +250,44 @@ def time_aggregate(nodes_or_lines, start_time, end_time, aggregation: Aggregatio
         raise ValueError('Unknown aggregation method "{}".'.format(aggregation.method.long_name))
 
     # multiplier (unit conversion)
+    # TODO should this be moved to curated_timeseries()?
     result *= aggregation.multiplier
+    return result
 
+
+def time_aggregate(
+        nodes_or_lines,
+        start_time,
+        end_time,
+        aggregation: Aggregation,
+        cfl_strictness=1
+):
+    """
+    Aggregate the variable with method using threshold within time frame
+
+    :rtype: np.ndarray
+
+    This method implicitly assumes that the discharge at a specific timestamp remains the same until the next
+    timestamp, i.e. if there are timestamps at every 300 s, and the user inputs '450' as end_time, the discharge at
+    300 s is multiplied by 150 s for the last 'broken' time interval. In this case, the first timestamp after
+    end_time is also required. For that reason, temporal filtering is done within this function, while other types
+    of filtering (spatial, typological, id-based) are not.
+    """
+    timeseries, tintervals = prepare_timeseries(
+        nodes_or_lines=nodes_or_lines,
+        start_time=start_time,
+        end_time=end_time,
+        aggregation=aggregation,
+        cfl_strictness=cfl_strictness
+    )
+
+    # Apply aggregation method
+    result = aggregate_prepared_timeseries(
+        timeseries=timeseries,
+        tintervals=tintervals,
+        start_time=start_time,
+        aggregation=aggregation
+    )
     return result
 
 
