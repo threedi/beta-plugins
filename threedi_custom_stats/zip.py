@@ -3,6 +3,7 @@ import os
 
 ROOT_DIR_FILES = [
     '__init__.py',
+    'cross_sectional_discharge.py',
     'icon.png',
     'metadata.txt',
     'ogr2qgis.py',
@@ -16,6 +17,7 @@ ROOT_DIR_FILES = [
 ]
 
 DIRECTORIES = [
+    'processing',
     'style',
     'threedi_result_aggregation'
 ]

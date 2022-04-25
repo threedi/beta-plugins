@@ -7,10 +7,17 @@ from shapely.geometry import Point, LineString, MultiLineString, MultiPoint
 from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 from threedigrid.admin.lines.models import Lines
 
-from .threedigrid_networkx import Q_NET_SUM
-from .threedi_result_aggregation.aggregation_classes import Aggregation
+from .threedi_result_aggregation.aggregation_classes import Aggregation, AggregationSign
+from .threedi_result_aggregation.constants import AGGREGATION_VARIABLES, AGGREGATION_METHODS
 from .threedi_result_aggregation.base import prepare_timeseries, aggregate_prepared_timeseries
 from .threedi_result_aggregation.threedigrid_ogr import threedigrid_to_ogr
+
+
+Q_NET_SUM = Aggregation(
+    variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
+    method=AGGREGATION_METHODS.get_by_short_name('sum'),
+    sign=AggregationSign('net', 'Net')
+)
 
 
 def intersected_segments(line: Union[LineString, MultiLineString], intersecting_line: LineString) -> List[LineString]:

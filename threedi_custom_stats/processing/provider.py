@@ -19,7 +19,7 @@ class ThreeDiCustomStatisticsProvider(QgsProcessingProvider):
         This string should be a unique, short, character only string,
         eg "qgis" or "gdal". This string should not be localised.
         """
-        return "threedi_network_analysis"
+        return "threedi_custom_statistics"
 
     def name(self, *args, **kwargs):
         """The human friendly name of your plugin in Processing.
@@ -27,7 +27,7 @@ class ThreeDiCustomStatisticsProvider(QgsProcessingProvider):
           This string should be as short as possible (e.g. "Lastools", not
         "Lastools version 1.0.1 64-bit") and localised.
         """
-        return self.tr("3Di Network Analysis")
+        return self.tr("3Di Custom Statistics")
 
     def icon(self):
         """Should return a QIcon which is used for your provider inside

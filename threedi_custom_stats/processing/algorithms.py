@@ -97,7 +97,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_FLOWLINES,
-                self.tr('Intersected flowlines'),
+                self.tr('Output: Intersected flowlines'),
                 type=QgsProcessing.TypeVectorLine
             )
         )
@@ -105,14 +105,14 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_GAUGE_LINES,
-                self.tr('Gauge lines output'),
+                self.tr('Output: Cross-section lines'),
                 type=QgsProcessing.TypeVectorLine
             )
         )
 
         self.addParameter(
             QgsProcessingParameterFileDestination(
-                self.OUTPUT_TIME_SERIES, self.tr("Timeseries output"), fileFilter="csv"
+                self.OUTPUT_TIME_SERIES, self.tr("Output: Timeseries"), fileFilter="csv"
             )
         )
 
@@ -207,7 +207,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         layer = QgsVectorLayer(csv_output_file_path, "Time series output")
         context.temporaryLayerStore().addMapLayer(layer)
         layer_details = QgsProcessingContext.LayerDetails(
-            csv_output_file_path, context.project(), "Time series output"
+            "Output: Timeseries", context.project(), "Output: Timeseries"
         )
         context.addLayerToLoadOnCompletion(layer.id(), layer_details)
 
@@ -224,10 +224,10 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         return self.tr("Cross-sectional discharge")
 
     def group(self):
-        return self.tr("Analysis")
+        return self.tr("Discharge")
 
     def groupId(self):
-        return "Analysis"
+        return "Discharge"
 
     def shortHelpString(self):
         return self.tr(
