@@ -142,7 +142,8 @@ def threedigrid_to_ogr(threedigrid_src: Union[Nodes, Cells, Lines],
             for attr in all_attributes.keys():
                 val = all_attributes[attr][i]
                 if all_attr_data_types[attr] in [ogr.OFTInteger]:
-                    val = int(val)
+                    if val is not None:
+                        val = int(val)
                 elif all_attr_data_types[attr] in [ogr.OFTString]:
                     if isinstance(val, bytes):
                         val = val.decode('utf-8')

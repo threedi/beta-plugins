@@ -6,6 +6,7 @@ from qgis.core import (
     QgsWkbTypes,
     QgsGeometry
 )
+import time
 
 FIELD_TYPES = {
     ogr.OFTInteger: 'integer',  # OFTInteger, Simple 32bit integer
@@ -26,7 +27,6 @@ GEOMETRY_TYPES = {  # See full list: https://gdal.org/doxygen/ogr__core_8h.html,
 def field_defn_as_uri_param(field_defn):
     """
     Converts an OGR field definition to a QgsVectorLayer uri field parameter string
-
     :param field_defn: ogr.FeatureDefn
     :return: str
     """
@@ -47,7 +47,6 @@ def field_defn_as_uri_param(field_defn):
 def layer_as_uri(layer, index=True):
     """
     Converts an OGR feature definition to a QgsVectorLayer uri field parameters string
-
     :param field_defn: ogr.FeatureDefn
     :return: str
     """
@@ -81,15 +80,15 @@ def layer_as_uri(layer, index=True):
     return geom_param + '?' + '&'.join(other_params)
 
 
-def ogr_feature_as_qgis_feature(ogr_feature, qgs_vector_lyr):
-
+def ogr_feature_as_qgis_feature(ogr_feature, qgs_vector_lyr, tgt_wkb_type=None, tgt_fields=None):
     # start_time = time.perf_counter()
     # f = open("C:\\Users\\leendert.vanwolfswin\\Downloads\\ogr_feature_as_qgis_feature.log", "a+")
     # f.write('action; time\n')
 
     # geometry
     ogr_geom_ref = ogr_feature.GetGeometryRef()
-    tgt_wkb_type = qgs_vector_lyr.wkbType()
+    if tgt_wkb_type is None:
+        tgt_wkb_type = qgs_vector_lyr.wkbType()
     if not QgsWkbTypes.hasZ(tgt_wkb_type):
         ogr_geom_ref.FlattenTo2D()
     ogr_geom_wkb = ogr_geom_ref.ExportToWkb()
@@ -106,10 +105,13 @@ def ogr_feature_as_qgis_feature(ogr_feature, qgs_vector_lyr):
     #     ogr_field_value = ogr_feature.GetField(ogr_field_idx)
     #     attributes[idx] = ogr_field_value
     attributes = []
-    for field in qgs_vector_lyr.fields():
+    if tgt_fields is None:
+        tgt_fields = qgs_vector_lyr.fields()
+    for field in tgt_fields:
         ogr_field_idx = ogr_feature.GetFieldIndex(field.name())
-        ogr_field_value = ogr_feature.GetField(ogr_field_idx)
-        attributes.append(ogr_field_value)
+        if ogr_field_idx != -1:
+            ogr_field_value = ogr_feature.GetField(ogr_field_idx)
+            attributes.append(ogr_field_value)
 
     # delta_time=time.perf_counter() - start_time
     # f.write('Make attribute dict;{}\n'.format(str(delta_time)))
@@ -117,7 +119,7 @@ def ogr_feature_as_qgis_feature(ogr_feature, qgs_vector_lyr):
     qgs_feature = QgsFeature()
     qgs_feature.setGeometry(qgs_geom)
     qgs_feature.setAttributes(attributes)
-    # qgs_feature = QgsVectorLayerUtils.createFeature(layer=qgs_vector_lyr,
+    # qgs_feature = QgsVectorLayerUtils.createFeature(target_node_layer=qgs_vector_lyr,
     #                                                 geometry=qgs_geom,
     #                                                 attributes=attributes
     #                                                 )
@@ -130,10 +132,21 @@ def ogr_feature_as_qgis_feature(ogr_feature, qgs_vector_lyr):
     return qgs_feature
 
 
+def append_to_qgs_vector_layer(ogr_layer, qgs_vector_layer):
+    qgs_features = []
+    for ogr_feature in ogr_layer:
+        qgs_feature = ogr_feature_as_qgis_feature(ogr_feature, qgs_vector_layer)
+        qgs_features.append(qgs_feature)
+
+    # qgs_vector_layer.startEditing()
+    qgs_vector_layer.dataProvider().addFeatures(qgs_features)
+    # qgs_vector_layer.commitChanges()
+
+
 def as_qgis_memory_layer(ogr_layer, base_name):
     """
     Creates a QgsVectorLayer from an in memory ogr Layer
-
+    :param base_name: name of output qgis target_node_layer
     :param ogr_layer: osgeo.ogr.Layer
     :return: qgis.core.QgsVectorLayer
     """
@@ -147,26 +160,9 @@ def as_qgis_memory_layer(ogr_layer, base_name):
         providerLib='memory',
         options=QgsVectorLayer.LayerOptions())
 
-    # delta_time=time.perf_counter() - start_time
-    # f.write('Created QgsVectorLayer. Time needed: {}\n'.format(str(delta_time)))
-    qgs_features=[]
-    for ogr_feature in ogr_layer:
-        qgs_feature = ogr_feature_as_qgis_feature(ogr_feature, qgs_vector_layer)
-        qgs_features.append(qgs_feature)
-
-    # delta_time=time.perf_counter() - start_time - delta_time
-    # f.write('Created features. Time needed: {}\n'.format(str(delta_time)))
-
-    #qgs_vector_layer.startEditing()
-    qgs_vector_layer.dataProvider().addFeatures(qgs_features)
-    #qgs_vector_layer.commitChanges()
-
-    # delta_time = time.perf_counter() - start_time - delta_time
-    # f.writelines('Added features. Time needed: {}\n'.format(str(delta_time)))
-    # f.close()
+    append_to_qgs_vector_layer(ogr_layer=ogr_layer, qgs_vector_layer=qgs_vector_layer)
 
     return qgs_vector_layer
-
 
 # ## testing
 # test_data = "C:/Users/leendert.vanwolfswin/Documents/threedi_custom_stats_test_data/minipyltjes.gpkg"
