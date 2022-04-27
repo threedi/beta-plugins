@@ -27,10 +27,10 @@ __copyright__ = "(C) 2022 by Nelen en Schuurmans"
 
 # This will get replaced with a git SHA1 when you do a git archive
 __revision__ = "$Format:%H$"
-
 import numpy as np
 import os
 from osgeo import ogr
+from pathlib import Path
 from qgis.core import QgsCoordinateReferenceSystem
 from qgis.core import QgsFeature
 from qgis.core import QgsFeatureSink
@@ -39,6 +39,7 @@ from qgis.core import QgsFields
 from qgis.core import QgsProcessing
 from qgis.core import QgsProcessingAlgorithm
 from qgis.core import QgsProcessingContext
+from qgis.core import QgsProcessingParameterNumber
 from qgis.core import QgsProcessingParameterFeatureSink
 from qgis.core import QgsProcessingParameterFeatureSource
 from qgis.core import QgsProcessingParameterFile
@@ -54,7 +55,7 @@ from ..ogr2qgis import ogr_feature_as_qgis_feature
 
 
 MEMORY_DRIVER = ogr.GetDriverByName("MEMORY")
-
+STYLE_DIR = Path(__file__).parent.parent / "style"
 
 class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
     # Constants used to refer to parameters and outputs. They will be
@@ -63,9 +64,11 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
     GRIDADMIN_INPUT = "GRIDADMIN_INPUT"
     RESULTS_3DI_INPUT = "RESULTS_3DI_INPUT"
-    GAUGE_LINE_INPUT = "GAUGE_LINES_INPUT"
+    CROSS_SECTION_LINES_INPUT = "CROSS_SECTION_LINES_INPUT"
+    START_TIME = "START_TIME"
+    END_TIME = "END_TIME"
     FIELD_NAME_INPUT = "FIELD_NAME_INPUT"
-    OUTPUT_GAUGE_LINES = "OUTPUT_GAUGE_LINES"
+    OUTPUT_CROSS_SECTION_LINES = "OUTPUT_CROSS_SECTION_LINES"
     OUTPUT_FLOWLINES = "OUTPUT_FLOWLINES"
     OUTPUT_TIME_SERIES = "OUTPUT_TIME_SERIES"
 
@@ -88,9 +91,25 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.GAUGE_LINE_INPUT,
-                self.tr('Gauge lines input'),
+                self.CROSS_SECTION_LINES_INPUT,
+                self.tr('Cross-section lines input'),
                 [QgsProcessing.TypeVectorLine]
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.START_TIME, 'Start time (s)',
+                type=QgsProcessingParameterNumber.Integer,
+                optional=True
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.END_TIME, 'End time (s)',
+                type=QgsProcessingParameterNumber.Integer,
+                optional=True
             )
         )
 
@@ -104,7 +123,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.OUTPUT_GAUGE_LINES,
+                self.OUTPUT_CROSS_SECTION_LINES,
                 self.tr('Output: Cross-section lines'),
                 type=QgsProcessing.TypeVectorLine
             )
@@ -112,7 +131,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFileDestination(
-                self.OUTPUT_TIME_SERIES, self.tr("Output: Timeseries"), fileFilter="csv"
+                self.OUTPUT_TIME_SERIES, self.tr("Output: Timeseries"), fileFilter="*.csv"
             )
         )
 
@@ -123,11 +142,11 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         gridadmin_fn = self.parameterAsFile(parameters, self.GRIDADMIN_INPUT, context)
         results_3di_fn = self.parameterAsFile(parameters, self.RESULTS_3DI_INPUT, context)
         gr = GridH5ResultAdmin(gridadmin_fn, results_3di_fn)
-        gauge_lines_source = self.parameterAsSource(parameters, self.GAUGE_LINE_INPUT, context)
-        csv_output_file_path = self.parameterAsFileOutput(
-            parameters, self.OUTPUT_TIME_SERIES, context
-        )
-        csv_output_file_path = f"{os.path.splitext(csv_output_file_path)[0]}.csv"
+        cross_section_lines_source = self.parameterAsSource(parameters, self.CROSS_SECTION_LINES_INPUT, context)
+        start_time = self.parameterAsInt(parameters, self.START_TIME, context) if parameters[self.START_TIME] else None
+        end_time = self.parameterAsInt(parameters, self.END_TIME, context) if parameters[self.END_TIME] else None
+        self.csv_output_file_path = self.parameterAsFileOutput(parameters, self.OUTPUT_TIME_SERIES, context)
+        self.csv_output_file_path = f"{os.path.splitext(self.csv_output_file_path)[0]}.csv"
 
         flowlines_sink_fields = QgsFields()
         flowlines_sink_fields.append(QgsField(name='id', type=QVariant.Int))
@@ -139,7 +158,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         flowlines_sink_fields.append(QgsField(name='q_net_sum', type=QVariant.Double))
 
         crs = QgsCoordinateReferenceSystem(f"EPSG:{gr.epsg_code}")
-        (flowlines_sink, flowlines_sink_dest_id) = self.parameterAsSink(
+        (flowlines_sink, self.flowlines_sink_dest_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_FLOWLINES,
             context,
@@ -148,41 +167,43 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             crs=crs
         )
 
-        gaugelines_sink_fields = QgsFields()
-        gaugelines_sink_fields.append(QgsField(name='id', type=QVariant.Int))
-        gaugelines_sink_fields.append(QgsField(name='q_net_sum', type=QVariant.Double))
-        (gaugelines_sink, gaugelines_sink_dest_id) = self.parameterAsSink(
+        cross_section_lines_sink_fields = QgsFields()
+        cross_section_lines_sink_fields.append(QgsField(name='id', type=QVariant.Int))
+        cross_section_lines_sink_fields.append(QgsField(name='q_net_sum', type=QVariant.Double))
+        (cross_section_lines_sink, self.cross_section_lines_sink_dest_id) = self.parameterAsSink(
             parameters,
-            self.OUTPUT_GAUGE_LINES,
+            self.OUTPUT_CROSS_SECTION_LINES,
             context,
-            fields=gaugelines_sink_fields,
+            fields=cross_section_lines_sink_fields,
             geometryType=QgsWkbTypes.LineString,
-            crs=gauge_lines_source.sourceCrs()
+            crs=cross_section_lines_source.sourceCrs()
         )
 
-        for i, gauge_line in enumerate(gauge_lines_source.getFeatures()):
+        for i, gauge_line in enumerate(cross_section_lines_source.getFeatures()):
             shapely_linestring = wkt.loads(gauge_line.geometry().asWkt())
             tgt_ds = MEMORY_DRIVER.CreateDataSource("")
             ts_gauge_line, total_discharge = left_to_right_discharge_ogr(
                 gr=gr,
                 gauge_line=shapely_linestring,
                 tgt_ds=tgt_ds,
-                gauge_line_id=gauge_line.id()
+                gauge_line_id=gauge_line.id(),
+                start_time=start_time,
+                end_time=end_time
             )
             feedback.pushInfo(f"total discharge for gauge line {gauge_line.id()}: {total_discharge}")
             if i == 0:
-                ts_all_gauge_lines = ts_gauge_line
+                ts_all_cross_section_lines = ts_gauge_line
                 column_names = ['"timestep"', f'"{gauge_line.id()}"']
                 formatting = ["%d", "%.6f"]
             else:
-                ts_all_gauge_lines = np.column_stack([ts_all_gauge_lines, ts_gauge_line[:, 1]])
+                ts_all_cross_section_lines = np.column_stack([ts_all_cross_section_lines, ts_gauge_line[:, 1]])
                 column_names.append(f'"{gauge_line.id()}"')
                 formatting.append("%.6f")
-            gaugeline_feature = QgsFeature(gaugelines_sink_fields)
+            gaugeline_feature = QgsFeature(cross_section_lines_sink_fields)
             gaugeline_feature[0] = gauge_line.id()
             gaugeline_feature[1] = float(total_discharge)
             gaugeline_feature.setGeometry(gauge_line.geometry())
-            gaugelines_sink.addFeature(
+            cross_section_lines_sink.addFeature(
                 gaugeline_feature,
                 QgsFeatureSink.FastInsert
             )
@@ -197,14 +218,14 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                 flowlines_sink.addFeature(qgs_feature, QgsFeatureSink.FastInsert)
 
         np.savetxt(
-            csv_output_file_path,
-            ts_all_gauge_lines,
+            self.csv_output_file_path,
+            ts_all_cross_section_lines,
             delimiter=",",
             header=",".join(column_names),
             fmt=formatting,
             comments=""
         )
-        layer = QgsVectorLayer(csv_output_file_path, "Time series output")
+        layer = QgsVectorLayer(self.csv_output_file_path, "Time series output")
         context.temporaryLayerStore().addMapLayer(layer)
         layer_details = QgsProcessingContext.LayerDetails(
             "Output: Timeseries", context.project(), "Output: Timeseries"
@@ -212,10 +233,24 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         context.addLayerToLoadOnCompletion(layer.id(), layer_details)
 
         return {
-            self.OUTPUT_FLOWLINES: flowlines_sink_dest_id,
-            self.OUTPUT_GAUGE_LINES: gaugelines_sink_dest_id,
-            self.OUTPUT_TIME_SERIES: csv_output_file_path
+            self.OUTPUT_FLOWLINES: self.flowlines_sink_dest_id,
+            self.OUTPUT_CROSS_SECTION_LINES: self.cross_section_lines_sink_dest_id,
+            self.OUTPUT_TIME_SERIES: self.csv_output_file_path
         }
+
+    def postProcessAlgorithm(self, context, feedback):
+        """Set styling of output vector layers"""
+        cross_section_lines_output_layer = context.getMapLayer(self.cross_section_lines_sink_dest_id)
+        cross_section_lines_output_layer.loadNamedStyle(str(STYLE_DIR / "cross_sectional_discharge.qml"))
+        flowlines_output_layer = context.getMapLayer(self.flowlines_sink_dest_id)
+        flowlines_output_layer.loadNamedStyle(str(STYLE_DIR / "cross_sectional_discharge_flowlines.qml"))
+
+        return {
+            self.OUTPUT_FLOWLINES: self.flowlines_sink_dest_id,
+            self.OUTPUT_CROSS_SECTION_LINES: self.cross_section_lines_sink_dest_id,
+            self.OUTPUT_TIME_SERIES: self.csv_output_file_path
+        }
+
 
     def name(self):
         return "crosssectionaldischarge"
@@ -234,7 +269,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             "Calculate total net discharge over a gauge line. \n\n The sign (positive/negative) of the output "
             "values depend on the drawing direction of the gauge line. Positive values indicate flow from "
             "the left-hand side of the gauge line to the right-hand side. Negative values indicate flow from right "
-            "to left."
+            "to left.\n\n"
+            "Specify start time (in seconds since start of simulation) to exclude all data before that time.\n\n"
+            "Specify end time (in seconds since start of simulation) to exclude all data after that time.\n\n"
         )
 
     def tr(self, string):

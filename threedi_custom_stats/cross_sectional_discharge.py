@@ -67,7 +67,7 @@ def is_left_of_line(point: Point, line: LineString) -> Union[bool, None]:
     return ((end.x - start.x)*(point.y - start.y) - (end.y - start.y)*(point.x - start.x)) > 0
 
 
-def flowline_start_nodes_left_of_line(flowlines: Lines, gauge_line: LineString):
+def flowline_start_nodes_left_of_line(flowlines: Lines, gauge_line: LineString) -> List[bool]:
     result = []
     for i in range(flowlines.count):
         line_coords = flowlines.line_coords[:, i]
@@ -98,11 +98,12 @@ def left_to_right_discharge(
         start_time: float = None,
         end_time: float = None,
         # aggregation: Aggregation = Q_NET_SUM
-) -> Tuple[Lines, np.array, np.array, float]:
+) -> Tuple[Lines, List[bool], np.array, np.array, float]:
     """
     Calculate the total net discharge from the left of a `gauge_line` to the right of that gauge line
 
     :returns: tuple of: Lines that intersect `gauge_line`,
+    List of boolean values indicating if these lines' drawing directions are left-to-right
     timeseries of total discharge in left -> right direction,
     sum of net discharge per flowline in left -> right direction,
     total left -> right discharge
@@ -137,7 +138,7 @@ def left_to_right_discharge(
     timesteps = np.cumsum(np.concatenate(([0], tintervals[:-1]))) + start_time
     ts_gauge_line = np.dstack([timesteps, ts_values_gauge_line]).squeeze()
 
-    return intersecting_lines, ts_gauge_line, agg_by_flowline_left_to_right, summed_vals
+    return intersecting_lines, is_left_to_right, ts_gauge_line, agg_by_flowline_left_to_right, summed_vals
 
 
 def left_to_right_discharge_ogr(
@@ -151,11 +152,12 @@ def left_to_right_discharge_ogr(
     """
     Calculate the total net discharge from the left of a `gauge_line` to the right of that gauge line
 
-    Writes the flowlines with attribute 'q_net_sum' to provided `tgt_ds`
+    Writes the flowlines with attribute 'q_net_sum' to provided `tgt_ds`. Flowline geometries always have their start
+    vertex left of the gauge line
 
     :returns: total left -> right discharge
     """
-    intersecting_lines, ts_gauge_line, q_net_sum_left_to_right, summed_vals = left_to_right_discharge(
+    intersecting_lines, is_left_to_right, ts_gauge_line, q_net_sum_left_to_right, summed_vals = left_to_right_discharge(
         gr=gr,
         gauge_line=gauge_line,
         start_time=start_time,
@@ -170,4 +172,16 @@ def left_to_right_discharge_ogr(
         attributes=attributes,
         attr_data_types=attr_data_types
     )
+    ogr_lyr = tgt_ds.GetLayerByName('flowline')
+    for i, feature in enumerate(ogr_lyr):
+        if is_left_to_right[i]:
+            geom = feature.GetGeometryRef()
+            points = geom.GetPoints()
+            points.reverse()
+            reversed_geom = ogr.Geometry(ogr.wkbLineString)
+            for point in points:
+                reversed_geom.AddPoint(*point)
+            feature.SetGeometryDirectly(reversed_geom)
+            ogr_lyr.SetFeature(feature)
+
     return ts_gauge_line, summed_vals
