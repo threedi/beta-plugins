@@ -17,7 +17,7 @@ from threedi_api_client.openapi import Schematisation
 from threedi_api_client.files import upload_file
 from threedi_api_client.openapi import ApiException
 
-from modules.constants import *
+from threedi_api.constants import *
 from login import get_login_details
 
 CONFIG = {
@@ -178,7 +178,6 @@ def upload_and_process(
 
 ):
     # Schematisatie maken als die nog niet bestaat
-    print
     schematisation = get_or_create_schematisation(schematisation_name, tags=schematisation_create_tags)
     print(schematisation)
     # Nieuwe (lege) revisie aanmaken
@@ -200,7 +199,7 @@ def upload_and_process(
 
     # 3Di model en simulation template genereren
     threedimodel = create_threedimodel(schematisation, revision)
-    return threedimodel
+    return threedimodel, schematisation.id
 
 
 # if __name__ == "__main__":

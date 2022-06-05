@@ -55,14 +55,14 @@ values(
     'rasters/dem.tif',
     0,
     50,
-    28992,
-    0.02,
+    {epsg_code},
+    0.000001,
     0,
-    0.02,
-    'rasters/friction.tif',
-    10,
+    0.04,
+    NULL,
+    100,
     -10,
-    3,
+    1,
     'default',
     240,
     1,
@@ -86,5 +86,5 @@ insert into v2_simple_infiltration(
     infiltration_rate_file)
 values(
     1,
-    0,
-    'rasters/infiltration.tif');
+    240,
+    NULL);
