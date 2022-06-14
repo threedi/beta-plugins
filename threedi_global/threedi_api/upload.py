@@ -147,7 +147,7 @@ def create_threedimodel(
     threedimodel = None
     for i in range(max_retries_creation):
         try:
-            threedimodel = THREEDI_API.schematisations_revisions_create_threedimodel(revision.id, schematisation.id, {})
+            threedimodel = THREEDI_API.schematisations_revisions_create_threedimodel(revision.id, schematisation.id)
             print(f"Creating threedimodel with id {threedimodel.id}...")
             break
         except ApiException:
