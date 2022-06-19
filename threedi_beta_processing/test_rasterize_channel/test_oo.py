@@ -88,6 +88,7 @@ def fill_wedge():
     assert channel_1._wedge_fill_triangles[1].geometry.wkt == 'POLYGON Z ((-1 0 1, -0.9805806756909201 0.196116135138184 1, -1.96116135138184 0.3922322702763681 2, -1 0 1))'
     assert channel_1._wedge_fill_triangles[2].geometry.wkt == 'POLYGON Z ((-1 0 1, -1.96116135138184 0.3922322702763681 2, -2 0 2, -1 0 1))'
 
+
 def channel_init():
     channel_geom = LineString([[0, 0], [1, 1], [2, 2]])
     srs = osr.SpatialReference()
@@ -133,6 +134,7 @@ def channel_properties(channel):
     assert (channel.cross_section_location_positions == np.array([0.5*channel.geometry.length])).all()
     assert str(channel.outline) == 'POLYGON ((-1.414213562373095 1.414213562373095, -0.4142135623730949 2.414213562373095, 0.5857864376269051 3.414213562373095, 3.414213562373095 0.5857864376269051, 2.414213562373095 -0.4142135623730949, 1.414213562373095 -1.414213562373095, -1.414213562373095 1.414213562373095))'
 
+
 def channel_parallel_offsets(channel):
     assert len(channel.parallel_offsets) == 5
     offset_distances = [po.offset_distance for po in channel.parallel_offsets]
@@ -151,6 +153,65 @@ def channel_parallel_offsets(channel):
     assert [str(point) for point in po5.points] == ['POINT Z (3.414213562373095 0.5857864376269051 2)', 'POINT Z (1.414213562373095 -1.414213562373095 2)']
 
 
+def two_vertex_channel():
+    "Test the edge case where all parallel offsets are only two vertices long"
+    wkt_geometry = "LineString (0 0, 10 10)"
+    channel_geom = wkt.loads(wkt_geometry)
+    channel = Channel(geometry=channel_geom, connection_node_start_id=1, connection_node_end_id=2, id=1)
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[1.2, 2.1],
+        heights=[0, 0.53],
+        geometry=Point(5, 5)
+    )
+    channel.add_cross_section_location(cross_section_loc)
+    channel.generate_parallel_offsets()
+    for tri in channel.triangles:
+        print(tri)
+
+
+def wedge_on_both_sides():
+    """Test the situation where a channel has a wedge with the connecting channel at both sides"""
+    channels = []
+
+    wkt_geometries = [
+        "LineString (20 -1, 10 -1)",
+        "LineString (10 -1, 0 0)",
+        "LineString (20 -1, 30 0)"
+    ]
+    connection_node_ids = [
+        (1, 2),
+        (2, 3),
+        (1, 4)
+    ]
+    cross_section_location_geoms = [
+        Point(15, -1),
+        Point(5, -0.5),
+        Point(25, -0.5)
+    ]
+    for i in range(len(wkt_geometries)):
+        channel_geom = wkt.loads(wkt_geometries[i])
+        channels.append(Channel(
+            geometry=channel_geom,
+            connection_node_start_id=connection_node_ids[i][0],
+            connection_node_end_id=connection_node_ids[i][1],
+            id=i
+        ))
+        cross_section_loc = CrossSectionLocation(
+            reference_level=10.0,
+            bank_level=12.0,
+            widths=[1.2, 2.1],
+            heights=[0, 0.53],
+            geometry=cross_section_location_geoms[i]
+        )
+        channels[i].add_cross_section_location(cross_section_loc)
+        channels[i].generate_parallel_offsets()
+    fill_wedges(channels)
+    print(channels[1]._wedge_fill_triangles)
+
+
 def cross_section_starting_at_0_0():
     wkt_geometry = "LineString (94066.74041438 441349.75156281, 94060.74041445 441355.7515628, 94064.24041445 441359.75156275, 94074.24041445 441372.25156263)"
     channel_geom = wkt.loads(wkt_geometry)
@@ -165,6 +226,7 @@ def cross_section_starting_at_0_0():
     )
     channel.add_cross_section_location(cross_section_loc)
     channel.generate_parallel_offsets()
+
 
 def channel_max_width_at(channel):
     channel_geom = LineString([[0, 0], [0, 1], [0, 2], [0, 3]])
@@ -230,18 +292,20 @@ def parallel_offset_heights_at_vertices():
 
 
 def run_tests():
-    indexed_point()
-    triangle()
-    channel = channel_init()
-    channel_vertex_positions(channel)
-    xsec = cross_section_location()
-    cross_section_location_height_at(xsec)
-    channel_add_cross_section_location(channel, xsec)
-    channel_properties(channel)
-    channel_max_width_at(channel)
-    channel.generate_parallel_offsets()
-    parallel_offset_heights_at_vertices()
-    cross_section_starting_at_0_0()
+    # indexed_point()
+    # triangle()
+    # channel = channel_init()
+    # channel_vertex_positions(channel)
+    # xsec = cross_section_location()
+    # cross_section_location_height_at(xsec)
+    # channel_add_cross_section_location(channel, xsec)
+    # channel_properties(channel)
+    # channel_max_width_at(channel)
+    # channel.generate_parallel_offsets()
+    # two_vertex_channel()
+    wedge_on_both_sides()
+    # parallel_offset_heights_at_vertices()
+    # cross_section_starting_at_0_0()
     # test_find_wedge_channels()
     # fill_wedge()
 
@@ -254,5 +318,6 @@ def run_tests():
     #     selects.append(f"SELECT {i+1} as id, geom_from_wkt('{str(tri)}')")
     # print("\nUNION\n".join(selects))
     # return channel.points
+
 
 run_tests()
