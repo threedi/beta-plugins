@@ -209,6 +209,8 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         
         feedback.setProgress(0)
         for i, gauge_line in enumerate(cross_section_lines_source.getFeatures()):
+            if feedback.isCanceled():
+                return {}
             feedback.setProgressText(f"Processing cross-section line {gauge_line.id()}...")
             shapely_linestring = wkt.loads(gauge_line.geometry().asWkt())
             tgt_ds = MEMORY_DRIVER.CreateDataSource("")
