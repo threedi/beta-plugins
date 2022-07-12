@@ -170,8 +170,6 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         start_time = self.parameterAsInt(parameters, self.START_TIME, context) if parameters[self.START_TIME] else None
         end_time = self.parameterAsInt(parameters, self.END_TIME, context) if parameters[self.END_TIME] else None
         subset = self.SUBSETS[parameters[self.SUBSET]] if parameters[self.SUBSET] else None
-        feedback.pushInfo(f"parameters[self.SUBSET]: {parameters[self.SUBSET]}")
-        feedback.pushInfo(f"Using subset: {subset}")
         field_name = self.parameterAsString(parameters, self.FIELD_NAME_INPUT, context) \
             if parameters[self.FIELD_NAME_INPUT] \
             else "q_net_sum"
@@ -208,8 +206,10 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             geometryType=QgsWkbTypes.LineString,
             crs=cross_section_lines_source.sourceCrs()
         )
-
+        
+        feedback.setProgress(0)
         for i, gauge_line in enumerate(cross_section_lines_source.getFeatures()):
+            feedback.setProgressText(f"Processing cross-section line {gauge_line.id()}...")
             shapely_linestring = wkt.loads(gauge_line.geometry().asWkt())
             tgt_ds = MEMORY_DRIVER.CreateDataSource("")
             ts_gauge_line, total_discharge = left_to_right_discharge_ogr(
@@ -221,7 +221,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                 end_time=end_time,
                 subset=subset
             )
-            feedback.pushInfo(f"total discharge for gauge line {gauge_line.id()}: {total_discharge}")
+            feedback.pushInfo(f"Net sum of discharge for cross-section line {gauge_line.id()}: {total_discharge}")
             if i == 0:
                 ts_all_cross_section_lines = ts_gauge_line
                 column_names = ['"timestep"', f'"{gauge_line.id()}"']
@@ -247,6 +247,8 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                     tgt_fields=flowlines_sink_fields
                 )
                 flowlines_sink.addFeature(qgs_feature, QgsFeatureSink.FastInsert)
+            feedback.setProgress(100 * i / cross_section_lines_source.featureCount())
+
 
         np.savetxt(
             self.csv_output_file_path,
