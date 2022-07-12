@@ -96,8 +96,7 @@ def left_to_right_discharge(
         gr: GridH5ResultAdmin,
         gauge_line: LineString,
         start_time: float = None,
-        end_time: float = None,
-        # aggregation: Aggregation = Q_NET_SUM
+        end_time: float = None
 ) -> Tuple[Lines, List[bool], np.array, np.array, float]:
     """
     Calculate the total net discharge from the left of a `gauge_line` to the right of that gauge line
@@ -108,16 +107,15 @@ def left_to_right_discharge(
     sum of net discharge per flowline in left -> right direction,
     total left -> right discharge
     """
-    print("starting left_to_right_discharge")
-    intersecting_lines = gr.lines.filter(line_coords__intersects_geometry=gauge_line)
-    print("found intersecting lines")
+    intersecting_lines = gr.lines\
+        .filter(line_coords__intersects_bbox=gauge_line.bounds)\
+        .filter(line_coords__intersects_geometry=gauge_line)
     ts, tintervals = prepare_timeseries(
         nodes_or_lines=intersecting_lines,
         start_time=start_time,
         end_time=end_time,
         aggregation=Q_NET_SUM
     )
-    print("prepared timeseries")
     agg_by_flowline = aggregate_prepared_timeseries(
         timeseries=ts,
         tintervals=tintervals,
