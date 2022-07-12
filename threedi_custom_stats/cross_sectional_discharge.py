@@ -96,7 +96,8 @@ def left_to_right_discharge(
         gr: GridH5ResultAdmin,
         gauge_line: LineString,
         start_time: float = None,
-        end_time: float = None
+        end_time: float = None,
+        subset: str = None
 ) -> Tuple[Lines, List[bool], np.array, np.array, float]:
     """
     Calculate the total net discharge from the left of a `gauge_line` to the right of that gauge line
@@ -110,6 +111,8 @@ def left_to_right_discharge(
     intersecting_lines = gr.lines\
         .filter(line_coords__intersects_bbox=gauge_line.bounds)\
         .filter(line_coords__intersects_geometry=gauge_line)
+    if subset: 
+        intersecting_lines = intersecting_lines.subset(subset)
     ts, tintervals = prepare_timeseries(
         nodes_or_lines=intersecting_lines,
         start_time=start_time,
@@ -145,6 +148,7 @@ def left_to_right_discharge_ogr(
         tgt_ds: ogr.DataSource,
         start_time: float = None,
         end_time: float = None,
+        subset: str = None,
         gauge_line_id: int = None
 ) -> Tuple[np.array, float]:
     """
@@ -159,7 +163,8 @@ def left_to_right_discharge_ogr(
         gr=gr,
         gauge_line=gauge_line,
         start_time=start_time,
-        end_time=end_time
+        end_time=end_time,
+        subset=subset
     )
     gauge_line_ids = [gauge_line_id] * intersecting_lines.count
     attributes = {"gauge_line_id": gauge_line_ids, "q_net_sum": q_net_sum_left_to_right}

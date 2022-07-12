@@ -40,6 +40,7 @@ from qgis.core import QgsProcessing
 from qgis.core import QgsProcessingAlgorithm
 from qgis.core import QgsProcessingContext
 from qgis.core import QgsProcessingParameterNumber
+from qgis.core import QgsProcessingParameterEnum
 from qgis.core import QgsProcessingParameterFeatureSink
 from qgis.core import QgsProcessingParameterFeatureSource
 from qgis.core import QgsProcessingParameterFile
@@ -68,10 +69,15 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
     CROSS_SECTION_LINES_INPUT = "CROSS_SECTION_LINES_INPUT"
     START_TIME = "START_TIME"
     END_TIME = "END_TIME"
+    SUBSET = "SUBSET"
     FIELD_NAME_INPUT = "FIELD_NAME_INPUT"
     OUTPUT_CROSS_SECTION_LINES = "OUTPUT_CROSS_SECTION_LINES"
     OUTPUT_FLOWLINES = "OUTPUT_FLOWLINES"
     OUTPUT_TIME_SERIES = "OUTPUT_TIME_SERIES"
+
+    # These are not algorithm parameters:
+    SUBSET_NAMES = ["2D Surface flow", "2D Groundwater flow", "1D flow"]
+    SUBSETS = ["2D_OPEN_WATER", "2D_GROUNDWATER", "1D"]
 
     def initAlgorithm(self, config):
         """
@@ -110,6 +116,15 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.END_TIME, 'End time (s)',
                 type=QgsProcessingParameterNumber.Integer,
+                optional=True
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.SUBSET, 
+                'Subset', 
+                options=self.SUBSET_NAMES, 
                 optional=True
             )
         )
@@ -154,6 +169,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         cross_section_lines_source = self.parameterAsSource(parameters, self.CROSS_SECTION_LINES_INPUT, context)
         start_time = self.parameterAsInt(parameters, self.START_TIME, context) if parameters[self.START_TIME] else None
         end_time = self.parameterAsInt(parameters, self.END_TIME, context) if parameters[self.END_TIME] else None
+        subset = self.SUBSETS[parameters[self.SUBSET]] if parameters[self.SUBSET] else None
+        feedback.pushInfo(f"parameters[self.SUBSET]: {parameters[self.SUBSET]}")
+        feedback.pushInfo(f"Using subset: {subset}")
         field_name = self.parameterAsString(parameters, self.FIELD_NAME_INPUT, context) \
             if parameters[self.FIELD_NAME_INPUT] \
             else "q_net_sum"
@@ -200,7 +218,8 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                 tgt_ds=tgt_ds,
                 gauge_line_id=gauge_line.id(),
                 start_time=start_time,
-                end_time=end_time
+                end_time=end_time,
+                subset=subset
             )
             feedback.pushInfo(f"total discharge for gauge line {gauge_line.id()}: {total_discharge}")
             if i == 0:
