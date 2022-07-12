@@ -44,6 +44,7 @@ from qgis.core import QgsProcessingParameterFeatureSink
 from qgis.core import QgsProcessingParameterFeatureSource
 from qgis.core import QgsProcessingParameterFile
 from qgis.core import QgsProcessingParameterFileDestination
+from qgis.core import QgsProcessingParameterString
 from qgis.core import QgsVectorLayer
 from qgis.core import QgsWkbTypes
 from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
@@ -130,6 +131,14 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
+            QgsProcessingParameterString(
+                self.FIELD_NAME_INPUT,
+                self.tr('Output field name'),
+                optional=True
+            )
+        )
+
+        self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT_TIME_SERIES, self.tr("Output: Timeseries"), fileFilter="*.csv"
             )
@@ -145,6 +154,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         cross_section_lines_source = self.parameterAsSource(parameters, self.CROSS_SECTION_LINES_INPUT, context)
         start_time = self.parameterAsInt(parameters, self.START_TIME, context) if parameters[self.START_TIME] else None
         end_time = self.parameterAsInt(parameters, self.END_TIME, context) if parameters[self.END_TIME] else None
+        field_name = self.parameterAsString(parameters, self.FIELD_NAME_INPUT, context) \
+            if parameters[self.FIELD_NAME_INPUT] \
+            else "q_net_sum"
         self.csv_output_file_path = self.parameterAsFileOutput(parameters, self.OUTPUT_TIME_SERIES, context)
         self.csv_output_file_path = f"{os.path.splitext(self.csv_output_file_path)[0]}.csv"
 
@@ -169,7 +181,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
         cross_section_lines_sink_fields = QgsFields()
         cross_section_lines_sink_fields.append(QgsField(name='id', type=QVariant.Int))
-        cross_section_lines_sink_fields.append(QgsField(name='q_net_sum', type=QVariant.Double))
+        cross_section_lines_sink_fields.append(QgsField(name=field_name, type=QVariant.Double))
         (cross_section_lines_sink, self.cross_section_lines_sink_dest_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_CROSS_SECTION_LINES,
@@ -272,6 +284,8 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             "to left.\n\n"
             "Specify start time (in seconds since start of simulation) to exclude all data before that time.\n\n"
             "Specify end time (in seconds since start of simulation) to exclude all data after that time.\n\n"
+            "Specify output field name to write the results to a specific field. Useful for combining results of "
+            "multiple simulations in one output layer"
         )
 
     def tr(self, string):
