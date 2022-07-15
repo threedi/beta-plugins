@@ -97,10 +97,14 @@ def left_to_right_discharge(
         gauge_line: LineString,
         start_time: float = None,
         end_time: float = None,
-        subset: str = None
+        subset: str = None,
+        content_types: List[str] = None
 ) -> Tuple[Lines, List[bool], np.array, np.array, float]:
     """
     Calculate the total net discharge from the left of a `gauge_line` to the right of that gauge line
+
+    `content_types` can be specified to filter 1D line types (further filters the given subset). does not affect
+    filtering of lines with `content_type` == ''
 
     :returns: tuple of: Lines that intersect `gauge_line`,
     List of boolean values indicating if these lines' drawing directions are left-to-right
@@ -113,6 +117,16 @@ def left_to_right_discharge(
         .filter(line_coords__intersects_geometry=gauge_line)
     if subset: 
         intersecting_lines = intersecting_lines.subset(subset)
+    if content_types:
+        # filtering on content_type only affects flowlines with a content_type (i.e. 1D flowlines)
+        # therefore we append b''
+        content_types.append('')
+        # 1D/2D flowlines between an added calculation point and a 2D node should are not affected either
+        # therefore we append v2_added_c
+        content_types.append('v2_added_c')
+        # convert to bytes because filtering with a mix of empty and non-empty strings does not work otherwise
+        content_types = [s.encode('utf-8') for s in content_types]
+        intersecting_lines = intersecting_lines.filter(content_type__in=content_types)
     ts, tintervals = prepare_timeseries(
         nodes_or_lines=intersecting_lines,
         start_time=start_time,
@@ -149,6 +163,7 @@ def left_to_right_discharge_ogr(
         start_time: float = None,
         end_time: float = None,
         subset: str = None,
+        content_types: List[str] = None,
         gauge_line_id: int = None
 ) -> Tuple[np.array, float]:
     """
@@ -157,6 +172,9 @@ def left_to_right_discharge_ogr(
     Writes the flowlines with attribute 'q_net_sum' to provided `tgt_ds`. Flowline geometries always have their start
     vertex left of the gauge line
 
+    `content_types` can be specified to filter 1D line types (further filters the given subset). does not affect
+    filtering of lines with `content_type` == ''
+
     :returns: total left -> right discharge
     """
     intersecting_lines, is_left_to_right, ts_gauge_line, q_net_sum_left_to_right, summed_vals = left_to_right_discharge(
@@ -164,7 +182,8 @@ def left_to_right_discharge_ogr(
         gauge_line=gauge_line,
         start_time=start_time,
         end_time=end_time,
-        subset=subset
+        subset=subset,
+        content_types=content_types
     )
     gauge_line_ids = [gauge_line_id] * intersecting_lines.count
     attributes = {"gauge_line_id": gauge_line_ids, "q_net_sum": q_net_sum_left_to_right}

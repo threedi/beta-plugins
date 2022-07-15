@@ -51,6 +51,11 @@ from qgis.core import QgsWkbTypes
 from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
 from shapely import wkt
 from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
+from threedigrid.admin.constants import TYPE_V2_CHANNEL
+from threedigrid.admin.constants import TYPE_V2_CULVERT
+from threedigrid.admin.constants import TYPE_V2_PIPE
+from threedigrid.admin.constants import TYPE_V2_ORIFICE
+from threedigrid.admin.constants import TYPE_V2_WEIR
 
 from ..cross_sectional_discharge import left_to_right_discharge_ogr
 from ..ogr2qgis import ogr_feature_as_qgis_feature
@@ -70,6 +75,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
     START_TIME = "START_TIME"
     END_TIME = "END_TIME"
     SUBSET = "SUBSET"
+    INCLUDE_TYPES_1D = "INCLUDE_TYPES_1D"
     FIELD_NAME_INPUT = "FIELD_NAME_INPUT"
     OUTPUT_CROSS_SECTION_LINES = "OUTPUT_CROSS_SECTION_LINES"
     OUTPUT_FLOWLINES = "OUTPUT_FLOWLINES"
@@ -78,6 +84,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
     # These are not algorithm parameters:
     SUBSET_NAMES = ["2D Surface flow", "2D Groundwater flow", "1D flow"]
     SUBSETS = ["2D_OPEN_WATER", "2D_GROUNDWATER", "1D"]
+
+    TYPES_1D_NAMES = ["Channel", "Culvert", "Pipe", "Orifice", "Weir"]
+    TYPES_1D = [TYPE_V2_CHANNEL, TYPE_V2_CULVERT, TYPE_V2_PIPE, TYPE_V2_ORIFICE, TYPE_V2_WEIR]
 
     def initAlgorithm(self, config):
         """
@@ -130,6 +139,17 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
+            QgsProcessingParameterEnum(
+                self.INCLUDE_TYPES_1D,
+                '1D Flowline types to include',
+                options=self.TYPES_1D_NAMES,
+                allowMultiple=True,
+                defaultValue=list(range(len(self.TYPES_1D))),  # all enabled
+                optional=True
+            )
+        )
+
+        self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_FLOWLINES,
                 self.tr('Output: Intersected flowlines'),
@@ -149,7 +169,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterString(
                 self.FIELD_NAME_INPUT,
                 self.tr('Output field name'),
-                optional=True
+                defaultValue="q_net_sum"
             )
         )
 
@@ -167,12 +187,16 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         results_3di_fn = self.parameterAsFile(parameters, self.RESULTS_3DI_INPUT, context)
         gr = GridH5ResultAdmin(gridadmin_fn, results_3di_fn)
         cross_section_lines_source = self.parameterAsSource(parameters, self.CROSS_SECTION_LINES_INPUT, context)
-        start_time = self.parameterAsInt(parameters, self.START_TIME, context) if parameters[self.START_TIME] else None
-        end_time = self.parameterAsInt(parameters, self.END_TIME, context) if parameters[self.END_TIME] else None
-        subset = self.SUBSETS[parameters[self.SUBSET]] if parameters[self.SUBSET] else None
-        field_name = self.parameterAsString(parameters, self.FIELD_NAME_INPUT, context) \
-            if parameters[self.FIELD_NAME_INPUT] \
-            else "q_net_sum"
+        start_time = self.parameterAsInt(parameters, self.START_TIME, context) \
+            if parameters[self.START_TIME] is not None else None  # use `is not None` to handle `== 0` properly
+        end_time = self.parameterAsInt(parameters, self.END_TIME, context) \
+            if parameters[self.END_TIME] is not None else None  # use `is not None` to handle `== 0` properly
+        subset = self.SUBSETS[parameters[self.SUBSET]] \
+            if parameters[self.SUBSET] is not None else None  # use `is not None` to handle `== 0` properly
+        feedback.pushInfo(f"Using subset: {subset}")
+        content_types = [self.TYPES_1D[i] for i in parameters[self.INCLUDE_TYPES_1D]]
+        feedback.pushInfo(f"Using content_types: {content_types}")
+        field_name = self.parameterAsString(parameters, self.FIELD_NAME_INPUT, context)
         self.csv_output_file_path = self.parameterAsFileOutput(parameters, self.OUTPUT_TIME_SERIES, context)
         self.csv_output_file_path = f"{os.path.splitext(self.csv_output_file_path)[0]}.csv"
 
@@ -221,7 +245,8 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                 gauge_line_id=gauge_line.id(),
                 start_time=start_time,
                 end_time=end_time,
-                subset=subset
+                subset=subset,
+                content_types=content_types
             )
             feedback.pushInfo(f"Net sum of discharge for cross-section line {gauge_line.id()}: {total_discharge}")
             if i == 0:
@@ -308,7 +333,11 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             "Specify start time (in seconds since start of simulation) to exclude all data before that time.\n\n"
             "Specify end time (in seconds since start of simulation) to exclude all data after that time.\n\n"
             "Specify output field name to write the results to a specific field. Useful for combining results of "
-            "multiple simulations in one output layer"
+            "multiple simulations in one output layer\n\n"
+            "By choosing a subset, you can tell the algorithm to limit the analysis to flowlines in a specific "
+            "domain.\n\n"
+            "Further filtering of specific 1D flowlines can be achieved by changing '1D Flowline types to include' "
+            "settings. This does not affect 2D or 1D/2D flowlines.\n\n"
         )
 
     def tr(self, string):
