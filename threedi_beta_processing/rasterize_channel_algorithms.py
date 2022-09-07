@@ -52,7 +52,7 @@ from qgis.core import (
 )
 import processing
 
-from .rasterize_channel_oo import Channel, CrossSectionLocation, EmptyOffsetError, fill_wedges
+from .rasterize_channel_oo import Channel, CrossSectionLocation, EmptyOffsetError, InvalidOffsetError, fill_wedges
 from .rasterize_channel_utils import merge_rasters
 
 
@@ -138,8 +138,13 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 channels.append(channel)
             except EmptyOffsetError:
                 feedback.reportError(
-                    f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated for "
-                    f"some cross-sectional widths"
+                    f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
+                    f"for some cross-sectional widths. "
+                )
+            except InvalidOffsetError:
+                feedback.reportError(
+                    f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
+                    f"for some cross-sectional widths. It may help to split the channel in the middle of its bends."
                 )
             multi_step_feedback.setProgress(100 * i / channel_features.featureCount())
 

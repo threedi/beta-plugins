@@ -4,7 +4,7 @@ from typing import Iterator, List, Union, Set, Tuple
 import numpy as np
 from osgeo import ogr, osr, gdal
 from shapely import wkt
-from shapely.geometry import LineString, MultiPolygon, Point, Polygon
+from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
 from shapely.ops import cascaded_union, nearest_points, transform
 
 
@@ -44,6 +44,10 @@ def variable_buffer(linestring: LineString, radii: List[float]) -> Polygon:
 class EmptyOffsetError(ValueError):
     """Raised when the parallel offset at given offset distance results in an empty geometry"""
     pass
+
+
+class InvalidOffsetError(ValueError):
+    """Raised when the parallel offset at given offset distance results in a geometry that is not a LineString"""
 
 
 class WedgeFillPointsAlreadySetError(ValueError):
@@ -431,6 +435,8 @@ class ParallelOffset:
         self.geometry = parent.geometry.parallel_offset(offset_distance)
         if self.geometry.is_empty:
             raise EmptyOffsetError
+        if type(self.geometry) != LineString:
+            raise InvalidOffsetError
         if offset_distance > 0:
             self.geometry = reverse(self.geometry)
         self.offset_distance = offset_distance
