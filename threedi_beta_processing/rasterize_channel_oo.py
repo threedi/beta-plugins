@@ -50,6 +50,13 @@ class InvalidOffsetError(ValueError):
     """Raised when the parallel offset at given offset distance results in a geometry that is not a LineString"""
 
 
+class SortError(Exception):
+    """Raised when sorting a list of triangles fails.
+    Triangles need to be sorted in such a way that at least one side of each triangle is shared with a previous triangle
+    in the list"""
+    pass
+
+
 class WedgeFillPointsAlreadySetError(ValueError):
     """Raised when it is attempted to set a channel's _wedge_fill_points that have already been set"""
     pass
@@ -71,6 +78,12 @@ class Triangle:
         self.points = points
         self.geometry = Polygon(LineString(points))
         self.vertex_indices = [point.index for point in points]
+
+    @property
+    def sides(self) -> Set:
+        """Returns a set of tuples, where each tuple is a sorted pair of vertex indices describing a triangle's side"""
+        idx = self.vertex_indices
+        return {tuple(sorted(idx[0:2])), tuple(sorted(idx[1:3])), tuple(sorted([idx[2], idx[0]]))}
 
     def is_between(self, line_1: LineString, line_2: LineString):
         if not (self.geometry.touches(line_1) and self.geometry.touches(line_2)):
@@ -252,13 +265,58 @@ class Channel:
         all_points += self._wedge_fill_points
         return all_points
 
+    @staticmethod
+    def add_to_triangle_sort(triangle: Triangle, processed_sides: Set[Tuple], sorted_triangles: List[Triangle]) -> bool:
+        """Adds the triangle to `sorted_triangles` if at least one of its sides is already present in `processed_sides`
+        Returns True if adding was successful, False if not"""
+        new_sides = triangle.sides
+        if len(new_sides & processed_sides):  # at least one of the sides of the new triangle has already been processed
+            sorted_triangles.append(triangle)
+            processed_sides.update(new_sides)
+            return True
+        else:
+            return False
+
     @property
     def triangles(self) -> List[Triangle]:
+        """
+        Returns a list of Triangles, sorted in such a way that each triangle shares at least one side with a
+        preceding triangle in the list.
+
+        If sorting fails, a SortError is raised
+        """
+        triangles = []
         for i in range(len(self.parallel_offsets)-1):
             for tri in self.parallel_offsets[i].triangulate(self.parallel_offsets[i+1]):
-                yield tri
+                triangles.append(tri)
         for tri in self._wedge_fill_triangles:
-            yield tri
+            triangles.append(tri)
+
+        # sort
+        processed_sides = triangles[0].sides
+        sorted_triangles = [triangles[0]]
+        failed_triangles = []
+        for triangle in triangles[1:]:
+            # handle next triangle from the original list
+            if not self.add_to_triangle_sort(triangle, processed_sides, sorted_triangles):
+                failed_triangles.append(triangle)
+
+            # handle failed triangles from previous run(s)
+            triangle_added = True
+            while triangle_added:
+                before_count = len(sorted_triangles)
+                failed_triangles = [
+                    ft for ft in failed_triangles if not self.add_to_triangle_sort(
+                        ft,
+                        processed_sides,
+                        sorted_triangles
+                    )
+                ]
+                triangle_added = len(sorted_triangles) > before_count
+        if failed_triangles:
+            raise SortError()
+        return sorted_triangles
+
 
     def find_vertex(self, connection_node_id, n: int) -> Point:
         """Starting from the given connection node, find the nth vertex"""
@@ -630,3 +688,4 @@ def fill_wedges(channels: List[Channel]):
         channel1, channel2 = find_wedge_channels(channels=channels, connection_node_id=connection_node_id)
         if channel1 and channel2:
             channel1.fill_wedge(channel2)
+
