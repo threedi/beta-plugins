@@ -18,7 +18,7 @@ from uuid import uuid4
 
 import numpy as np
 from osgeo import gdal
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (
     QgsApplication,
     QgsCoordinateReferenceSystem,
@@ -28,28 +28,20 @@ from qgis.core import (
     QgsMeshLayer,
     QgsProcessingMultiStepFeedback,
     QgsFeature,
-    QgsFeatureSink,
-    QgsField,
     QgsFields,
     QgsPoint,
     QgsProcessing,
     QgsProcessingAlgorithm,
-    QgsProcessingContext,
     QgsProcessingException,
     QgsProcessingFeedback,
-    QgsProcessingParameterBoolean,
-    QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
     QgsProcessingParameterNumber,
     QgsProcessingParameterRasterDestination,
     QgsProcessingParameterRasterLayer,
     QgsProcessingUtils,
-    QgsProject,
     QgsProviderRegistry,
-    QgsRasterLayer,
     QgsRectangle,
     QgsVectorLayer,
-    QgsWkbTypes,
 )
 import processing
 
@@ -145,7 +137,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         if dem:
             if dem.rasterUnitsPerPixelX() != dem.rasterUnitsPerPixelY():
                 multi_step_feedback.reportError(
-                    f"Input Digital Elevation Model has different X and Y resolutions",
+                    "Input Digital Elevation Model has different X and Y resolutions",
                     fatalError=True,
                 )
                 raise QgsProcessingException()
@@ -155,7 +147,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             pixel_size = user_pixel_size
         else:
             multi_step_feedback.reportError(
-                f"Either 'Digital Elevation Model' or 'Pixel size' has to be specified, fatalError=True)"
+                "Either 'Digital Elevation Model' or 'Pixel size' has to be specified, fatalError=True)"
             )
             raise QgsProcessingException()
 
@@ -200,7 +192,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         multi_step_feedback.setCurrentStep(1)
         if len(channels) == 0:
             multi_step_feedback.reportError(
-                f"No valid channels to process", fatalError=True
+                "No valid channels to process", fatalError=True
             )
             raise QgsProcessingException()
         else:

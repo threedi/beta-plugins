@@ -1,88 +1,421 @@
-import sys; import os
-sys.path.append('C:/Users/stijn.overmeen/Documents/GitHub/beta-plugins/threedi_beta_processing')
-from rasterize_channel import *
+import numpy as np
+from osgeo import osr
+from shapely.geometry import LineString, Point
+from shapely import wkt
 
-from pathlib import Path
-folder=Path(r"C:/Users/stijn.overmeen/Documents/Projecten_lokaal/Intern/Rasterize channel")
-sqlite=os.path.join(folder,'hillegersberg-schiebroek.sqlite')
-dem=os.path.join(folder,'dem.tif')
-output_raster=os.path.join(folder,'tijdelijk3.tif')
+try:
+    from rasterize_channel import (
+        IndexedPoint,
+        Triangle,
+        Channel,
+        CrossSectionLocation,
+        find_wedge_channels,
+        fill_wedges,
+    )
+except ImportError:
+    from threedi_beta_processing.rasterize_channel import (
+        IndexedPoint,
+        Triangle,
+        Channel,
+        CrossSectionLocation,
+        find_wedge_channels,
+        fill_wedges,
+    )
 
-#10065 skipped (wrong geometry)
-"""
-list_of_channels=[40032,11029,11007,10903,10902,10901,10894,10893,10892,10891,10890,10885,10884,10883,10882,10881,10880,10878,10877,
-                  10876,10873,10867,10866,10855,10854,10848,10844,10843,10842,10839,10838,10837,10836,10835,10834,10833,10832,10831,
-                  10830,10829,10828,10824,10823,10822,10821,10820,10818,10796,10795,10794,10793,10787,10776,10775,10768,10767,10765,
-                  10720,10719,10543,10517,10259,10258,10257,10256,10231,10230,10229,10228,10227,10226,10225,10224,10223,10222,10216,
-                  10210,10209,10208,10207,10191,10186,10182,10181,10178,10177,10176,10175,10174,10171,10170,10169,10168,10167,10166,
-                  10165,10163,10161,10160,10159,10158,10157,10156,10152,10151,10150,10149,10148,10147,10146,10145,10144,10142,10141,
-                  10140,10139,10138,10137,10131,10130,10129,10128,10127,10126,10125,10124,10123,10122,10121,10119,10115,10114,10113,
-                  10112,10111,10110,10109,10102,10101,10094,10093,10091,10090,10089,10088,10087,10086,10085,10082,10081,10080,10079,
-                  10078,10077,10076,10075,10074,10073,10072,10071,10070,10068,10064,10063,10062,10061,10060,10059,10058,10057,10056,
-                  10054,10053,10052,10051,10050,10049,10048,10047,10046,10045,10044,10043,10042,10041,10040,10039,10038,10037,10036,
-                  10025,10022,10021,10020,10009,10008,10007]
-"""
-list_of_channels=[40032,11029,11007,10903,10902,10901]
-rasterize_channels(sqlite,dem,output_raster,'profile',False,False,0,28992,list_of_channels)
-    #sqlite / dem / output raster / rasterize profile or bank level? / burn in DEM/ lower (profile) or higher (bank_level) only /
-    #add constant value / projection EPSG / list of channel id's
 
-'''    
-Vragen aan Ivar
-      is het ook geschikt voor andere projecties dan 28992?
-      gelijk aan het begin checken of alle inputs en output(locatie)s valide zijn
-      duurt lang, analyseren waar dat door komt: rasterizeren of opzoekfuncties (joins). je doet wel iets met spatial index
-      maar ik vraag me af of die ook gebruikt wordt
-      zou fijn zijn als je in de attribute table van v2_channel kan selecteren welke je wilt rasterizeren
-      optie om gelijk te burnen in de dem
-      optie om bij het burnen in de dem 'alleen verlagen' aan te kunnen vinken
-      de interpolatie gaat nog niet helemaal lekker (zie plaatje), misschien gaat het beter met arjan z'n fill algoritme?
-      use sqlalchemy and standardised 3Di object-relations mappings
+def indexed_point():
+    point = IndexedPoint(3.4, 2.4, index=3)
+    assert point.index == 3
+    assert point.x == 3.4
+    assert point.y == 2.4
 
-Comments Stijn:
-    Logging toegevoegd
-        -> Hieruit blijkt dat het interpoleren 3 min van de 5 min opneemt (test voor maar 1 channel!)
-    Target projectie variabel gemaakt
-    Interpoleren sneller gemaakt met gdal.rasterize en gdal.fillnodata, van 3 min naar 3 sec!
-    Interpolatie nu ook beter bij randen kanaal
-    Profile tool omgezet naar bank level tool (quick and dirty)
-    Optie waarde bovenop bank level toegevoegd (verzoek Ivar)
-    Check meerdere channels, twee gaat goed
-    Problemen bij alle channels tegelijk: een invalid polygon -> 10065, weglaten
-    Script runt 5 minuten voor alle 200 channels 
-    Er gaat nog veel fout
-    Polygonen moet punten volgen (polygonen worden niet juist gecreeerd): channel outline is herzien
-        door buitenste punten te verzamelen. Meest tijdrovend geweest om juiste module te vinden
-    Polygonen sloten nog niet precies aan op nodes, bij elke begin en eind vertice dus nog twee punten
-        verzameld uit line.coords en toegevoegd aan boundary points
-    Samensmeltingen van channels, hoe hier mee om te gaan?
-        Net niet samenkomende polygonen? Deze moeten eigenlijk aangesloten worden, zie plaatje
-            fix door dissolve, buffer 1m, buffer -1m
-        Bij overlappende polygonen moeten de punten van maar 1 channel gebruikt worden voor de interpolatie.
-            Nu is het een zooitje met punten die door elkaar lopen met verschillende hoogtes van verschillende profielen.
-            When adding the points, check if points are already within existing polygon, 
-            if so, don't add them
-                Zou betekenen dat de channel met het laagste id-nummer leidend is
-                TODO: nadenken of dit handiger kan
-                    Aan de andere kant ook ingewikkeld om dit door de gebruiker te laten bepalen
-            Deze zoektocht of elk punt binnen een van de polygonen valt vertraagd het proces enorm
-            En is toenemend trager naarmate er mee polygonen bijkomen
-                Sommige channels bevatten heel erg veel punten, niet alle punten hoeven gecheckt te worden
-                Alleen bij uiteindes channel
-                    Rule nu: bij eerste 10 of laatste 10 langspunten
-    Script runt nu 7 minuten voor alle channels
-        Bank level tool kan nog wat sneller worden als minder hoogtepunten worden meegenomen
-    Het ziet er nog niet overal optimaal uit bij samenvoegingen, maar gebruiker kan zelf ook kritisch kijken
-    naar schematisatie/ rasters
-    Burnen in op te geven DEM toegevoegd, bank level leidend over dem
-    Profile tool ook even ingekopt (kleine wijziging ten opzichte van huidige bank level tool)
-    Optie toegevoegd: alleen verlagen (lijkt me alleen interessant voor profile tool)
-    Optie toegevoegd: alleen verhogen (lijkt me alleen interessant voor bank level tool)
-    Scripts samengevoegd en opgeschoond tot 1 rasterize_channel met keuze voor rasterizeren bank level of profiel
-        Alleen boundary points verzamelen voor bank level tool scheelt 2 minuten (resultaten identiek)
-    Uiteindelijk duurt het script 5 minuten als bank level tool en 7 minuten als profile tool voor 200 channels
-    TODO: Check bij Leendert en hulp van Leendert bij
-        omschrijven tot class met functions
-        plug-in maken
-    
-'''
+
+def triangle():
+    point_coords = {0: (0, 0), 1: (1, 1), 2: (2, 0)}
+    indexed_points = [IndexedPoint(val, index=key) for key, val in point_coords.items()]
+    tri = Triangle(indexed_points)
+    assert tri.geometry.wkt == "POLYGON ((0 0, 1 1, 2 0, 0 0))"
+    line_1 = LineString(
+        [
+            Point(
+                -10,
+                -10,
+            ),
+            Point(
+                10,
+                10,
+            ),
+        ]
+    )
+    line_2 = LineString(
+        [
+            Point(
+                -8,
+                -10,
+            ),
+            Point(
+                12,
+                10,
+            ),
+        ]
+    )
+    assert tri.is_between(line_1, line_2)
+    line_2 = LineString(
+        [
+            Point(
+                -9,
+                -10,
+            ),
+            Point(
+                11,
+                10,
+            ),
+        ]
+    )
+    assert not tri.is_between(line_1, line_2)
+    line_2 = LineString(
+        [
+            Point(
+                300,
+                400,
+            ),
+            Point(
+                310,
+                410,
+            ),
+        ]
+    )
+    assert not tri.is_between(line_1, line_2)
+
+
+def test_find_wedge_channels():
+    # channel_1: last segment pointing north (azimuth = 0)
+    channel_1 = Channel(
+        geometry=LineString([Point(20, -100), Point(0, -50), Point(0, 0)]),
+        connection_node_start_id=1,
+        connection_node_end_id=2,
+        id=1,
+    )
+    xsec = cross_section_location()
+    xsec.geometry = Point(0, -50)
+    channel_1.add_cross_section_location(xsec)
+    assert channel_1.azimuth_at(connection_node_id=2) == 180
+
+    channel_2 = Channel(
+        geometry=LineString([Point(0, 0), Point(10, 50), Point(10, 100)]),
+        connection_node_start_id=2,
+        connection_node_end_id=3,
+        id=2,
+    )
+    xsec = cross_section_location()
+    xsec.geometry = Point(10, 50)
+    channel_2.add_cross_section_location(xsec)
+    print(round(channel_2.azimuth_at(connection_node_id=2), 2))
+    assert round(channel_2.azimuth_at(connection_node_id=2), 2) == 11.31
+
+    channel_3 = Channel(
+        geometry=LineString([Point(0, 0), Point(50, 0), Point(100, 10)]),
+        connection_node_start_id=2,
+        connection_node_end_id=4,
+        id=3,
+    )
+    xsec = cross_section_location()
+    xsec.geometry = Point(50, 0)
+    channel_3.add_cross_section_location(xsec)
+    assert channel_3.azimuth_at(connection_node_id=2) == 90
+
+    wedge_channels = find_wedge_channels(
+        [channel_1, channel_2, channel_3], connection_node_id=2
+    )
+    for chn in wedge_channels:
+        print(chn.__dict__)
+    assert wedge_channels[0].connection_node_start_id == 2
+    assert wedge_channels[1].connection_node_end_id == 2
+    return wedge_channels
+
+
+def fill_wedge():
+    channel_1, channel_2 = test_find_wedge_channels()
+    channel_1.generate_parallel_offsets()
+    channel_2.generate_parallel_offsets()
+    channel_1.fill_wedge(channel_2)
+    # print("channel 1 triangles:")
+    # print(channel_1.as_query())
+    # print("channel 2 triangles:")
+    # print(channel_2.as_query())
+    assert len(channel_1._wedge_fill_triangles) == 3
+    assert len(channel_2._wedge_fill_triangles) == 0
+    assert (
+        channel_1._wedge_fill_triangles[0].geometry.wkt
+        == "POLYGON Z ((0 0 0, -0.9805806756909201 0.196116135138184 1, -1 0 1, 0 0 0))"
+    )
+    assert (
+        channel_1._wedge_fill_triangles[1].geometry.wkt
+        == "POLYGON Z ((-1 0 1, -0.9805806756909201 0.196116135138184 1, -1.96116135138184 0.3922322702763681 2, -1 0 1))"
+    )
+    assert (
+        channel_1._wedge_fill_triangles[2].geometry.wkt
+        == "POLYGON Z ((-1 0 1, -1.96116135138184 0.3922322702763681 2, -2 0 2, -1 0 1))"
+    )
+
+
+def channel_init():
+    channel_geom = LineString([[0, 0], [1, 1], [2, 2]])
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(28992)
+
+    channel = Channel(
+        geometry=channel_geom,
+        connection_node_start_id=1,
+        connection_node_end_id=2,
+        id=1,
+    )
+    return channel
+
+
+def cross_section_location():
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 4.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(1, 1),
+    )
+    return cross_section_loc
+
+
+def cross_section_location_height_at(xsec):
+    assert xsec.height_at(0.0) == 10 + 0.0
+    assert xsec.height_at(1.0) == 10 + 0.5
+    assert xsec.height_at(2.0) == 10 + 1.0
+    assert xsec.height_at(3.0) == 10 + 1.5
+    assert xsec.height_at(5.0) == 10 + 2.0
+
+
+def channel_vertex_positions(channel):
+    vp = channel.vertex_positions
+    assert (vp == np.array([0, 0.5, 1]) * channel.geometry.length).all()
+    assert len(vp) == 3
+
+
+def channel_add_cross_section_location(channel, xsec):
+    channel.add_cross_section_location(xsec)
+    return channel
+
+
+def channel_properties(channel):
+    assert (channel.max_widths == np.array([4.0, 4.0, 4.0])).all()
+    assert (channel.unique_widths == np.array([0.0, 2.0, 4.0])).all()
+    assert (
+        channel.cross_section_location_positions
+        == np.array([0.5 * channel.geometry.length])
+    ).all()
+    assert (
+        str(channel.outline)
+        == "POLYGON ((-1.414213562373095 1.414213562373095, -0.4142135623730949 2.414213562373095, 0.5857864376269051 3.414213562373095, 3.414213562373095 0.5857864376269051, 2.414213562373095 -0.4142135623730949, 1.414213562373095 -1.414213562373095, -1.414213562373095 1.414213562373095))"
+    )
+
+
+def channel_parallel_offsets(channel):
+    assert len(channel.parallel_offsets) == 5
+    offset_distances = [po.offset_distance for po in channel.parallel_offsets]
+    print(offset_distances)
+    print(channel.offset_distances)
+    assert offset_distances == [2.0, 1.0, 0.0, -1.0, -2.0]
+
+    po1 = channel.parallel_offsets[1]
+    heights_at_vertices = po1.heights_at_vertices
+    assert (heights_at_vertices == np.array([1.0, 1.0])).all()
+    # assert [str(point) for point in po1.points] == ['POINT Z (-0.7071067811865475 0.7071067811865475 1)', 'POINT Z (1.292893218813453 2.707106781186547 1)'].reverse()
+
+    po5 = channel.parallel_offsets[4]
+    heights_at_vertices = po5.heights_at_vertices
+    assert (heights_at_vertices == np.array([2.0, 2.0])).all()
+    assert [str(point) for point in po5.points] == [
+        "POINT Z (3.414213562373095 0.5857864376269051 2)",
+        "POINT Z (1.414213562373095 -1.414213562373095 2)",
+    ]
+
+
+def two_vertex_channel():
+    "Test the edge case where all parallel offsets are only two vertices long"
+    wkt_geometry = "LineString (0 0, 10 10)"
+    channel_geom = wkt.loads(wkt_geometry)
+    channel = Channel(
+        geometry=channel_geom,
+        connection_node_start_id=1,
+        connection_node_end_id=2,
+        id=1,
+    )
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[1.2, 2.1],
+        heights=[0, 0.53],
+        geometry=Point(5, 5),
+    )
+    channel.add_cross_section_location(cross_section_loc)
+    channel.generate_parallel_offsets()
+    for tri in channel.triangles:
+        print(tri)
+
+
+def wedge_on_both_sides():
+    """Test the situation where a channel has a wedge with the connecting channel at both sides"""
+    channels = []
+
+    wkt_geometries = [
+        "LineString (20 -1, 10 -1)",
+        "LineString (10 -1, 0 0)",
+        "LineString (20 -1, 30 0)",
+    ]
+    connection_node_ids = [(1, 2), (2, 3), (1, 4)]
+    cross_section_location_geoms = [Point(15, -1), Point(5, -0.5), Point(25, -0.5)]
+    for i in range(len(wkt_geometries)):
+        channel_geom = wkt.loads(wkt_geometries[i])
+        channels.append(
+            Channel(
+                geometry=channel_geom,
+                connection_node_start_id=connection_node_ids[i][0],
+                connection_node_end_id=connection_node_ids[i][1],
+                id=i,
+            )
+        )
+        cross_section_loc = CrossSectionLocation(
+            reference_level=10.0,
+            bank_level=12.0,
+            widths=[1.2, 2.1],
+            heights=[0, 0.53],
+            geometry=cross_section_location_geoms[i],
+        )
+        channels[i].add_cross_section_location(cross_section_loc)
+        channels[i].generate_parallel_offsets()
+    fill_wedges(channels)
+    print(channels[1]._wedge_fill_triangles)
+
+
+def cross_section_starting_at_0_0():
+    wkt_geometry = "LineString (94066.74041438 441349.75156281, 94060.74041445 441355.7515628, 94064.24041445 441359.75156275, 94074.24041445 441372.25156263)"
+    channel_geom = wkt.loads(wkt_geometry)
+    channel = Channel(
+        geometry=channel_geom,
+        connection_node_start_id=1,
+        connection_node_end_id=2,
+        id=1,
+    )
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[0, 15.13, 16.666, 17.413, 24.984, 32],
+        heights=[0, 0.53, 1.06, 1.59, 2.12, 2.65],
+        geometry=Point(0, 1),
+    )
+    channel.add_cross_section_location(cross_section_loc)
+    channel.generate_parallel_offsets()
+
+
+def channel_max_width_at(channel):
+    channel_geom = LineString([[0, 0], [0, 1], [0, 2], [0, 3]])
+    channel = Channel(
+        geometry=channel_geom,
+        connection_node_start_id=1,
+        connection_node_end_id=2,
+        id=1,
+    )
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 4.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(0, 1),
+    )
+    channel.add_cross_section_location(cross_section_loc)
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 8.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(0, 2),
+    )
+    channel.add_cross_section_location(cross_section_loc)
+
+    assert channel.max_width_at(0.2) == 4.0
+    assert channel.max_width_at(0 * channel.geometry.length) == 4.0
+    assert channel.max_width_at(0.25 * channel.geometry.length) == 4.0
+    assert channel.max_width_at(0.5 * channel.geometry.length) == 6.0
+    assert channel.max_width_at(0.75 * channel.geometry.length) == 8.0
+    assert channel.max_width_at(1 * channel.geometry.length) == 8.0
+    print("Channel outline:")
+    print(channel.outline.wkt)
+
+
+def parallel_offset_heights_at_vertices():
+    """Test method heights_at_vertices of ParallelOffset"""
+    channel_geom = LineString([[0, 0], [5, 1], [7, 1], [18, 2], [20, 2], [35, 3]])
+    channel = Channel(
+        geometry=channel_geom,
+        connection_node_start_id=1,
+        connection_node_end_id=2,
+        id=1,
+    )
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=2.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 4.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(5, 1),
+    )
+    channel.add_cross_section_location(cross_section_loc)
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=4.0,
+        bank_level=12.0,
+        widths=[0.0, 2.0, 8.0],
+        heights=[0.0, 1.0, 2.0],
+        geometry=Point(20, 2),
+    )
+    channel.add_cross_section_location(cross_section_loc)
+    channel.generate_parallel_offsets()
+    po = channel.parallel_offset_at(1.0)
+    print(f"po.geometry.wkt: {po.geometry.wkt}")
+    print(f"po.vertex_positions: {po.vertex_positions}")
+    print(f"po.heights_at_vertices: {po.heights_at_vertices}")
+    print([vertex for vertex in po.geometry.coords])
+    print(po.points[4].z)
+
+
+def run_tests():
+    # indexed_point()
+    # triangle()
+    # channel = channel_init()
+    # channel_vertex_positions(channel)
+    # xsec = cross_section_location()
+    # cross_section_location_height_at(xsec)
+    # channel_add_cross_section_location(channel, xsec)
+    # channel_properties(channel)
+    # channel_max_width_at(channel)
+    # channel.generate_parallel_offsets()
+    # two_vertex_channel()
+    wedge_on_both_sides()
+    # parallel_offset_heights_at_vertices()
+    # cross_section_starting_at_0_0()
+    # test_find_wedge_channels()
+    # fill_wedge()
+
+    # channel_parallel_offsets(channel)
+    # for tri in channel.triangles:
+    #     print(tri)
+    # print(channel.outline)
+    # selects = []
+    # for i, tri in enumerate(channel.triangles):
+    #     selects.append(f"SELECT {i+1} as id, geom_from_wkt('{str(tri)}')")
+    # print("\nUNION\n".join(selects))
+    # return channel.points
+
+
+run_tests()
