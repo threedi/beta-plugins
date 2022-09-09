@@ -48,13 +48,11 @@ class EmptyOffsetError(ValueError):
 
 class InvalidOffsetError(ValueError):
     """Raised when the parallel offset at given offset distance results in a geometry that is not a LineString"""
-
-
-class SortError(Exception):
-    """Raised when sorting a list of triangles fails.
-    Triangles need to be sorted in such a way that at least one side of each triangle is shared with a previous triangle
-    in the list"""
-    pass
+# class SortError(Exception):
+#     """Raised when sorting a list of triangles fails.
+#     Triangles need to be sorted in such a way that at least one side of each triangle is shared with a previous
+#     trianglein the list"""
+#     pass
 
 
 class WedgeFillPointsAlreadySetError(ValueError):
@@ -281,9 +279,8 @@ class Channel:
     def triangles(self) -> List[Triangle]:
         """
         Returns a list of Triangles, sorted in such a way that each triangle shares at least one side with a
-        preceding triangle in the list.
-
-        If sorting fails, a SortError is raised
+        preceding triangle in the list. If this is not possible, the resulting list may contain several sections to
+        which this requirement applies, but not between the sections.
         """
         triangles = []
         for i in range(len(self.parallel_offsets)-1):
@@ -295,28 +292,33 @@ class Channel:
         # sort
         processed_sides = triangles[0].sides
         sorted_triangles = [triangles[0]]
-        failed_triangles = []
-        for triangle in triangles[1:]:
-            # handle next triangle from the original list
-            if not self.add_to_triangle_sort(triangle, processed_sides, sorted_triangles):
-                failed_triangles.append(triangle)
 
-            # handle failed triangles from previous run(s)
-            triangle_added = True
-            while triangle_added:
-                before_count = len(sorted_triangles)
-                failed_triangles = [
-                    ft for ft in failed_triangles if not self.add_to_triangle_sort(
-                        ft,
-                        processed_sides,
-                        sorted_triangles
-                    )
-                ]
-                triangle_added = len(sorted_triangles) > before_count
-        if failed_triangles:
-            raise SortError()
+        while len(sorted_triangles) < len(triangles):
+            failed_triangles = []
+            for triangle in triangles[1:]:
+                # handle next triangle from the original list
+                if not self.add_to_triangle_sort(triangle, processed_sides, sorted_triangles):
+                    failed_triangles.append(triangle)
+
+                # handle failed triangles from previous run(s)
+                triangle_added = True
+                while triangle_added:
+                    before_count = len(sorted_triangles)
+                    failed_triangles = [
+                        ft for ft in failed_triangles if not self.add_to_triangle_sort(
+                            ft,
+                            processed_sides,
+                            sorted_triangles
+                        )
+                    ]
+                    triangle_added = len(sorted_triangles) > before_count
+            if failed_triangles:
+                # force first failed triangle in the sorted list and continue while loop
+                sorted_triangles.append(failed_triangles[0])
+                processed_sides.update(failed_triangles[0].sides)
+                triangles = failed_triangles[1:]
+
         return sorted_triangles
-
 
     def find_vertex(self, connection_node_id, n: int) -> Point:
         """Starting from the given connection node, find the nth vertex"""
