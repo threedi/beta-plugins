@@ -42,6 +42,7 @@ from qgis.core import (
     QgsProcessingParameterFeatureSource,
     QgsProcessingParameterNumber,
     QgsProcessingParameterRasterDestination,
+    QgsProcessingParameterRasterLayer,
     QgsProcessingUtils,
     QgsProject,
     QgsProviderRegistry,
@@ -72,6 +73,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
     """
     INPUT_CHANNELS = 'INPUT_CHANNELS'
     INPUT_CROSS_SECTION_LOCATIONS = 'INPUT_CROSS_SECTION_LOCATIONS'
+    INPUT_DEM = 'INPUT_DEM'
     INPUT_PIXEL_SIZE = 'PIXEL_SIZE'
 
     OUTPUT = 'OUTPUT'
@@ -94,12 +96,21 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.INPUT_DEM,
+                self.tr('Digital Elevation Model'),
+                optional=True
+            )
+        )
+
         pixel_size_param = QgsProcessingParameterNumber(
             self.INPUT_PIXEL_SIZE,
             self.tr('Pixel size'),
-            type=QgsProcessingParameterNumber.Double
+            type=QgsProcessingParameterNumber.Double,
+            optional=True
         )
-        pixel_size_param.setMetadata({'widget_wrapper':{'decimals': 2}})
+        pixel_size_param.setMetadata({'widget_wrapper': {'decimals': 2}})
         self.addParameter(pixel_size_param)
 
         self.addParameter(
@@ -110,7 +121,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        # We report progress in three steps:
+        # Progress is reported in three steps:
         # preparation phase (10%),
         # loop through the channels (60%)
         # merging the output rasters (30%)
@@ -121,7 +132,22 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                                                                  context)
 
         output_raster = self.parameterAsOutputLayer(parameters, self.OUTPUT, context)
-        pixel_size = self.parameterAsDouble(parameters, self.INPUT_PIXEL_SIZE, context)
+        dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
+        user_pixel_size = self.parameterAsDouble(parameters, self.INPUT_PIXEL_SIZE, context)
+        if dem:
+            if dem.rasterUnitsPerPixelX() != dem.rasterUnitsPerPixelY():
+                multi_step_feedback.reportError(
+                    f"Input Digital Elevation Model has different X and Y resolutions", fatalError=True)
+                raise QgsProcessingException()
+            pixel_size = dem.rasterUnitsPerPixelX()
+            feedback.pushInfo("Using pixel size from input Digital Elevation Model")
+        elif user_pixel_size:
+            pixel_size = user_pixel_size
+        else:
+            multi_step_feedback.reportError(
+                f"Either 'Digital Elevation Model' or 'Pixel size' has to be specified, fatalError=True)"
+            )
+            raise QgsProcessingException()
 
         rasters = []
         channels = []
@@ -284,6 +310,10 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             multi_step_feedback.setProgressText("Merging rasters...")
 
             rasters_datasets = [gdal.Open(raster) for raster in rasters]
+            if dem:
+                uri = dem.dataProvider().dataSourceUri()
+                dem_gdal_datasource = gdal.Open(uri)
+                rasters_datasets.append(dem_gdal_datasource)
             merge_rasters(
                 rasters_datasets,
                 tile_size=1000,

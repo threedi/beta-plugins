@@ -1,10 +1,8 @@
-from operator import attrgetter
 from typing import Iterator, List, Union, Set, Tuple
 
 import numpy as np
-from osgeo import ogr, osr, gdal
 from shapely import wkt
-from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 from shapely.ops import cascaded_union, nearest_points, transform
 
 
@@ -48,11 +46,6 @@ class EmptyOffsetError(ValueError):
 
 class InvalidOffsetError(ValueError):
     """Raised when the parallel offset at given offset distance results in a geometry that is not a LineString"""
-# class SortError(Exception):
-#     """Raised when sorting a list of triangles fails.
-#     Triangles need to be sorted in such a way that at least one side of each triangle is shared with a previous
-#     trianglein the list"""
-#     pass
 
 
 class WedgeFillPointsAlreadySetError(ValueError):
