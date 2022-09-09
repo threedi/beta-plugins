@@ -125,6 +125,9 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
 
         rasters = []
         channels = []
+        errors = []
+        warnings = []
+        total_missing_pixels = 0
         for i, channel_feature in enumerate(channel_features.getFeatures()):
             channel_id = channel_feature.attribute('id')
             multi_step_feedback.setProgressText(f"Reading channel and cross section data for channel {channel_id}...")
@@ -137,11 +140,13 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 channel.generate_parallel_offsets()
                 channels.append(channel)
             except EmptyOffsetError:
+                errors.append(channel_id)
                 feedback.reportError(
                     f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
                     f"for some cross-sectional widths. "
                 )
             except InvalidOffsetError:
+                errors.append(channel_id)
                 feedback.reportError(
                     f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
                     f"for some cross-sectional widths. It may help to split the channel in the middle of its bends."
@@ -202,8 +207,11 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 if faces_added != total_triangles:
                     missing_area = np.sum(np.array([tri.geometry.area for tri in triangles_dict.values()]))
                     if missing_area > (pixel_size**2):
+                        warnings.append(channel.id),
+                        missing_pixels = int(missing_area/(pixel_size**2))
+                        total_missing_pixels += missing_pixels
                         feedback.pushWarning(
-                            f"Warning: Up to {int(missing_area/(pixel_size**2))} pixel(s) may be missing from the "
+                            f"Warning: Up to {missing_pixels} pixel(s) may be missing from the "
                             f"raster for channel {channel.id} !")
 
                 mesh_layer.commitFrameEditing(transform, continueEditing=False)
@@ -283,6 +291,20 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 output_filename=output_raster,
                 output_nodatavalue=-9999,
                 feedback=multi_step_feedback
+            )
+
+            if errors:
+                feedback.pushWarning(
+                    f"Warning: The following channels where not rasterized: {', '.join([str(i) for i in errors])}. "
+                    f"See previous log messages for more information."
+                )
+
+            if warnings:
+                pass
+            feedback.pushWarning(
+                f"Warning: The following channels may have missing pixels: {', '.join([str(i) for i in warnings])}. "
+                f"In total, up to {total_missing_pixels} pixels may be missing. See previous log messages for more "
+                f"information."
             )
 
             return {self.OUTPUT: output_raster}
