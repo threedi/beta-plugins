@@ -10,10 +10,6 @@
 *                                                                         *
 ***************************************************************************
 """
-# TODO Only add faces that are within the channel's outline
-# TODO Fix channel 10157
-# TODO Replace cliprasterbyextent by call to gdal.Warp()
-
 from uuid import uuid4
 
 import numpy as np

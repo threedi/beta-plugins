@@ -377,8 +377,6 @@ class Channel:
 
     def fill_wedge(self, other):
         """Add points and triangles to fill the wedge-shaped gap between self and other. Also updates self.outline"""
-        # TODO: Deal with cases where one channel should have 2 wedges, 1 at start and 1 at end.
-        #  Perhaps make wedges entirely separate class?
         # Find out if and how self and other_channel are connected
         # -->-->
         if self.connection_node_end_id == other.connection_node_start_id:
@@ -431,9 +429,6 @@ class Channel:
         # -->                               -->
         else:
             raise ValueError("Channels are not connected")
-
-        # if len(channel_to_update._wedge_fill_points) > 0:
-        #     raise WedgeFillPointsAlreadySetError(f"Wedge fill points already set for channel {channel_to_update.id}")
 
         channel_to_update_offsets = []
         wedge_fill_points_source_offsets = [0]
@@ -495,12 +490,6 @@ class Channel:
         ):
             self._wedge_fill_triangles.append(triangle)
         channel_to_update._wedge_fill_points += wedge_fill_points
-        # raise Exception(f"fill_wedge failed for channels {self.id} and {other.id}"
-        #                 f"side_1_points: {channel_to_update_points}"
-        #                 f"side_1_distances: {channel_to_update_offsets}"
-        #                 f"side_2_points: {channel_to_update._wedge_fill_points}"
-        #                 f"side_2_distances: {wedge_fill_points_source_offsets}"
-        #                 )
         extra_point = Point(
             wedge_fill_points_source.geometry.coords[wedge_fill_points_source_idx]
         )
@@ -519,23 +508,6 @@ class Channel:
                 f"SELECT {i + 1} as id, geom_from_wkt('{str(tri.geometry.wkt)}')"
             )
         return "\nUNION\n".join(selects)
-
-
-# class ChannelGroup(Channel):
-#     """One or more Channels of which the geometry can be linemerged to a single linestring"""
-#     def __init__(self, channels: List[Channel]):
-#         geometries = [channel.geometry for channel in channels]
-#         merged_geometry = linemerge(geometries)
-#         if not isinstance(self.geometry, LineString):
-#             raise ValueError('Input channel geometries cannot be merged into a single LineString')
-#         super().__init__(geometry=merged_geometry, connection_node_start_id=None, connection_node_end_id=None)
-#
-#         unsorted_cross_section_locations = []
-#         for channel in channels:
-#             for cross_section_location in channel.cross_section_locations:
-#                 cross_section_location.position = self.geometry.project(cross_section_location.geometry, normalized=True)
-#                 unsorted_cross_section_locations.append(cross_section_location)
-#         self.cross_section_locations = sorted(unsorted_cross_section_locations, key=attrgetter('position'))
 
 
 class ParallelOffset:
@@ -642,16 +614,6 @@ def triangulate_between(
 
         # then we handle the 'normal' case when we are still halfway at both sides
         else:
-            # TODO Check of deze code van Stijn zijn bug op een goede manier kan verhelpen
-            # if side_1_last_idx == 1:
-            #     next_side_1_vertex_pos = side_1_distances[side_1_idx]
-            # else:
-            #     next_side_1_vertex_pos = side_1_distances[side_1_idx + 1]
-            # if side_2_last_idx == 1:
-            #     next_side_2_vertex_pos = side_2_distances[side_2_idx]
-            # else:
-            #     next_side_2_vertex_pos = side_2_distances[side_2_idx + 1]
-
             next_side_1_vertex_pos = side_1_distances[side_1_idx + 1]
             next_side_2_vertex_pos = side_2_distances[side_2_idx + 1]
             if next_side_2_vertex_pos == next_side_1_vertex_pos:
@@ -752,7 +714,6 @@ def find_wedge_channels(
         channel_1 = azimuth_channel_dict[sorted_azimuths[i]]
         channel_2 = azimuth_channel_dict[sorted_azimuths[i + 1]]
         angle = ccw_angle(channel_1, channel_2)
-        # print(f"ccw angle between {channel_1.id} and {channel_2.id} is {angle}")
         if angle > 180:
             return channel_1, channel_2
     return None, None
@@ -760,7 +721,6 @@ def find_wedge_channels(
 
 def fill_wedges(channels: List[Channel]):
     connection_node_channels_dict = get_channels_per_connection_node(channels)
-    # print(connection_node_channels_dict)
     for connection_node_id, channels in connection_node_channels_dict.items():
         channel1, channel2 = find_wedge_channels(
             channels=channels, connection_node_id=connection_node_id
