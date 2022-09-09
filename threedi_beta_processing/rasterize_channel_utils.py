@@ -7,11 +7,11 @@ from shapely.geometry import MultiPolygon, Polygon, box
 
 
 def read_as_array(
-        raster: gdal.Dataset,
-        bbox: Union[List, Tuple],
-        band_nr: int = 1,
-        pad: bool = False,
-        decimals: int = 5
+    raster: gdal.Dataset,
+    bbox: Union[List, Tuple],
+    band_nr: int = 1,
+    pad: bool = False,
+    decimals: int = 5,
 ) -> np.ndarray:
     """
     Read part of raster that intersects with bounding box in geo coordinates as array
@@ -26,29 +26,39 @@ def read_as_array(
     band = raster.GetRasterBand(band_nr)
     gt = raster.GetGeoTransform()
     inv_gt = gdal.InvGeoTransform(gt)
-    x0, y0 = (round(val, decimals) for val in gdal.ApplyGeoTransform(inv_gt, float(bbox[0]), float(bbox[1])))
-    x1, y1 = (round(val, decimals) for val in gdal.ApplyGeoTransform(inv_gt, float(bbox[2]), float(bbox[3])))
+    x0, y0 = (
+        round(val, decimals)
+        for val in gdal.ApplyGeoTransform(inv_gt, float(bbox[0]), float(bbox[1]))
+    )
+    x1, y1 = (
+        round(val, decimals)
+        for val in gdal.ApplyGeoTransform(inv_gt, float(bbox[2]), float(bbox[3]))
+    )
     xmin, ymin = min(x0, x1), min(y0, y1)
     xmax, ymax = max(x0, x1), max(y0, y1)
     if xmin > raster.RasterXSize or ymin > raster.RasterYSize or xmax < 0 or ymax < 0:
-        raise ValueError('bbox does not intersect with raster')
+        raise ValueError("bbox does not intersect with raster")
 
     intersection_xmin, intersection_ymin = max(xmin, 0), max(ymin, 0)
-    intersection_xmax, intersection_ymax = min(xmax, raster.RasterXSize), min(ymax, raster.RasterYSize)
+    intersection_xmax, intersection_ymax = min(xmax, raster.RasterXSize), min(
+        ymax, raster.RasterYSize
+    )
     arr = band.ReadAsArray(
         int(intersection_xmin),
         int(intersection_ymin),
         int(intersection_xmax - intersection_xmin),
-        int(intersection_ymax - intersection_ymin)
+        int(intersection_ymax - intersection_ymin),
     )
     if pad:
         ndv = band.GetNoDataValue()
         arr_pad = np.pad(
             arr,
-            ((int(intersection_ymin - ymin), int(ymax - intersection_ymax)),
-             (int(intersection_xmin - xmin), int(xmax - intersection_xmax))),
-            'constant',
-            constant_values=((ndv, ndv), (ndv, ndv))
+            (
+                (int(intersection_ymin - ymin), int(ymax - intersection_ymax)),
+                (int(intersection_xmin - xmin), int(xmax - intersection_xmax)),
+            ),
+            "constant",
+            constant_values=((ndv, ndv), (ndv, ndv)),
         )
         return arr_pad
     else:
@@ -56,14 +66,14 @@ def read_as_array(
 
 
 def write_raster(
-        output_filename: Path,
-        geotransform: Tuple,
-        srs: osr.SpatialReference,
-        data: np.array,
-        output_format="GTiff",
-        datatype=gdal.GDT_Float32,
-        nodatavalue=-9999,
-        dataset_creation_options=["COMPRESS=DEFLATE"]
+    output_filename: Path,
+    geotransform: Tuple,
+    srs: osr.SpatialReference,
+    data: np.array,
+    output_format="GTiff",
+    datatype=gdal.GDT_Float32,
+    nodatavalue=-9999,
+    dataset_creation_options=["COMPRESS=DEFLATE"],
 ):
     """
     write a numpy array to a gdal raster
@@ -92,16 +102,14 @@ def bounding_box(raster: gdal.Dataset) -> Polygon:
     return box(lrx, lry, ulx, uly)
 
 
-def tile_aggregate(rasters: List[gdal.Dataset],
-                   bbox: Tuple[float, float, float, float],
-                   aggregation_method: str,
-                   output_nodatavalue: float
-                   ) -> np.array:
+def tile_aggregate(
+    rasters: List[gdal.Dataset],
+    bbox: Tuple[float, float, float, float],
+    aggregation_method: str,
+    output_nodatavalue: float,
+) -> np.array:
     assert len(rasters) > 0
-    methods = {
-        'min': np.nanmin,
-        'max': np.nanmax
-    }
+    methods = {"min": np.nanmin, "max": np.nanmax}
     method = methods[aggregation_method]
     arrays = []
     for raster in rasters:
@@ -115,12 +123,12 @@ def tile_aggregate(rasters: List[gdal.Dataset],
 
 
 def merge_rasters(
-        rasters: List[gdal.Dataset],
-        tile_size: int,
-        aggregation_method: str,
-        output_filename: Path,
-        output_nodatavalue: float,
-        feedback=None
+    rasters: List[gdal.Dataset],
+    tile_size: int,
+    aggregation_method: str,
+    output_filename: Path,
+    output_nodatavalue: float,
+    feedback=None,
 ):
     """Assumes that all input rasters have the same SRS, resolution, skew, and pixels are
     aligned (as in gdal.Warp's targetAlignedPixels)
@@ -135,8 +143,8 @@ def merge_rasters(
     nrows = int(np.ceil(((maxy - miny) / abs(yres)) / tile_size))
     ntiles = ncols * nrows
     print(nrows, ncols)
-    geo_tile_size_x = (tile_size * abs(xres))
-    geo_tile_size_y = (tile_size * abs(yres))
+    geo_tile_size_x = tile_size * abs(xres)
+    geo_tile_size_y = tile_size * abs(yres)
     rows = []
     for tile_row in range(nrows):
         # print(f"tile_row: {tile_row}")
@@ -149,10 +157,14 @@ def merge_rasters(
                 tile_minx,
                 tile_maxy - geo_tile_size_y,
                 tile_minx + geo_tile_size_x,
-                tile_maxy
+                tile_maxy,
             )
             # print(f"    tile_polygon.bounds: {tile_polygon.bounds}")
-            intersecting_rasters = [raster for i, raster in enumerate(rasters) if tile_polygon.intersects(bboxes[i])]
+            intersecting_rasters = [
+                raster
+                for i, raster in enumerate(rasters)
+                if tile_polygon.intersects(bboxes[i])
+            ]
             if len(intersecting_rasters) == 0:
                 tile = np.full((tile_size, tile_size), output_nodatavalue)
             else:
@@ -160,7 +172,7 @@ def merge_rasters(
                     rasters=intersecting_rasters,
                     bbox=tile_polygon.bounds,
                     aggregation_method=aggregation_method,
-                    output_nodatavalue=output_nodatavalue
+                    output_nodatavalue=output_nodatavalue,
                 )
             tiles.append(tile)
             # print(f"    tile.shape: {tile.shape}")
@@ -176,5 +188,5 @@ def merge_rasters(
         output_filename=output_filename,
         geotransform=geotransform,
         srs=srs,
-        data=result_array
+        data=result_array,
     )

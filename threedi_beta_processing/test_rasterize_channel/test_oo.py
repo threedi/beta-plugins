@@ -1,5 +1,5 @@
 try:
-    from rasterize_channel_oo import *
+    from rasterize_channel import *
 except ImportError:
     from threedi_beta_processing.rasterize_channel_oo import *
 
