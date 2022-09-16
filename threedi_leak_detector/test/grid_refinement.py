@@ -89,10 +89,11 @@ def single_cell(test_cell_id: int, result_side: str, result_nr_obstacles:int, re
             edge.filter_obstacles(min_obstacle_height=MIN_OBSTACLE_HEIGHT, search_precision=SEARCH_PRECISION)
     topo.select_final_obstacle_segments()
 
-    # test if top edge has obstacle
-    assert cell.edges[result_side][0].highest_obstacle is not None
+    # test if `result_side` edge has obstacle
+    if result_nr_obstacles > 0:
+        assert cell.edges[result_side][0].highest_obstacle is not None
 
-    # test if total number of obstacles is 1
+    # test if total number of obstacles equals `result_nr_obstacles`
     obstacles = []
     for edge in topo.edges.values():
         obstacle = edge.highest_obstacle
@@ -101,7 +102,8 @@ def single_cell(test_cell_id: int, result_side: str, result_nr_obstacles:int, re
     assert len(obstacles) == result_nr_obstacles
 
     # test if obstacle height is 5.0
-    assert obstacles[0].height == result_height
+    if result_nr_obstacles > 0:
+        assert obstacles[0].height == result_height
 
 
 def two_cells(
@@ -167,6 +169,11 @@ def single_cell_vertical_obstacle_right():
     single_cell(test_cell_id=95, result_side=LEFT, result_nr_obstacles=1, result_height=5.0)
 
 
+def single_cell_diagonal_slope_dem():
+    """Cell 42 should result in 0 obstacles"""
+    single_cell(test_cell_id=42, result_side=None, result_nr_obstacles=0, result_height=None)
+
+
 def equal_size_horizontal_no_obstacle():
     pass
 
@@ -220,6 +227,7 @@ cell_pair = create_cell_pair(topo, 156, 200)
 single_cell_horizontal_obstacle_top()
 single_cell_horizontal_obstacle_bottom()
 single_cell_vertical_obstacle_left()
+single_cell_diagonal_slope_dem()
 equal_size_horizontal()
 equal_size_vertical()
 different_size_horizontal_top()
