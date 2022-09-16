@@ -207,8 +207,8 @@ class Edge:
         else:
             side_pairs = [(LEFT, RIGHT), (RIGHT, LEFT)]
         for side_1, side_2 in side_pairs:
-            neigh_edge_1 = self.neigh_l.get_edges(side_1)
-            neigh_edge_2 = self.neigh_r.get_edges(side_2)
+            neigh_edge_1 = self.neigh_l.edges[side_1]
+            neigh_edge_2 = self.neigh_r.edges[side_2]
             if neigh_edge_1 is not None and neigh_edge_2 is not None:
                 if neigh_edge_1.highest_obstacle is not None and neigh_edge_2.highest_obstacle is not None:
                     cell_pair = CellPair(reference_cell=self.neigh_l, neigh_cell=self.neigh_r)
@@ -453,8 +453,8 @@ class ObstacleSegment:
         """
         # from_val or max_to_val is not significantly higher than lowest point in flow domain
         # i.e., flat or smoothly sloping cell
-        print(f"pixels: {pixels}")
-        print(f"from_pos: {from_pos}")
+        # print(f"pixels: {pixels}")
+        # print(f"from_pos: {from_pos}")
 
         from_val = pixels[from_pos]
         max_to_val = np.nanmax(pixels[to_positions])
@@ -546,7 +546,7 @@ class ObstacleSegment:
                 is_single = False
                 self._edges = None
             if is_single:
-                if self.parent.edges[preferred_side] > 0:
+                if len(self.parent.edges[preferred_side]) > 0:
                     self._edges = self.parent.edges[preferred_side]
                 else:
                     self._edges = self.parent.edges[OPPOSITE[preferred_side]]
@@ -560,33 +560,39 @@ class ObstacleSegment:
         self._edges = edge
 
     def is_valid(self, min_obstacle_height: float):
-        # stricter filtering for diagonal obstacles
-        if ((self.starts_at(TOP) and self.ends_at(BOTTOM)) or
-                (self.starts_at(BOTTOM) and self.ends_at(TOP)) or
-                (self.starts_at(LEFT) and self.ends_at(RIGHT)) or
-                (self.starts_at(RIGHT) and self.ends_at(LEFT))
-        ):
-            return True
-        # stricter filtering for diagonal obstacles:
-        # obstacle must be significantly higher than *highest* exchange height of the obstacle-side edges
-        # and significantly higher than the *lowest* exchange height on the opposite side edges
-        from_side_edge = self.parent.get_edges(self.from_side)
-        from_side_exchange_level = from_side_edge.threedi_exchange_level if from_side_edge else PSEUDO_INFINITE
-        to_side_edge = self.parent.get_edges(self.to_side)
-        to_side_exchange_level = to_side_edge.threedi_exchange_level if to_side_edge else PSEUDO_INFINITE
-        opposite_from_side_edge = self.parent.get_edges(OPPOSITE[self.from_side])
-        opposite_from_side_exchange_level = opposite_from_side_edge.threedi_exchange_level if opposite_from_side_edge \
-            else PSEUDO_INFINITE
-        opposite_to_side_edge = self.parent.get_edges(OPPOSITE[self.to_side])
-        opposite_to_side_exchange_level = opposite_to_side_edge.threedi_exchange_level if opposite_to_side_edge \
-            else PSEUDO_INFINITE
+        """Test obstacle segment against a set of criteria, ie.e. should """
+        return True
 
-        if self.height > max(from_side_exchange_level, to_side_exchange_level) + min_obstacle_height and \
-                self.height > min(opposite_from_side_exchange_level, opposite_to_side_exchange_level) + \
-                min_obstacle_height:
-            return True
-        else:
-            return False
+        # If obstacle segment is direct (top->bottom or left->right), it is always valid
+        # if ((self.starts_at(TOP) and self.ends_at(BOTTOM)) or
+        #         (self.starts_at(BOTTOM) and self.ends_at(TOP)) or
+        #         (self.starts_at(LEFT) and self.ends_at(RIGHT)) or
+        #         (self.starts_at(RIGHT) and self.ends_at(LEFT))
+        # ):
+        #     return True
+        #
+        # # TODO: I think the validity check below should be moved to Edge.filter_obstacles(). it is not possible to
+        # #  check this for Obstacle Segments, because they have not yet been assigned to an edge
+        # # stricter filtering for diagonal obstacles:
+        # # obstacle must be significantly higher than *highest* exchange height of the obstacle-side edges
+        # # and significantly higher than the *lowest* exchange height on the opposite side edges
+        # from_side_edges = self.parent.edges[self.from_side]
+        # from_side_exchange_level = from_side_edge.threedi_exchange_level if from_side_edge else PSEUDO_INFINITE
+        # to_side_edge = self.parent.edges[self.to_side]
+        # to_side_exchange_level = to_side_edge.threedi_exchange_level if to_side_edge else PSEUDO_INFINITE
+        # opposite_from_side_edge = self.parent.edges[OPPOSITE[self.from_side]]
+        # opposite_from_side_exchange_level = opposite_from_side_edge.threedi_exchange_level if opposite_from_side_edge \
+        #     else PSEUDO_INFINITE
+        # opposite_to_side_edge = self.parent.edges[OPPOSITE[self.to_side]]
+        # opposite_to_side_exchange_level = opposite_to_side_edge.threedi_exchange_level if opposite_to_side_edge \
+        #     else PSEUDO_INFINITE
+        #
+        # if self.height > max(from_side_exchange_level, to_side_exchange_level) + min_obstacle_height and \
+        #         self.height > min(opposite_from_side_exchange_level, opposite_to_side_exchange_level) + \
+        #         min_obstacle_height:
+        #     return True
+        # else:
+        #     return False
 
     def starts_at(self, side):
         """Find out if the obstacle segment starts at `side`, including cases where the obstacle segment's from_side is
@@ -722,10 +728,12 @@ class ObstacleSegment:
 
 
 class Obstacle:
-    """Group of one or more ObstacleSegments that cross a cell / two neighb. cells from bottom to top or left to right"""
+    """
+    Group of one or more ObstacleSegments that cross a cell or two neighbouring cells from bottom to top or
+    from left to right
+    """
 
     def __init__(self, segments: List[ObstacleSegment], edges: List[Edge]):
-        # TODO add support for grid refinement, i.e. obstacle may apply to multiple edges
         self.segments = segments
         self.edges = edges
 
@@ -956,6 +964,13 @@ class Cell:
             search_precision: float,
             min_obstacle_height: float
     ) -> List[Obstacle]:
+        """Starting from the start or end of a given obstacle segment in this cell,
+        Try to reach the opposite side of the cell. The opposite side may also be reached by traversing
+        a neighbouring cell. CellPairs with all relevant neighbouring cells are created to conduct the search
+
+        :returns: a list of obstacles that have been identified in the search
+        """
+
         obstacles = list()
         if search_forward:
             search_start_side = obstacle_segment_to_side
@@ -980,7 +995,8 @@ class Cell:
                     obstacle_segments = [obstacle_segment] + additional_obstacle_segments
                 else:
                     obstacle_segments = additional_obstacle_segments + [obstacle_segment]
-                obstacles.append(Obstacle(segments=obstacle_segments, edges=obstacle_segment.edges))
+                edges = [cell_pair.edge]
+                obstacles.append(Obstacle(segments=obstacle_segments, edges=edges))
         return obstacles
 
     def create_obstacles_from_segments(self, direct_connection_preference: float,
@@ -1005,11 +1021,13 @@ class Cell:
             for obstacle_segment_from_side in [TOP, LEFT, BOTTOM, RIGHT]:
                 if obstacle_segment.starts_at(obstacle_segment_from_side):
                     if obstacle_segment.ends_at(OPPOSITE[obstacle_segment_from_side]):
+                        # Obstacle segment DOES constitute an obstacle on its own
+                        # Now assign the edges to it
                         if obstacle_segment.from_side == obstacle_segment_from_side and \
                                 obstacle_segment.to_side == OPPOSITE[obstacle_segment_from_side]:
                             edges = obstacle_segment.edges
                         else:
-                            # find correct edge
+                            # find correct edges
                             mock_obstacle_segment = obstacle_segment.clone()
                             mock_obstacle_segment.from_side = obstacle_segment_from_side
                             mock_obstacle_segment.to_side = OPPOSITE[obstacle_segment_from_side]
@@ -1024,6 +1042,7 @@ class Cell:
                                     direct_connection_obstacles.append(obstacle)
                                     break
                     else:
+                        # Obstacle segment does NOT constitute an obstacle on its own
                         for obstacle_segment_to_side in [TOP, LEFT, BOTTOM, RIGHT]:
                             if obstacle_segment.ends_at(obstacle_segment_to_side):
                                 obstacles_search_forward = self.connect_to_opposite_side(
@@ -1043,7 +1062,8 @@ class Cell:
                                     min_obstacle_height=min_obstacle_height
                                 )
                                 for obstacle in obstacles_search_forward + obstacles_search_backward:
-                                    if obstacle.height > obstacle.edges.threedi_exchange_level + min_obstacle_height:
+                                    if obstacle.height > \
+                                            highest(obstacle.edges).threedi_exchange_level + min_obstacle_height:
                                         indirect_connection_obstacles.append(obstacle)
         # simpler obstacles (i.e. direct left->right / top->bottom, or consisting of fewer
         # obstacle segments get preference above more complex ones, as long as their height is
@@ -1066,7 +1086,8 @@ class Cell:
                 final_obstacles.append(obstacle)
 
         for obstacle in final_obstacles:
-            obstacle.edges.obstacles.append(obstacle)
+            for edge in obstacle.edges:
+                edge.obstacles.append(obstacle)
 
         self.parent.obstacles += final_obstacles
 
@@ -1076,7 +1097,7 @@ class CellPair:
         # TODO build cell pair from edge argument instead of two cells as argument
         self.reference_cell = reference_cell
         self.neigh_cell = neigh_cell
-        print(f'Creating cell pair of (ref) {reference_cell.id} and (neigh) {neigh_cell.id}')
+        # print(f'Creating cell pair of (ref) {reference_cell.id} and (neigh) {neigh_cell.id}')
         self.topo = reference_cell.parent
         try:
             self.edge = self.topo.edges[(reference_cell.id, neigh_cell.id)]
@@ -1092,8 +1113,8 @@ class CellPair:
             else:
                 smallest_secondary_location = neigh_secondary_location
 
-        print(f"neigh_primary_location: {neigh_primary_location}, neigh_secondary_location: {neigh_secondary_location}")
-        print(f"reference_primary_location: {reference_primary_location}, reference_secondary_location: {reference_secondary_location}")
+        # print(f"neigh_primary_location: {neigh_primary_location}, neigh_secondary_location: {neigh_secondary_location}")
+        # print(f"reference_primary_location: {reference_primary_location}, reference_secondary_location: {reference_secondary_location}")
         if neigh_primary_location == TOP:
             if not smallest_cell:
                 self.pixels = np.vstack([neigh_cell.pixels, reference_cell.pixels])
@@ -1187,9 +1208,9 @@ class CellPair:
             neigh_cell_shift_y = 0
 
         self.reference_cell_shift = (reference_cell_shift_y, reference_cell_shift_x)
-        print(f"reference_cell_shift: {self.reference_cell_shift}")
+        # print(f"reference_cell_shift: {self.reference_cell_shift}")
         self.neigh_cell_shift = (neigh_cell_shift_y, neigh_cell_shift_x)
-        print(f"neigh_cell_shift: {self.neigh_cell_shift}")
+        # print(f"neigh_cell_shift: {self.neigh_cell_shift}")
 
     def smallest(self) -> Cell:
         """Returns None if cells have the same width"""
@@ -1204,7 +1225,7 @@ class CellPair:
         """Return primary and secondary location of `which_cell` relative to the other cell in the pair
         If `which_cell` is the largest of the two or both cells are of the same size, secondary location is NA
         """
-        print(f"locating: {which_cell}")
+        # print(f"locating: {which_cell}")
         # preparations
         if which_cell == REFERENCE:
             cell_to_locate = self.reference_cell
@@ -1225,15 +1246,15 @@ class CellPair:
             raise ValueError("Could determine primary location with given arguments")
 
         # secondary location
-        print(cell_to_locate.width)
-        print(other_cell.width)
+        # print(cell_to_locate.width)
+        # print(other_cell.width)
         if cell_to_locate.width >= other_cell.width:
             secondary_location = NA
         elif primary_location in [LEFT, RIGHT]:
             bottom_aligned = round(self.reference_cell.coords[1], decimals) == round(self.neigh_cell.coords[1], decimals)
-            print(f"bottom_aligned: {bottom_aligned}")
+            # print(f"bottom_aligned: {bottom_aligned}")
             top_aligned = round(self.reference_cell.coords[3], decimals) == round(self.neigh_cell.coords[3], decimals)
-            print(f"top_aligned: {top_aligned}")
+            # print(f"top_aligned: {top_aligned}")
             if bottom_aligned and top_aligned:
                 secondary_location = NA
             elif bottom_aligned:
@@ -1244,9 +1265,9 @@ class CellPair:
                 raise ValueError("Could not locate with given arguments")
         elif primary_location in [TOP, BOTTOM]:
             left_aligned = round(self.reference_cell.coords[0], decimals) == round(self.neigh_cell.coords[0], decimals)
-            print(f"left_aligned: {left_aligned}")
+            # print(f"left_aligned: {left_aligned}")
             right_aligned = round(self.reference_cell.coords[2], decimals) == round(self.neigh_cell.coords[2], decimals)
-            print(f"right_aligned: {right_aligned}")
+            # print(f"right_aligned: {right_aligned}")
             if left_aligned and right_aligned:
                 secondary_location = NA
             elif left_aligned:
@@ -1343,8 +1364,17 @@ class CellPair:
             search_precision: float
     ) -> List[ObstacleSegment]:
         """
-        :param search_forward: True if `search_start_pos_in_reference_cell` is the end point of an obstacle segment or
-        False if it is the start point
+        Try to get to the `target_side` in the neigh cell by connecting obstacle segments.
+        First, it will be attempted to connect to relevant existing obstacle segments in neigh cell.
+        If that fails, it will be attempted to reach the `target_side` by free search.
+
+        Before using this method, make sure to identify the obstacle segments in each cell using cell.find_maxima() and
+        cell.connect_maxima() first.
+
+        :param search_forward: True if `search_start_pos_in_reference_cell` is the end point of an obstacle segment
+        or False if it is the start point
+        :returns: A list of obstacle segments that together connect the `search_start_pos_in_reference_cell` to the
+        `target_side`
         """
         obstacle_segments = []
         search_start_pos_in_cell_pair = self.transform(
@@ -1472,40 +1502,42 @@ class CellPair:
         return obstacle_segments
 
 
-def highest(obstacles: List[Union[ObstacleSegment, Obstacle]]):
-    """Return the highest obstacle or obstacle segment from a list of obstacles / obstacle segments.
+def highest(elements: List[Union[ObstacleSegment, Obstacle, Edge]]):
+    """Return the highest element from a list of obstacles, obstacle segments, or edges.
 
     For Obstacle lists, obstacles with fewer segments will be preferred over
     obstacles of equal height with more segments
     """
-    max_obstacle_height = -PSEUDO_INFINITE
-    highest_obstacle = None
-    for obstacle in obstacles:
-        if obstacle.height >= max_obstacle_height:
-            if isinstance(obstacle, Obstacle):
-                if obstacle.height == max_obstacle_height and len(obstacle.segments) > len(highest_obstacle.segments):
+    max_element_height = -PSEUDO_INFINITE
+    highest_element = None
+    for element in elements:
+        attr_name = 'threedi_exchange_level' if isinstance(element, Edge) else 'height'
+        if getattr(element, attr_name) >= max_element_height:
+            if isinstance(element, Obstacle):
+                if element.height == max_element_height and len(element.segments) > len(highest_element.segments):
                     continue
-            max_obstacle_height = obstacle.height
-            highest_obstacle = obstacle
-    return highest_obstacle
+            max_element_height = getattr(element, attr_name)
+            highest_element = element
+    return highest_element
 
 
-def lowest(obstacles: List[Union[ObstacleSegment, Obstacle]]):
-    """Return the lowest obstacle or obstacle segment from a list of obstacles / obstacle segments.
+def lowest(elements: List[Union[ObstacleSegment, Obstacle, Edge]]):
+    """Return the lowest element from a list of obstacles, obstacle segments, or edges.
 
     For Obstacle lists, obstacles with fewer segments will be preferred over
     obstacles of equal height with more segments
     """
-    min_obstacle_height = PSEUDO_INFINITE
-    lowest_obstacle = None
-    for obstacle in obstacles:
-        if obstacle.height <= min_obstacle_height:
-            if isinstance(obstacle, Obstacle):
-                if obstacle.height == min_obstacle_height and len(obstacle.segments) > len(lowest_obstacle.segments):
+    min_element_height = PSEUDO_INFINITE
+    lowest_element = None
+    for element in elements:
+        attr_name = 'threedi_exchange_level' if isinstance(element, Edge) else 'height'
+        if getattr(element, attr_name) <= min_element_height:
+            if isinstance(element, Obstacle):
+                if element.height == min_element_height and len(element.segments) > len(lowest_element.segments):
                     continue
-            min_obstacle_height = obstacle.height
-            lowest_obstacle = obstacle
-    return lowest_obstacle
+            min_element_height = getattr(element, attr_name)
+            lowest_element = element
+    return lowest_element
 
 
 def intersection(line_coords1, line_coords2, decimals: int = 5):
@@ -1551,7 +1583,6 @@ def identify_obstacles(dem: gdal.Dataset,
 
     # find obstacle segments within cell
     for nr, cell_i in enumerate(topo.cells.values()):
-        cell_i_id = cell_i.id  # TODO remove
         print(f'find obstacles within cell {cell_i.id} ({nr} of {len(topo.cells)})')
         try:
             cell_i.find_maxima(min_peak_prominence=min_peak_prominence)
@@ -1579,7 +1610,6 @@ def identify_obstacles(dem: gdal.Dataset,
     for nr, (edge_key, edge) in enumerate(topo.edges.items()):
         print(f'generate_connecting_obstacle for edge {nr} of {len(topo.edges)}')
         edge.generate_connecting_obstacle(min_obstacle_height=min_obstacle_height, search_precision=search_precision)
-
 
     # collect unique obstacle segments
     topo.select_final_obstacle_segments()
