@@ -201,42 +201,61 @@ class Edge:
                 |                   |
         """
         if self.neigh_l is None or self.neigh_r is None:
+            print("A")
             return
         if self.is_bottom_up():
+            print("B")
             side_pairs = [(TOP, BOTTOM), (BOTTOM, TOP)]
         else:
+            print("C")
             side_pairs = [(LEFT, RIGHT), (RIGHT, LEFT)]
         for side_1, side_2 in side_pairs:
-            neigh_edge_1 = self.neigh_l.edges[side_1]
-            neigh_edge_2 = self.neigh_r.edges[side_2]
-            if neigh_edge_1 is not None and neigh_edge_2 is not None:
-                if neigh_edge_1.highest_obstacle is not None and neigh_edge_2.highest_obstacle is not None:
+            neigh_edges_1 = self.neigh_l.edges[side_1]
+            neigh_edges_2 = self.neigh_r.edges[side_2]
+            print(f"neigh_edges_1: {neigh_edges_1}")
+            print(f"neigh_edges_2: {neigh_edges_2}")
+            if neigh_edges_1 and neigh_edges_2:
+                # find the highest obstacle that applies to all of neigh_edges_1 / neigh_edges_2
+                highest_shared_obstacle_1 = highest(shared_obstacles(neigh_edges_1))
+                highest_shared_obstacle_2 = highest(shared_obstacles(neigh_edges_2))
+                print(f"highest_shared_obstacle_1: {highest_shared_obstacle_1}")
+                print(f"highest_shared_obstacle_2: {highest_shared_obstacle_2}")
+                if highest_shared_obstacle_1 and highest_shared_obstacle_2:
                     cell_pair = CellPair(reference_cell=self.neigh_l, neigh_cell=self.neigh_r)
                     search_start_pos_in_cell_pair = None
                     search_end_pos_in_cell_pair = None
-                    if self in neigh_edge_1.highest_obstacle.start_edges():
-                        search_start_pos = neigh_edge_1.highest_obstacle.segments[0].from_pos
+                    print(f"self: {self}")
+                    print(f"highest_shared_obstacle_1.start_edges(): {highest_shared_obstacle_1.start_edges()}")
+                    if self in highest_shared_obstacle_1.start_edges():
+                        print("self in highest_shared_obstacle_1.start_edges()")
+                        search_start_pos = highest_shared_obstacle_1.segments[0].from_pos
                         search_start_pos_in_cell_pair = cell_pair.transform(
                             pos=search_start_pos,
                             from_array=REFERENCE,
                             to_array=MERGED
                         )
-                    if self in neigh_edge_1.highest_obstacle.end_edges():
-                        search_start_pos = neigh_edge_1.highest_obstacle.segments[-1].to_pos
+                    print(f"highest_shared_obstacle_1.end_edges(): {highest_shared_obstacle_1.end_edges()}")
+                    if self in highest_shared_obstacle_1.end_edges():
+                        print("self in highest_shared_obstacle_1.end_edges()")
+                        search_start_pos = highest_shared_obstacle_1.segments[-1].to_pos
                         search_start_pos_in_cell_pair = cell_pair.transform(
                             pos=search_start_pos,
                             from_array=REFERENCE,
                             to_array=MERGED
                         )
-                    if self in neigh_edge_2.highest_obstacle.start_edges():
-                        search_end_pos = neigh_edge_2.highest_obstacle.segments[0].from_pos
+                    print(f"highest_shared_obstacle_2.start_edges(): {highest_shared_obstacle_2.start_edges()}")
+                    if self in highest_shared_obstacle_2.start_edges():
+                        print("self in highest_shared_obstacle_2.start_edges()")
+                        search_end_pos = highest_shared_obstacle_2.segments[0].from_pos
                         search_end_pos_in_cell_pair = cell_pair.transform(
                             pos=search_end_pos,
                             from_array=NEIGH,
                             to_array=MERGED
                         )
-                    if self in neigh_edge_2.highest_obstacle.end_edges():
-                        search_end_pos = neigh_edge_1.highest_obstacle.segments[-1].to_pos
+                    print(f"highest_shared_obstacle_2.end_edges(): {highest_shared_obstacle_2.end_edges()}")
+                    if self in highest_shared_obstacle_2.end_edges():
+                        print("self in highest_shared_obstacle_2.end_edges()")
+                        search_end_pos = highest_shared_obstacle_2.segments[-1].to_pos
                         search_end_pos_in_cell_pair = cell_pair.transform(
                             pos=search_end_pos,
                             from_array=NEIGH,
@@ -271,7 +290,10 @@ class Edge:
                                 clip_array=REFERENCE
                             )
                             connecting_obstacle_segment.calculate_coords()
-                            if connecting_obstacle_segment.height > self.threedi_exchange_level + min_obstacle_height - search_precision:
+                            if connecting_obstacle_segment.height > \
+                                    self.threedi_exchange_level + \
+                                    min_obstacle_height - \
+                                    search_precision:
                                 obstacle = Obstacle(segments=[connecting_obstacle_segment], edges=[self])
                                 self.obstacles.append(obstacle)
                                 self.parent.obstacles.append(obstacle)
@@ -390,6 +412,35 @@ class Topology:
 
     def neigh_cells(self, cell_id: int, location: str):
         return self.cell_topologies[cell_id][location]
+
+    def filter_obstacles(self, min_obstacle_height: float, search_precision: float):
+        """Filter obstacles of all edges based on several criteria. Updates obstacles for all edges in this Topology"""
+        for edge in self.edges.values():
+            edge.filter_obstacles(min_obstacle_height=min_obstacle_height, search_precision=search_precision)
+
+    def deduplicate_obstacles(self, search_precision):
+        result = []
+        print("Deduplicate obstacles...")
+        for i, obstacle in enumerate(self.obstacles):
+            has_duplicate = False
+            print(f"processing obstacle {i}: {obstacle.geometry.ExportToWkt()}")
+            for comparison in self.obstacles[i+1:]:
+                print(f"comparing with obstacle: {comparison.geometry.ExportToWkt()}")
+                print(f"equals volgens ogr: {obstacle.geometry.Equals(comparison.geometry)}")
+                print(f"abs(obstacle.height - comparison.height): {abs(obstacle.height - comparison.height)}")
+                if obstacle.geometry.Equals(comparison.geometry) and \
+                        abs(obstacle.height - comparison.height) < search_precision:
+                    has_duplicate = True
+                    break
+            if not has_duplicate:
+                result.append(obstacle)
+
+        # update topology obstacles
+        self.obstacles = result
+
+        # remove obstacles from edge if they are no longer part of this topology
+        for edge in self.edges.values():
+            edge.obstacles = [obstacle for obstacle in edge.obstacles if obstacle in result]
 
     def select_final_obstacle_segments(self):
         for edge in self.edges.values():
@@ -628,14 +679,14 @@ class ObstacleSegment:
         result = []
         for side in [TOP, RIGHT, BOTTOM, LEFT]:
             if self.starts_at(side):
-                result.append(self.parent.get_edges(side))
+                result += self.parent.edges[side]
         return result
 
     def end_edges(self):
         result = []
         for side in [TOP, RIGHT, BOTTOM, LEFT]:
             if self.ends_at(side):
-                result.append(self.parent.get_edges(side))
+                result += self.parent.edges[side]
         return result
 
     def clone(self):
@@ -747,7 +798,7 @@ class Obstacle:
         """
         Returns the edge or edges at which this obstacle ends
         """
-        return self.segments[0].end_edges()
+        return self.segments[-1].end_edges()
 
     @property
     def height(self):
@@ -984,18 +1035,52 @@ class Cell:
         neigh_cells = self.parent.neigh_cells(self.id, search_start_side)
         for neigh_cell in neigh_cells:
             cell_pair = CellPair(reference_cell=self, neigh_cell=neigh_cell)
+            target_side = OPPOSITE[obstacle_segment_begin_side]
             additional_obstacle_segments = cell_pair.connect_in_cell_pair(
                 search_start_pos_in_reference_cell=search_start_pos,
-                target_side=OPPOSITE[obstacle_segment_begin_side],
+                target_side=target_side,
                 search_forward=search_forward,
                 search_precision=search_precision
             )
             if len(additional_obstacle_segments) > 0:  # i.e. other side has been reached
+                print(f"search_forward: {search_forward}")
+                print(f"cell_pair: ref: {cell_pair.reference_cell.id}, neigh: {cell_pair.neigh_cell.id}")
                 if search_forward:
                     obstacle_segments = [obstacle_segment] + additional_obstacle_segments
                 else:
                     obstacle_segments = additional_obstacle_segments + [obstacle_segment]
-                edges = [cell_pair.edge]
+                # determine which edges the Obstacle should be assigned to
+                if not cell_pair.smallest():  # cells are of equal size
+                    print("cells are of equal size")
+                    edges = [cell_pair.edge]
+                elif self == cell_pair.smallest():  # cells are of different size, self is smaller
+                    print("cells are of different size, self is smaller")
+                    ref_cell_location = cell_pair.locate(REFERENCE)
+                    print(f"ref_cell_location: {ref_cell_location}")
+                    print(f"obstacle_segment_begin_side: {obstacle_segment_begin_side}")
+                    if ref_cell_location[1] == obstacle_segment_begin_side:  # [1] = secondary location
+                        # e.g. obstacle goes to TOP of smaller, neighbouring cell whose secondary location is TOP
+                        edges = cell_pair.neigh_cell.edges[ref_cell_location[0]]  # [0] = primary location
+                        print(f"A edges: {edges}")
+                    else:
+                        # e.g. obstacle goes to TOP of smaller, neighbouring cell whose secondary location is BOTTOM
+                        edges = [cell_pair.edge]
+                        print(f"B edges: {edges}")
+                else:  # cells are of different size, neigh is smaller
+                    print("cells are of different size, neigh is smaller")
+                    neigh_cell_location = cell_pair.locate(NEIGH)
+                    print(f"neigh_cell_location: {neigh_cell_location}")
+                    print(f"target_side: {target_side}")
+                    if neigh_cell_location[1] == target_side:  # [1] = secondary location
+                        # e.g. obstacle starts at BOTTOM of ref cell whose secondary location is BOTTOM, and goes to TOP
+                        # of larger neighbouring cell
+                        edges = self.edges[neigh_cell_location[0]]
+                        print(f"C edges: {edges}")
+                    else:
+                        # e.g. obstacle starts at BOTTOM of ref cell whose secondary location is TOP, and goes to TOP
+                        # of larger neighbouring cell
+                        edges = [cell_pair.edge]
+                        print(f"D edges: {edges}")
                 obstacles.append(Obstacle(segments=obstacle_segments, edges=edges))
         return obstacles
 
@@ -1213,7 +1298,9 @@ class CellPair:
         # print(f"neigh_cell_shift: {self.neigh_cell_shift}")
 
     def smallest(self) -> Cell:
-        """Returns None if cells have the same width"""
+        """
+        Returns the smallest cell of self.`reference_cell` and self.`neigh_cell` or None if cells have the same width
+        """
         if self.reference_cell.width < self.neigh_cell.width:
             return self.reference_cell
         elif self.reference_cell.width > self.neigh_cell.width:
@@ -1222,8 +1309,10 @@ class CellPair:
             return None
 
     def locate(self, which_cell: str, decimals: int = 5) -> Tuple[str, str]:
-        """Return primary and secondary location of `which_cell` relative to the other cell in the pair
+        """
+        Return primary and secondary location of `which_cell` relative to the other cell in the pair
         If `which_cell` is the largest of the two or both cells are of the same size, secondary location is NA
+        :param which_cell: REFERENCE or NEIGH
         """
         # print(f"locating: {which_cell}")
         # preparations
@@ -1540,6 +1629,22 @@ def lowest(elements: List[Union[ObstacleSegment, Obstacle, Edge]]):
     return lowest_element
 
 
+def shared_obstacles(edges: List[Edge]):
+    """Return the obstacles that apply to all `edges`"""
+    obstacles = []
+    result = []
+    for edge in edges:
+        obstacles += edge.obstacles
+    for obstacle in obstacles:
+        shared = True
+        for edge in edges:
+            if edge not in obstacle.edges:
+               shared = False
+        if shared:
+            result.append(obstacle)
+    return result
+
+
 def intersection(line_coords1, line_coords2, decimals: int = 5):
     (start_x1, start_y1), (end_x1, end_y1) = np.round(line_coords1, decimals)
     (start_x2, start_y2), (end_x2, end_y2) = np.round(line_coords2, decimals)
@@ -1667,11 +1772,11 @@ def identify_obstacles(dem: gdal.Dataset,
     id_counter = 1
     for segment in topo.final_obstacle_segments.values():
         print(segment)
-        print(segment.get_edges.cell_1.id, segment.get_edges.cell_2.id)
         feat = ogr.Feature(lyr.GetLayerDefn())
         feat['id'] = id_counter
         feat['crest_level'] = segment.height
-        feat['exchange_level_3di'] = segment.get_edges.threedi_exchange_level
+        # feat['exchange_level_3di'] = segment.get_edges.threedi_exchange_level
+        feat['exchange_level_3di'] = None
         feat.SetGeometry(segment.geometry())
         lyr.CreateFeature(feat)
         id_counter += 1
