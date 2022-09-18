@@ -184,7 +184,6 @@ def single_cell(test_cell_id: int, result_side: Union[str, None], result_nr_obst
         obstacle = edge.highest_obstacle
         if obstacle is not None:
             obstacles.append(obstacle)
-    print(f"obstacles: {obstacles}")
     assert len(obstacles) == result_nr_obstacles
 
     # test if obstacle height is 5.0
@@ -394,28 +393,24 @@ def full_test(cell_ids: List):
     obstacles = None
 
 
-# topo=create_topology()
-# get_cell(topo)
-# cell_edges_unequal_cell_size()
-# cell_pair = create_cell_pair(topo, 156, 200)
-# cell_pair_locate()
-# cell_pair_smallest()
-# single_cell_horizontal_obstacle_top()
-# single_cell_horizontal_obstacle_bottom()
-# single_cell_vertical_obstacle_left()
-# single_cell_diagonal_slope_dem()
+topo=create_topology()
+get_cell(topo)
+cell_edges_unequal_cell_size()
+cell_pair = create_cell_pair(topo, 156, 200)
+cell_pair_locate()
+cell_pair_smallest()
+single_cell_horizontal_obstacle_top()
+single_cell_horizontal_obstacle_bottom()
+single_cell_vertical_obstacle_left()
+single_cell_diagonal_slope_dem()
 single_cell_free_search()
-# equal_size_horizontal()
-# equal_size_vertical()
-# different_size_horizontal_top()
-# different_size_horizontal_top_across()
-# different_size_horizontal_bottom_across()
-# different_size_vertical_left_across()
-# connecting_obstacle()
-# np.set_printoptions(threshold=100000000)
-# print(cell_pair.indices(BOTTOM).astype(int))
-# obstacle_segments = connect_in_cell_pair(cell_pair, (0, 5))
-# edge = get_edge(obstacle_segments[0])
-# full_test(cell_ids=[156, 200])
-# full_test(cell_ids = list(GR.cells.id))
+equal_size_horizontal()
+equal_size_vertical()
+different_size_horizontal_top()
+different_size_horizontal_top_across()
+different_size_horizontal_bottom_across()
+different_size_vertical_left_across()
+connecting_obstacle()
+
+full_test(cell_ids = list(GR.cells.id))
 

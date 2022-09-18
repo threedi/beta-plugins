@@ -301,41 +301,46 @@ class Edge:
 
     def filter_obstacles(self, min_obstacle_height: float, search_precision: float):
         """Filter obstacles of this edge based on several criteria. Updates self.obstacles"""
-        filtered_obstacles = list()
-        for obstacle in self.obstacles:
-            select_this_obstacle = True
-
-            # keep Obstacles based on 'free search' connection to other side only if
-            # both neighbouring exchange levels are significantly higher then the obstacle crest level
-            obstacle_has_free_search_segment = False
-            for segment in obstacle.segments:
-                if segment.creation_method == CREATION_METHOD_FREE_SEARCH:
-                    obstacle_has_free_search_segment = True
-
-            if obstacle_has_free_search_segment:
-                if self.is_bottom_up():
-                    # TODO search for all uses of 'get_edges()' and replace them with .edges[],
-                    #  taking into account that this now returns a list
-                    opposite_edges_left = self.neigh_l.edges[LEFT]
-                    opposite_edges_right = self.neigh_r.edges[RIGHT]
-                else:
-                    opposite_edges_left = self.neigh_l.edges[TOP]
-                    opposite_edges_right = self.neigh_r.edges[BOTTOM]
-                if opposite_edges_left:
-                    opposite_left_exchange_level = lowest(opposite_edges_left).threedi_exchange_level
-                else:
-                    opposite_left_exchange_level = PSEUDO_INFINITE
-                if opposite_edges_right:
-                    opposite_right_exchange_level = lowest(opposite_edges_right).threedi_exchange_level
-                else:
-                    opposite_right_exchange_level = PSEUDO_INFINITE
-                if obstacle.height < opposite_left_exchange_level + min_obstacle_height - search_precision \
-                        or obstacle.height < opposite_right_exchange_level + min_obstacle_height - search_precision:
-                    select_this_obstacle = False
-
-            if select_this_obstacle:
-                filtered_obstacles.append(obstacle)
-        self.obstacles = filtered_obstacles
+        return
+        # filtered_obstacles = list()
+        # for obstacle in self.obstacles:
+        #     select_this_obstacle = True
+        #
+        #     # keep Obstacles based on 'free search' connection to other side only if
+        #     # both neighbouring exchange levels are significantly lower then the obstacle crest level
+        #     obstacle_has_free_search_segment = False
+        #     for segment in obstacle.segments:
+        #         if segment.creation_method == CREATION_METHOD_FREE_SEARCH:
+        #             obstacle_has_free_search_segment = True
+        #
+        #     if obstacle_has_free_search_segment:
+        #         if self.is_bottom_up():
+        #             # TODO search for all uses of 'get_edges()' and replace them with .edges[],
+        #             #  taking into account that this now returns a list
+        #             opposite_edges_left = self.neigh_l.edges[LEFT]
+        #             opposite_edges_right = self.neigh_r.edges[RIGHT]
+        #         else:
+        #             opposite_edges_left = self.neigh_l.edges[TOP]
+        #             opposite_edges_right = self.neigh_r.edges[BOTTOM]
+        #         if opposite_edges_left:
+        #             opposite_left_exchange_level = lowest(opposite_edges_left).threedi_exchange_level
+        #         else:
+        #             opposite_left_exchange_level = PSEUDO_INFINITE
+        #         print(f"opposite_edges_right: {opposite_edges_right}")
+        #         if opposite_edges_right:
+        #             opposite_right_exchange_level = lowest(opposite_edges_right).threedi_exchange_level
+        #         else:
+        #             opposite_right_exchange_level = PSEUDO_INFINITE
+        #         print(f"obstacle.height: {obstacle.height}")
+        #         print(f"opposite_left_exchange_level: {opposite_left_exchange_level}")
+        #         print(f"opposite_right_exchange_level: {opposite_right_exchange_level}")
+        #         if obstacle.height < opposite_left_exchange_level + min_obstacle_height - search_precision \
+        #                 or obstacle.height < opposite_right_exchange_level + min_obstacle_height - search_precision:
+        #             select_this_obstacle = False
+        #
+        #     if select_this_obstacle:
+        #         filtered_obstacles.append(obstacle)
+        # self.obstacles = filtered_obstacles
 
     def geometry(self):
         geom = ogr.Geometry(ogr.wkbLineString)
