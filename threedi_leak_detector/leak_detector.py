@@ -316,13 +316,19 @@ class Edge:
                 if self.is_bottom_up():
                     # TODO search for all uses of 'get_edges()' and replace them with .edges[],
                     #  taking into account that this now returns a list
-                    opposite_edge_left = self.neigh_l.get_edges(LEFT)
-                    opposite_edge_right = self.neigh_r.get_edges(RIGHT)
+                    opposite_edges_left = self.neigh_l.edges[LEFT]
+                    opposite_edges_right = self.neigh_r.edges[RIGHT]
                 else:
-                    opposite_edge_left = self.neigh_l.get_edges(TOP)
-                    opposite_edge_right = self.neigh_r.get_edges(BOTTOM)
-                opposite_left_exchange_level = opposite_edge_left.threedi_exchange_level if opposite_edge_left else PSEUDO_INFINITE
-                opposite_right_exchange_level = opposite_edge_right.threedi_exchange_level if opposite_edge_right else PSEUDO_INFINITE
+                    opposite_edges_left = self.neigh_l.edges[TOP]
+                    opposite_edges_right = self.neigh_r.edges[BOTTOM]
+                if opposite_edges_left:
+                    opposite_left_exchange_level = lowest(opposite_edges_left).threedi_exchange_level
+                else:
+                    opposite_left_exchange_level = PSEUDO_INFINITE
+                if opposite_edges_right:
+                    opposite_right_exchange_level = lowest(opposite_edges_right).threedi_exchange_level
+                else:
+                    opposite_right_exchange_level = PSEUDO_INFINITE
                 if obstacle.height < opposite_left_exchange_level + min_obstacle_height - search_precision \
                         or obstacle.height < opposite_right_exchange_level + min_obstacle_height - search_precision:
                     select_this_obstacle = False

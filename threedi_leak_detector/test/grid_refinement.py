@@ -178,21 +178,22 @@ def single_cell(test_cell_id: int, result_side: Union[str, None], result_nr_obst
     topo.filter_obstacles(min_obstacle_height=MIN_OBSTACLE_HEIGHT, search_precision=SEARCH_PRECISION)
     topo.deduplicate_obstacles(search_precision=SEARCH_PRECISION)
 
-    # test if `result_side` edge has obstacle
-    if result_nr_obstacles > 0:
-        assert cell.edges[result_side][0].highest_obstacle is not None
-
     # test if total number of obstacles equals `result_nr_obstacles`
     obstacles = []
     for edge in topo.edges.values():
         obstacle = edge.highest_obstacle
         if obstacle is not None:
             obstacles.append(obstacle)
+    print(f"obstacles: {obstacles}")
     assert len(obstacles) == result_nr_obstacles
 
     # test if obstacle height is 5.0
     if result_nr_obstacles > 0:
         assert obstacles[0].height == result_height
+
+    # test if `result_side` edge has obstacle
+    if result_nr_obstacles > 0:
+        assert cell.edges[result_side][0].highest_obstacle is not None
 
 
 def two_cells(
@@ -263,6 +264,11 @@ def single_cell_vertical_obstacle_right():
 def single_cell_diagonal_slope_dem():
     """Cell 42 should result in 0 obstacles"""
     single_cell(test_cell_id=42, result_side=None, result_nr_obstacles=0, result_height=None)
+
+
+def single_cell_free_search():
+    """Cell 34 should yield 1 obstacle at the RIGHT edge"""
+    single_cell(test_cell_id=34, result_side=RIGHT, result_nr_obstacles=1, result_height=5.0)
 
 
 def equal_size_horizontal_no_obstacle():
@@ -388,27 +394,28 @@ def full_test(cell_ids: List):
     obstacles = None
 
 
-topo=create_topology()
-get_cell(topo)
-cell_edges_unequal_cell_size()
-cell_pair = create_cell_pair(topo, 156, 200)
-cell_pair_locate()
-cell_pair_smallest()
-single_cell_horizontal_obstacle_top()
-single_cell_horizontal_obstacle_bottom()
-single_cell_vertical_obstacle_left()
-single_cell_diagonal_slope_dem()
-equal_size_horizontal()
-equal_size_vertical()
-different_size_horizontal_top()
-different_size_horizontal_top_across()
-different_size_horizontal_bottom_across()
-different_size_vertical_left_across()
-connecting_obstacle()
+# topo=create_topology()
+# get_cell(topo)
+# cell_edges_unequal_cell_size()
+# cell_pair = create_cell_pair(topo, 156, 200)
+# cell_pair_locate()
+# cell_pair_smallest()
+# single_cell_horizontal_obstacle_top()
+# single_cell_horizontal_obstacle_bottom()
+# single_cell_vertical_obstacle_left()
+# single_cell_diagonal_slope_dem()
+single_cell_free_search()
+# equal_size_horizontal()
+# equal_size_vertical()
+# different_size_horizontal_top()
+# different_size_horizontal_top_across()
+# different_size_horizontal_bottom_across()
+# different_size_vertical_left_across()
+# connecting_obstacle()
 # np.set_printoptions(threshold=100000000)
 # print(cell_pair.indices(BOTTOM).astype(int))
 # obstacle_segments = connect_in_cell_pair(cell_pair, (0, 5))
 # edge = get_edge(obstacle_segments[0])
 # full_test(cell_ids=[156, 200])
-full_test(cell_ids = list(GR.cells.id))
+# full_test(cell_ids = list(GR.cells.id))
 
