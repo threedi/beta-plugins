@@ -315,8 +315,6 @@ class Edge:
         #
         #     if obstacle_has_free_search_segment:
         #         if self.is_bottom_up():
-        #             # TODO search for all uses of 'get_edges()' and replace them with .edges[],
-        #             #  taking into account that this now returns a list
         #             opposite_edges_left = self.neigh_l.edges[LEFT]
         #             opposite_edges_right = self.neigh_r.edges[RIGHT]
         #         else:
@@ -1743,11 +1741,9 @@ def identify_obstacles(dem: gdal.Dataset,
 
     # add fields
     field_defn_id = ogr.FieldDefn('id', ogr.OFTInteger)
-    field_defn_3di = ogr.FieldDefn('exchange_level_3di', ogr.OFTReal)
     field_defn_crest_level = ogr.FieldDefn('crest_level', ogr.OFTReal)
 
     lyr.CreateField(field_defn_id)
-    lyr.CreateField(field_defn_3di)
     lyr.CreateField(field_defn_crest_level)
 
     lyr.StartTransaction()
@@ -1757,9 +1753,6 @@ def identify_obstacles(dem: gdal.Dataset,
             feat = ogr.Feature(lyr.GetLayerDefn())
             feat['id'] = id_counter
             feat['crest_level'] = segment.height
-            if hasattr(segment, 'edge'):
-                if hasattr(segment.get_edges, 'threedi_exchange_level'):
-                    feat['exchange_level_3di'] = segment.get_edges.threedi_exchange_level
             feat.SetGeometry(segment.geometry())
             lyr.CreateFeature(feat)
             id_counter += 1
@@ -1772,11 +1765,9 @@ def identify_obstacles(dem: gdal.Dataset,
 
     # add fields
     field_defn_id = ogr.FieldDefn('id', ogr.OFTInteger)
-    field_defn_3di = ogr.FieldDefn('exchange_level_3di', ogr.OFTReal)
     field_defn_crest_level = ogr.FieldDefn('crest_level', ogr.OFTReal)
 
     lyr.CreateField(field_defn_id)
-    lyr.CreateField(field_defn_3di)
     lyr.CreateField(field_defn_crest_level)
 
     lyr.StartTransaction()
@@ -1786,8 +1777,6 @@ def identify_obstacles(dem: gdal.Dataset,
         feat = ogr.Feature(lyr.GetLayerDefn())
         feat['id'] = id_counter
         feat['crest_level'] = segment.height
-        # feat['exchange_level_3di'] = segment.get_edges.threedi_exchange_level
-        feat['exchange_level_3di'] = None
         feat.SetGeometry(segment.geometry())
         lyr.CreateFeature(feat)
         id_counter += 1
