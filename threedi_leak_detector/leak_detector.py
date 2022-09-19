@@ -116,74 +116,54 @@ class Edge:
 
     def __init__(self,
                  parent,  # Topology
-                 cell_1,  # Cell
-                 cell_2  # Cell
+                 # cell_1,  # Cell
+                 # cell_2  # Cell
+                 flowline: dict
                  ):
         self.parent = parent
-        self.cell_1 = cell_1
-        self.cell_2 = cell_2
-        side_coords1 = cell_1.side_coords()
-        side_coords2 = cell_2.side_coords()
+        cell_id_1, cell_id_2 = flowline["line"]
+        self.cell_1 = parent.cells[cell_id_1]
+        self.cell_2 = parent.cells[cell_id_2]
+        # self.cell_1 = cell_1
+        # self.cell_2 = cell_2
+        side_coords1 = self.cell_1.side_coords()
+        side_coords2 = self.cell_2.side_coords()
         for side_1 in [TOP, BOTTOM, LEFT, RIGHT]:
             for side_2 in [TOP, BOTTOM, LEFT, RIGHT]:
                 intersection_coords = intersection(side_coords1[side_1], side_coords2[side_2])
                 if intersection_coords:
                     self.start_coord, self.end_coord = intersection_coords
                     if (side_1 == TOP and side_2 == BOTTOM) or (side_1 == LEFT and side_2 == RIGHT):
-                        self.neigh_r = cell_1
-                        self.neigh_l = cell_2
+                        self.neigh_r = self.cell_1
+                        self.neigh_l = self.cell_2
                     elif (side_1 == BOTTOM and side_2 == TOP) or (side_1 == RIGHT and side_2 == LEFT):
-                        self.neigh_r = cell_2
-                        self.neigh_l = cell_1
+                        self.neigh_r = self.cell_2
+                        self.neigh_l = self.cell_1
                     break
             if intersection_coords:
                 break
         if not intersection_coords:
             raise ValueError('Input cells do not share an edge')
-        cell_1.add_edge(side_1, self)
-        cell_2.add_edge(side_2, self)
+        self.cell_1.add_edge(side_1, self)
+        self.cell_2.add_edge(side_2, self)
         self.obstacles = list()
 
-        # calculate exchange levels: 1D array of max of pixel pairs along the edge
-        pxsize = self.parent.dem.GetGeoTransform()[1]
-
-        if self.is_bottom_up():
-            bbox = [self.start_coord[0] - pxsize, self.start_coord[1], self.end_coord[0] + pxsize, self.end_coord[1]]
+        if not np.isnan(flowline["dpumax"]):
+            self.threedi_exchange_level = flowline["dpumax"]
         else:
-            bbox = [self.start_coord[0], self.start_coord[1] - pxsize, self.end_coord[0], self.end_coord[1] + pxsize]
-        # try:
-        arr = read_as_array(raster=self.parent.dem, bbox=bbox, pad=True)
-        self.exchange_levels = np.nanmax(arr, axis=int(self.is_bottom_up()))
-        self.threedi_exchange_level = np.nanmin(self.exchange_levels)
-        # except ValueError:  # cell is at model boundary and therefore edge is out of dem extent
-        #     self.exchange_levels = None
-        #     self.threedi_exchange_level = None
+            # calculate exchange level from DEM: 1D array of max of pixel pairs along the edge
+            pxsize = self.parent.dem.GetGeoTransform()[1]
+            if self.is_bottom_up():
+                bbox = [self.start_coord[0] - pxsize, self.start_coord[1], self.end_coord[0] + pxsize,
+                        self.end_coord[1]]
+            else:
+                bbox = [self.start_coord[0], self.start_coord[1] - pxsize, self.end_coord[0],
+                        self.end_coord[1] + pxsize]
+            arr = read_as_array(raster=self.parent.dem, bbox=bbox, pad=True)
+            self.exchange_levels = np.nanmax(arr, axis=int(self.is_bottom_up()))
+            self.threedi_exchange_level = np.nanmin(self.exchange_levels)
 
-    # @property
-    # def neigh_l(self):
-    #     return self._neigh_l
-    #
-    # @neigh_l.setter
-    # def neigh_l(self, cell):
-    #     self._neigh_l = cell
-    #     self.update_is_connected()
-    #
-    # @property
-    # def neigh_r(self):
-    #     return self._neigh_r
-    #
-    # @neigh_r.setter
-    # def neigh_r(self, cell):
-    #     self._neigh_r = cell
-    #     self.update_is_connected()
-    #
-    # def update_is_connected(self):
-    #     if self.neigh_l is None or self.neigh_r is None:
-    #         self.is_connected = False
-    #     else:
-    #         line_nodes_list = self.parent.line_nodes.tolist()
-    #         self.is_connected = [self.neigh_l.id, self.neigh_r.id] in line_nodes_list or \
-    #                             [self.neigh_r.id, self.neigh_l.id] in line_nodes_list
+        self.parent.edges[(cell_id_1, cell_id_2)] = self
 
     def is_bottom_up(self):
         return self.start_coord[0] == self.end_coord[0]
@@ -370,7 +350,7 @@ class Topology:
         # Get all flowlines that are connected to any of the cell_ids
         flowlines = filter_lines_by_node_ids(gr.lines.subset('2D_OPEN_WATER'), node_ids=cell_ids)
 
-        # get node coordinates
+        # get node ids
         self.line_nodes = flowlines.line_nodes
 
         # get cell coordinates
@@ -413,11 +393,8 @@ class Topology:
 
         # edges
         self.edges = dict()  # {line_nodes: Edge}
-        for line_nodes in self.line_nodes.tolist():
-            start_cell = self.cells[line_nodes[0]]
-            end_cell = self.cells[line_nodes[1]]
-            edge = Edge(parent=self, cell_1=start_cell, cell_2=end_cell)
-            self.edges[tuple(line_nodes)] = edge
+        for flowline in flowlines.to_list():
+            edge = Edge(parent=self, flowline=flowline)
 
     def neigh_cells(self, cell_id: int, location: str):
         return self.cell_topologies[cell_id][location]
