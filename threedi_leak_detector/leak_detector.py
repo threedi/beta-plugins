@@ -340,7 +340,8 @@ class Topology:
             self,
             gr: GridH5Admin,
             cell_ids: List,
-            dem: gdal.Dataset
+            dem: gdal.Dataset,
+            feedback=None
     ):
         """Note: cells in topology will also include neighbours of cells indicated by cell_ids"""
         self.dem = dem
@@ -349,6 +350,11 @@ class Topology:
 
         # Get all flowlines that are connected to any of the cell_ids
         flowlines = filter_lines_by_node_ids(gr.lines.subset('2D_OPEN_WATER'), node_ids=cell_ids)
+        if np.all(np.isnan(flowlines.dpumax)):
+            if feedback:
+                feedback.pushWarning("Gridadmin file does not contain elevation data. Exchange levels will be derived"
+                                     "from the DEM. Obstacles will be ignored. Please use a gridadmin file that was "
+                                     "generated on the server instead." )
 
         # get node ids
         self.line_nodes = flowlines.line_nodes
