@@ -116,16 +116,13 @@ class Edge:
 
     def __init__(self,
                  parent,  # Topology
-                 # cell_1,  # Cell
-                 # cell_2  # Cell
                  flowline: dict
                  ):
         self.parent = parent
+        self.id = flowline["id"]
         cell_id_1, cell_id_2 = flowline["line"]
         self.cell_1 = parent.cells[cell_id_1]
         self.cell_2 = parent.cells[cell_id_2]
-        # self.cell_1 = cell_1
-        # self.cell_2 = cell_2
         side_coords1 = self.cell_1.side_coords()
         side_coords2 = self.cell_2.side_coords()
         for side_1 in [TOP, BOTTOM, LEFT, RIGHT]:
@@ -163,8 +160,6 @@ class Edge:
             self.exchange_levels = np.nanmax(arr, axis=int(self.is_bottom_up()))
             self.threedi_exchange_level = np.nanmin(self.exchange_levels)
 
-        self.parent.edges[(cell_id_1, cell_id_2)] = self
-
     def is_bottom_up(self):
         return self.start_coord[0] == self.end_coord[0]
 
@@ -181,60 +176,45 @@ class Edge:
                 |                   |
         """
         if self.neigh_l is None or self.neigh_r is None:
-            print("A")
             return
         if self.is_bottom_up():
-            print("B")
             side_pairs = [(TOP, BOTTOM), (BOTTOM, TOP)]
         else:
-            print("C")
             side_pairs = [(LEFT, RIGHT), (RIGHT, LEFT)]
         for side_1, side_2 in side_pairs:
             neigh_edges_1 = self.neigh_l.edges[side_1]
             neigh_edges_2 = self.neigh_r.edges[side_2]
-            print(f"neigh_edges_1: {neigh_edges_1}")
-            print(f"neigh_edges_2: {neigh_edges_2}")
             if neigh_edges_1 and neigh_edges_2:
                 # find the highest obstacle that applies to all of neigh_edges_1 / neigh_edges_2
                 highest_shared_obstacle_1 = highest(shared_obstacles(neigh_edges_1))
                 highest_shared_obstacle_2 = highest(shared_obstacles(neigh_edges_2))
-                print(f"highest_shared_obstacle_1: {highest_shared_obstacle_1}")
-                print(f"highest_shared_obstacle_2: {highest_shared_obstacle_2}")
                 if highest_shared_obstacle_1 and highest_shared_obstacle_2:
                     cell_pair = CellPair(reference_cell=self.neigh_l, neigh_cell=self.neigh_r)
                     search_start_pos_in_cell_pair = None
                     search_end_pos_in_cell_pair = None
-                    print(f"self: {self}")
-                    print(f"highest_shared_obstacle_1.start_edges(): {highest_shared_obstacle_1.start_edges()}")
+
                     if self in highest_shared_obstacle_1.start_edges():
-                        print("self in highest_shared_obstacle_1.start_edges()")
                         search_start_pos = highest_shared_obstacle_1.segments[0].from_pos
                         search_start_pos_in_cell_pair = cell_pair.transform(
                             pos=search_start_pos,
                             from_array=REFERENCE,
                             to_array=MERGED
                         )
-                    print(f"highest_shared_obstacle_1.end_edges(): {highest_shared_obstacle_1.end_edges()}")
                     if self in highest_shared_obstacle_1.end_edges():
-                        print("self in highest_shared_obstacle_1.end_edges()")
                         search_start_pos = highest_shared_obstacle_1.segments[-1].to_pos
                         search_start_pos_in_cell_pair = cell_pair.transform(
                             pos=search_start_pos,
                             from_array=REFERENCE,
                             to_array=MERGED
                         )
-                    print(f"highest_shared_obstacle_2.start_edges(): {highest_shared_obstacle_2.start_edges()}")
                     if self in highest_shared_obstacle_2.start_edges():
-                        print("self in highest_shared_obstacle_2.start_edges()")
                         search_end_pos = highest_shared_obstacle_2.segments[0].from_pos
                         search_end_pos_in_cell_pair = cell_pair.transform(
                             pos=search_end_pos,
                             from_array=NEIGH,
                             to_array=MERGED
                         )
-                    print(f"highest_shared_obstacle_2.end_edges(): {highest_shared_obstacle_2.end_edges()}")
                     if self in highest_shared_obstacle_2.end_edges():
-                        print("self in highest_shared_obstacle_2.end_edges()")
                         search_end_pos = highest_shared_obstacle_2.segments[-1].to_pos
                         search_end_pos_in_cell_pair = cell_pair.transform(
                             pos=search_end_pos,
@@ -320,6 +300,7 @@ class Edge:
         #         filtered_obstacles.append(obstacle)
         # self.obstacles = filtered_obstacles
 
+    @property
     def geometry(self):
         geom = ogr.Geometry(ogr.wkbLineString)
         geom.AddPoint(self.start_coord[0], self.start_coord[1])
@@ -341,20 +322,23 @@ class Topology:
             gr: GridH5Admin,
             cell_ids: List,
             dem: gdal.Dataset,
-            feedback=None
+            feedback=None,
+            max_progress=10
     ):
         """Note: cells in topology will also include neighbours of cells indicated by cell_ids"""
         self.dem = dem
         self.obstacles = list()
         self.final_obstacle_segments = dict()
+        nr_progress_steps = 3
 
         # Get all flowlines that are connected to any of the cell_ids
         flowlines = filter_lines_by_node_ids(gr.lines.subset('2D_OPEN_WATER'), node_ids=cell_ids)
         if np.all(np.isnan(flowlines.dpumax)):
             if feedback:
-                feedback.pushWarning("Gridadmin file does not contain elevation data. Exchange levels will be derived"
-                                     "from the DEM. Obstacles will be ignored. Please use a gridadmin file that was "
-                                     "generated on the server instead." )
+                feedback.pushWarning(
+                    "Gridadmin file does not contain elevation data. Exchange levels will be derived from the DEM. "
+                    "Obstacles will be ignored. Please use a gridadmin file that was generated on the server instead."
+                )
 
         # get node ids
         self.line_nodes = flowlines.line_nodes
@@ -366,10 +350,9 @@ class Topology:
 
         self.cells = dict()
         for cell_id_i, cell_coords_i in self.cell_coords.items():
-            try:
-                self.cells[cell_id_i] = Cell(parent=self, id=cell_id_i, coords=cell_coords_i)
-            except KeyError:
-                continue
+            self.cells[cell_id_i] = Cell(parent=self, id=cell_id_i, coords=cell_coords_i)
+            if feedback:
+                feedback.setProgress(feedback.progress() + (1/nr_progress_steps)/len(self.cell_coords)*max_progress)
 
         self.cell_topologies = dict()
         for cell in self.cells.values():
@@ -397,29 +380,41 @@ class Topology:
                     cell_topology[BOTTOM].append(self.cells[previous_cell_id])
             self.cell_topologies[cell.id] = cell_topology
 
+            if feedback:
+                feedback.setProgress(feedback.progress() + (1/nr_progress_steps)/len(self.cells)*max_progress)
+
         # edges
-        self.edges = dict()  # {line_nodes: Edge}
-        for flowline in flowlines.to_list():
+        self.edges = list()
+        self._edge_dict = dict()  # {line_nodes: Edge}
+        flowlines_list = flowlines.to_list()
+        for flowline in flowlines_list:
             edge = Edge(parent=self, flowline=flowline)
+            self.edges.append(edge)
+            self._edge_dict[(edge.cell_1.id, edge.cell_2.id)] = edge
+
+            if feedback:
+                feedback.setProgress(feedback.progress() + (1/nr_progress_steps)/len(flowlines_list)*max_progress)
+
+    def find_edge(self, cell_1, cell_2):
+        try:
+            edge = self._edge_dict[(cell_1.id, cell_2.id)]
+        except KeyError:
+            edge = self._edge_dict[(cell_2.id, cell_1.id)]
+        return edge
 
     def neigh_cells(self, cell_id: int, location: str):
         return self.cell_topologies[cell_id][location]
 
     def filter_obstacles(self, min_obstacle_height: float, search_precision: float):
         """Filter obstacles of all edges based on several criteria. Updates obstacles for all edges in this Topology"""
-        for edge in self.edges.values():
+        for edge in self.edges:
             edge.filter_obstacles(min_obstacle_height=min_obstacle_height, search_precision=search_precision)
 
     def deduplicate_obstacles(self, search_precision):
         result = []
-        print("Deduplicate obstacles...")
         for i, obstacle in enumerate(self.obstacles):
             has_duplicate = False
-            print(f"processing obstacle {i}: {obstacle.geometry.ExportToWkt()}")
             for comparison in self.obstacles[i+1:]:
-                print(f"comparing with obstacle: {comparison.geometry.ExportToWkt()}")
-                print(f"equals volgens ogr: {obstacle.geometry.Equals(comparison.geometry)}")
-                print(f"abs(obstacle.height - comparison.height): {abs(obstacle.height - comparison.height)}")
                 if obstacle.geometry.Equals(comparison.geometry) and \
                         abs(obstacle.height - comparison.height) < search_precision:
                     has_duplicate = True
@@ -431,11 +426,11 @@ class Topology:
         self.obstacles = result
 
         # remove obstacles from edge if they are no longer part of this topology
-        for edge in self.edges.values():
+        for edge in self.edges:
             edge.obstacles = [obstacle for obstacle in edge.obstacles if obstacle in result]
 
     def select_final_obstacle_segments(self):
-        for edge in self.edges.values():
+        for edge in self.edges:
             if edge.highest_obstacle is not None:
                 for segment in edge.highest_obstacle.segments:
                     segment_to_add = segment.clone()
@@ -496,9 +491,6 @@ class ObstacleSegment:
         """
         # from_val or max_to_val is not significantly higher than lowest point in flow domain
         # i.e., flat or smoothly sloping cell
-        # print(f"pixels: {pixels}")
-        # print(f"from_pos: {from_pos}")
-
         from_val = pixels[from_pos]
         max_to_val = np.nanmax(pixels[to_positions])
         if np.nanmin([from_val, max_to_val]) - np.nanmin(pixels) < search_precision:
@@ -1035,44 +1027,31 @@ class Cell:
                 search_precision=search_precision
             )
             if len(additional_obstacle_segments) > 0:  # i.e. other side has been reached
-                print(f"search_forward: {search_forward}")
-                print(f"cell_pair: ref: {cell_pair.reference_cell.id}, neigh: {cell_pair.neigh_cell.id}")
                 if search_forward:
                     obstacle_segments = [obstacle_segment] + additional_obstacle_segments
                 else:
                     obstacle_segments = additional_obstacle_segments + [obstacle_segment]
                 # determine which edges the Obstacle should be assigned to
                 if not cell_pair.smallest():  # cells are of equal size
-                    print("cells are of equal size")
                     edges = [cell_pair.edge]
                 elif self == cell_pair.smallest():  # cells are of different size, self is smaller
-                    print("cells are of different size, self is smaller")
                     ref_cell_location = cell_pair.locate(REFERENCE)
-                    print(f"ref_cell_location: {ref_cell_location}")
-                    print(f"obstacle_segment_begin_side: {obstacle_segment_begin_side}")
                     if ref_cell_location[1] == obstacle_segment_begin_side:  # [1] = secondary location
                         # e.g. obstacle goes to TOP of smaller, neighbouring cell whose secondary location is TOP
                         edges = cell_pair.neigh_cell.edges[ref_cell_location[0]]  # [0] = primary location
-                        print(f"A edges: {edges}")
                     else:
                         # e.g. obstacle goes to TOP of smaller, neighbouring cell whose secondary location is BOTTOM
                         edges = [cell_pair.edge]
-                        print(f"B edges: {edges}")
                 else:  # cells are of different size, neigh is smaller
-                    print("cells are of different size, neigh is smaller")
                     neigh_cell_location = cell_pair.locate(NEIGH)
-                    print(f"neigh_cell_location: {neigh_cell_location}")
-                    print(f"target_side: {target_side}")
                     if neigh_cell_location[1] == target_side:  # [1] = secondary location
                         # e.g. obstacle starts at BOTTOM of ref cell whose secondary location is BOTTOM, and goes to TOP
                         # of larger neighbouring cell
                         edges = self.edges[neigh_cell_location[0]]
-                        print(f"C edges: {edges}")
                     else:
                         # e.g. obstacle starts at BOTTOM of ref cell whose secondary location is TOP, and goes to TOP
                         # of larger neighbouring cell
                         edges = [cell_pair.edge]
-                        print(f"D edges: {edges}")
                 obstacles.append(Obstacle(segments=obstacle_segments, edges=edges))
         return obstacles
 
@@ -1171,15 +1150,10 @@ class Cell:
 
 class CellPair:
     def __init__(self, reference_cell: Cell, neigh_cell: Cell):
-        # TODO build cell pair from edge argument instead of two cells as argument
         self.reference_cell = reference_cell
         self.neigh_cell = neigh_cell
-        # print(f'Creating cell pair of (ref) {reference_cell.id} and (neigh) {neigh_cell.id}')
         self.topo = reference_cell.parent
-        try:
-            self.edge = self.topo.edges[(reference_cell.id, neigh_cell.id)]
-        except KeyError:
-            self.edge = self.topo.edges[(neigh_cell.id, reference_cell.id)]
+        self.edge = self.topo.find_edge(reference_cell, neigh_cell)
         neigh_primary_location, neigh_secondary_location = self.locate(NEIGH)
         reference_primary_location, reference_secondary_location = self.locate(REFERENCE)
         smallest_cell = self.smallest()
@@ -1190,8 +1164,6 @@ class CellPair:
             else:
                 smallest_secondary_location = neigh_secondary_location
 
-        # print(f"neigh_primary_location: {neigh_primary_location}, neigh_secondary_location: {neigh_secondary_location}")
-        # print(f"reference_primary_location: {reference_primary_location}, reference_secondary_location: {reference_secondary_location}")
         if neigh_primary_location == TOP:
             if not smallest_cell:
                 self.pixels = np.vstack([neigh_cell.pixels, reference_cell.pixels])
@@ -1285,9 +1257,7 @@ class CellPair:
             neigh_cell_shift_y = 0
 
         self.reference_cell_shift = (reference_cell_shift_y, reference_cell_shift_x)
-        # print(f"reference_cell_shift: {self.reference_cell_shift}")
         self.neigh_cell_shift = (neigh_cell_shift_y, neigh_cell_shift_x)
-        # print(f"neigh_cell_shift: {self.neigh_cell_shift}")
 
     def smallest(self) -> Cell:
         """
@@ -1306,7 +1276,6 @@ class CellPair:
         If `which_cell` is the largest of the two or both cells are of the same size, secondary location is NA
         :param which_cell: REFERENCE or NEIGH
         """
-        # print(f"locating: {which_cell}")
         # preparations
         if which_cell == REFERENCE:
             cell_to_locate = self.reference_cell
@@ -1327,15 +1296,11 @@ class CellPair:
             raise ValueError("Could determine primary location with given arguments")
 
         # secondary location
-        # print(cell_to_locate.width)
-        # print(other_cell.width)
         if cell_to_locate.width >= other_cell.width:
             secondary_location = NA
         elif primary_location in [LEFT, RIGHT]:
             bottom_aligned = round(self.reference_cell.coords[1], decimals) == round(self.neigh_cell.coords[1], decimals)
-            # print(f"bottom_aligned: {bottom_aligned}")
             top_aligned = round(self.reference_cell.coords[3], decimals) == round(self.neigh_cell.coords[3], decimals)
-            # print(f"top_aligned: {top_aligned}")
             if bottom_aligned and top_aligned:
                 secondary_location = NA
             elif bottom_aligned:
@@ -1346,9 +1311,7 @@ class CellPair:
                 raise ValueError("Could not locate with given arguments")
         elif primary_location in [TOP, BOTTOM]:
             left_aligned = round(self.reference_cell.coords[0], decimals) == round(self.neigh_cell.coords[0], decimals)
-            # print(f"left_aligned: {left_aligned}")
             right_aligned = round(self.reference_cell.coords[2], decimals) == round(self.neigh_cell.coords[2], decimals)
-            # print(f"right_aligned: {right_aligned}")
             if left_aligned and right_aligned:
                 secondary_location = NA
             elif left_aligned:
@@ -1675,12 +1638,10 @@ def identify_obstacles(dem: gdal.Dataset,
                        output_fn: str,
                        driver_name='Memory'
                        ):
-    print('constructing topology...')
     topo = Topology(gr=gr, cell_ids=cell_ids, dem=dem)
 
     # find obstacle segments within cell
     for nr, cell_i in enumerate(topo.cells.values()):
-        print(f'find obstacles within cell {cell_i.id} ({nr} of {len(topo.cells)})')
         try:
             cell_i.find_maxima(min_peak_prominence=min_peak_prominence)
             cell_i.connect_maxima(search_precision=search_precision, min_obstacle_height=min_obstacle_height)
@@ -1691,7 +1652,6 @@ def identify_obstacles(dem: gdal.Dataset,
 
     # Create obstacles from segments
     for cell_i in topo.cells.values():
-        print(f'Create obstacles from segments for cell {cell_i.id} of {len(topo.cells)}')
         cell_i.create_obstacles_from_segments(
             direct_connection_preference=min_obstacle_height,
             search_precision=search_precision,
@@ -1699,13 +1659,11 @@ def identify_obstacles(dem: gdal.Dataset,
         )
 
     # filter obstacles
-    for nr, (edge_key, edge) in enumerate(topo.edges.items()):
-        print(f'filter obstacles for edge {nr} of {len(topo.edges)}')
+    for edge in topo.edges:
         edge.filter_obstacles(min_obstacle_height=min_obstacle_height, search_precision=search_precision)
 
     # generate connecting obstacles
-    for nr, (edge_key, edge) in enumerate(topo.edges.items()):
-        print(f'generate_connecting_obstacle for edge {nr} of {len(topo.edges)}')
+    for edge in topo.edges:
         edge.generate_connecting_obstacle(min_obstacle_height=min_obstacle_height, search_precision=search_precision)
 
     # collect unique obstacle segments
@@ -1756,7 +1714,6 @@ def identify_obstacles(dem: gdal.Dataset,
     lyr.StartTransaction()
     id_counter = 1
     for segment in topo.final_obstacle_segments.values():
-        print(segment)
         feat = ogr.Feature(lyr.GetLayerDefn())
         feat['id'] = id_counter
         feat['crest_level'] = segment.height
@@ -1781,7 +1738,7 @@ def identify_obstacles(dem: gdal.Dataset,
 
     lyr.StartTransaction()
     id_counter = 1
-    for edge in topo.edges.values():
+    for edge in topo.edges:
         obstacle = edge.highest_obstacle
         if obstacle is not None:
             feat = ogr.Feature(lyr.GetLayerDefn())
@@ -1789,6 +1746,139 @@ def identify_obstacles(dem: gdal.Dataset,
             feat['crest_level'] = obstacle.height
             feat['exchange_level_3di'] = edge.threedi_exchange_level
             feat.SetGeometry(edge.geometry())
+            lyr.CreateFeature(feat)
+            id_counter += 1
+    lyr.CommitTransaction()
+
+    return ds
+
+
+def detect_leaking_obstacles(
+        dem: gdal.Dataset,
+        gr: GridH5Admin,
+        cell_ids: List,
+        min_peak_prominence: float,
+        search_precision: float,
+        min_obstacle_height: float,
+        output_fn: str,
+        driver_name='Memory',
+        feedback=None  # QgsProcessingFeedback
+):
+    topo = Topology(gr=gr, cell_ids=cell_ids, dem=dem, feedback=feedback)
+    max_progress = 90  # first 10% has been filled by creating topology
+    nr_progress_steps = 4
+
+    # find obstacle segments within cell
+    for nr, cell_i in enumerate(topo.cells.values()):
+        try:
+            cell_i.find_maxima(min_peak_prominence=min_peak_prominence)
+            cell_i.connect_maxima(search_precision=search_precision, min_obstacle_height=min_obstacle_height)
+        except KeyError:
+            # KeyError in case user requests ids that do not exist, e.g. by using list(gr.cells.id)
+            # ValueError - I think this has to do with cases where cell is partly outside raster extent?
+            continue
+        if feedback:
+            feedback.setProgress(feedback.progress() + (1/nr_progress_steps)/len(topo.cells)*max_progress)
+
+    # Create obstacles from segments
+    for cell_i in topo.cells.values():
+        cell_i.create_obstacles_from_segments(
+            direct_connection_preference=min_obstacle_height,
+            search_precision=search_precision,
+            min_obstacle_height=min_obstacle_height
+        )
+        if feedback:
+            feedback.setProgress(feedback.progress() + (1/nr_progress_steps)/len(topo.cells)*max_progress)
+
+    # filter obstacles
+    for edge in topo.edges:
+        edge.filter_obstacles(min_obstacle_height=min_obstacle_height, search_precision=search_precision)
+        if feedback:
+            feedback.setProgress(feedback.progress() + (1/nr_progress_steps)/len(topo.edges)*max_progress)
+
+    # generate connecting obstacles
+    for edge in topo.edges:
+        edge.generate_connecting_obstacle(min_obstacle_height=min_obstacle_height, search_precision=search_precision)
+        if feedback:
+            feedback.setProgress(feedback.progress() + (1/nr_progress_steps)/len(topo.edges)*max_progress)
+
+    # export result to geopackage
+    drv = ogr.GetDriverByName(driver_name)
+    ds = drv.CreateDataSource(output_fn)
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(int(gr.epsg_code))
+
+    ####
+    # Export all obstacle segments
+    ####
+    lyr = ds.CreateLayer('obstacle_segments', srs, geom_type=ogr.wkbLineString, options=['FID=id'])
+
+    # add fields
+    field_defn_id = ogr.FieldDefn('id', ogr.OFTInteger)
+    field_defn_crest_level = ogr.FieldDefn('crest_level', ogr.OFTReal)
+
+    lyr.CreateField(field_defn_id)
+    lyr.CreateField(field_defn_crest_level)
+
+    lyr.StartTransaction()
+    id_counter = 1
+    for cell in topo.cells.values():
+        for segment in cell.obstacle_segments:
+            feat = ogr.Feature(lyr.GetLayerDefn())
+            feat['id'] = id_counter
+            feat['crest_level'] = segment.height
+            feat.SetGeometry(segment.geometry())
+            lyr.CreateFeature(feat)
+            id_counter += 1
+    lyr.CommitTransaction()
+
+    ####
+    # Export final obstacle segments
+    ####
+    lyr = ds.CreateLayer('final_obstacle_segments', srs, geom_type=ogr.wkbLineString, options=['FID=id'])
+
+    # add fields
+    field_defn_id = ogr.FieldDefn('id', ogr.OFTInteger)
+    field_defn_crest_level = ogr.FieldDefn('crest_level', ogr.OFTReal)
+
+    lyr.CreateField(field_defn_id)
+    lyr.CreateField(field_defn_crest_level)
+
+    lyr.StartTransaction()
+    id_counter = 1
+    for segment in topo.final_obstacle_segments.values():
+        feat = ogr.Feature(lyr.GetLayerDefn())
+        feat['id'] = id_counter
+        feat['crest_level'] = segment.height
+        feat.SetGeometry(segment.geometry())
+        lyr.CreateFeature(feat)
+        id_counter += 1
+    lyr.CommitTransaction()
+
+    ####
+    # Export edges that have obstacles
+    ####
+    lyr = ds.CreateLayer('edge_with_obstacle', srs, geom_type=ogr.wkbLineString, options=['FID=id'])
+
+    # add fields
+    field_defn_id = ogr.FieldDefn('id', ogr.OFTInteger)
+    field_defn_3di = ogr.FieldDefn('exchange_level_3di', ogr.OFTReal)
+    field_defn_crest_level = ogr.FieldDefn('crest_level', ogr.OFTReal)
+
+    lyr.CreateField(field_defn_id)
+    lyr.CreateField(field_defn_3di)
+    lyr.CreateField(field_defn_crest_level)
+
+    lyr.StartTransaction()
+    id_counter = 1
+    for edge in topo.edges:
+        obstacle = edge.highest_obstacle
+        if obstacle is not None:
+            feat = ogr.Feature(lyr.GetLayerDefn())
+            feat['id'] = id_counter
+            feat['crest_level'] = obstacle.height
+            feat['exchange_level_3di'] = edge.threedi_exchange_level
+            feat.SetGeometry(edge.geometry)
             lyr.CreateFeature(feat)
             id_counter += 1
     lyr.CommitTransaction()

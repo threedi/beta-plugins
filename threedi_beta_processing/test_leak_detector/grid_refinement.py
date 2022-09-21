@@ -12,7 +12,7 @@ MIN_PEAK_PROMINENCE = 0.05
 SEARCH_PRECISION = 0.001
 MIN_OBSTACLE_HEIGHT = 0.05
 
-OUT_GIS_FILE = DATA_DIR / f'test_output{current_date_time}.gpkg'
+OUT_GIS_FILE = DATA_DIR / "output" / f'test_output{current_date_time}.gpkg'
 
 
 def create_topology():
@@ -68,8 +68,6 @@ def connect_in_cell_pair(cell_pair, search_start_pos_in_reference_cell):
         search_precision=0.001
     )
     assert len(obstacle_segments) == 1
-    # for obs in obstacle_segments:
-    #     print(obs.__dict__)
     return obstacle_segments
 
 
@@ -79,7 +77,6 @@ def cell_pair_locate_helper(test_cell_ids: List[int], which_cell: str, result_lo
     cell_pair = CellPair(reference_cell=topo.cells[test_cell_ids[0]],
                          neigh_cell=topo.cells[test_cell_ids[1]])
     location = cell_pair.locate(which_cell=which_cell)
-    print(location)
     assert location == result_location
 
 
@@ -180,7 +177,7 @@ def single_cell(test_cell_id: int, result_side: Union[str, None], result_nr_obst
 
     # test if total number of obstacles equals `result_nr_obstacles`
     obstacles = []
-    for edge in topo.edges.values():
+    for edge in topo.edges:
         obstacle = edge.highest_obstacle
         if obstacle is not None:
             obstacles.append(obstacle)
@@ -232,7 +229,7 @@ def two_cells(
     # assert len(topo.obstacles) == result_nr_obstacles
 
     # test if total number of edges with obstacles equals `result_nr_edges_with_obstacles`
-    nr_edges_with_obstacles = len([edge for edge in topo.edges.values() if len(edge.obstacles) > 0])
+    nr_edges_with_obstacles = len([edge for edge in topo.edges if len(edge.obstacles) > 0])
     assert nr_edges_with_obstacles == result_nr_edges_with_obstacles
 
     # test if obstacle height equals `result_height`
@@ -368,7 +365,7 @@ def connecting_obstacle():
     assert len(CellPair(topo.cells[31], topo.cells[51]).edge.obstacles) == 1
     assert len(CellPair(topo.cells[29], topo.cells[30]).edge.obstacles) == 0
 
-    # for edge in topo.edges.values():
+    # for edge in topo.edges:
     #     edge.generate_connecting_obstacle(min_obstacle_height=MIN_OBSTACLE_HEIGHT, search_precision=SEARCH_PRECISION)
 
     edge = CellPair(topo.cells[29], topo.cells[30]).edge
