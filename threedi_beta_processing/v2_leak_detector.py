@@ -3,6 +3,7 @@ from typing import Union, List, Tuple
 import numpy as np
 from osgeo import gdal
 from scipy.ndimage import label, generate_binary_structure, maximum_position
+from scipy.signal import find_peaks
 from threedigrid.admin.gridadmin import GridH5Admin
 from threedigrid.admin.lines.models import Lines
 
@@ -13,6 +14,12 @@ RIGHT = 'right'
 BOTTOM = 'bottom'
 LEFT = 'left'
 NA = 'N/A'
+SIDE_INDEX = {
+    TOP: np.index_exp[0, :],
+    RIGHT: np.index_exp[:, -1],
+    BOTTOM: np.index_exp[-1, :],
+    LEFT: np.index_exp[:, 0]
+}
 OPPOSITE = {
     LEFT: RIGHT,
     RIGHT: LEFT,
@@ -22,7 +29,7 @@ OPPOSITE = {
 REFERENCE = 'reference'
 NEIGH = 'neigh'
 MERGED = 'merged'
-
+COORD_DECIMALS = 5
 
 gdal.UseExceptions()
 
@@ -116,8 +123,6 @@ class LeakDetector:
         self.min_peak_prominence = min_peak_prominence
         self.edges = list()
         self._edge_dict = dict()
-        self.cells = list()
-        self._cell_dict = dict()
 
         # Get all flowlines that are connected to any of the cell_ids
         flowlines = filter_lines_by_node_ids(gridadmin.lines.subset('2D_OPEN_WATER'), node_ids=cell_ids)
@@ -129,13 +134,29 @@ class LeakDetector:
                 )
         self.line_nodes = flowlines.line_nodes
 
+        # Create cells
+        threedigrid_cells = gridadmin.cells.filter(id__in=self.line_nodes.flatten())
+        cell_properties = threedigrid_cells.only('id', 'cell_coords').data
+        cell_properties_dict = dict(zip(cell_properties['id'], np.round(cell_properties['cell_coords'].T, COORD_DECIMALS)))
+
+        self._cell_dict = dict()
+        for cell_id, cell_coords in cell_properties_dict.items():
+            self._cell_dict[cell_id] = Cell(leak_detector=self, id=cell_id, coords=cell_coords)
+
+        for cell in self.cells:
+            cell.set_neighbours()
+
+    @property
+    def cells(self) -> List:
+        return list(self._cell_dict.values())
+
     def find_edge(self, reference_cell, neigh_cell):
         """
         Find the edge between reference_cell (left/bottom) and neigh_cell (top/right)
         """
         return self._edge_dict[(reference_cell.id, neigh_cell.id)]
 
-    def find_cell(self, cell_id):
+    def cell(self, cell_id):
         """
         Return the cell indicated by `cell_id`
         """
@@ -167,6 +188,7 @@ class Cell:
         :param leak_detector:
         :param coords: corner coordinates the crs of the dem: [min_x, min_y, max_x, max_y]
         """
+        self.leak_detector = leak_detector
         self.id = id
         self.coords = coords
         self.pixels = read_as_array(raster=leak_detector.dem, bbox=coords, pad=True)
@@ -179,17 +201,25 @@ class Cell:
         self.width = self.pixels.shape[1]
         self.height = self.pixels.shape[0]
 
-        # Identify cells to the top and right of this cell
+    def set_neighbours(self):
+        """Identify cells to the top and right of this cell"""
         self.neigh_cells = {RIGHT: [], TOP: []}
-        cell_x_coords = coords[[0, 2]]
+        cell_x_coords = self.coords[[0, 2]]
         cell1_xmax = np.max(cell_x_coords)
-        next_cell_ids = leak_detector.line_nodes[np.where(leak_detector.line_nodes[:, 0] == self.id), 1].flatten()
+        next_cell_ids = self.leak_detector.line_nodes[np.where(self.leak_detector.line_nodes[:, 0] == self.id), 1].flatten()
         for next_cell_id in next_cell_ids:
-            cell2_xmin = np.min(leak_detector.find_cell(next_cell_id).coords[[0, 2]])
+            cell2_xmin = np.min(self.leak_detector.cell(next_cell_id).coords[[0, 2]])
             if cell1_xmax == cell2_xmin:  # aligned horizontally if True
-                self.neigh_cells[RIGHT].append(leak_detector.find_cell(next_cell_id))
+                self.neigh_cells[RIGHT].append(self.leak_detector.cell(next_cell_id))
             else:
-                self.neigh_cells[TOP].append(leak_detector.find_cell(next_cell_id))
+                self.neigh_cells[TOP].append(self.leak_detector.cell(next_cell_id))
+
+    def edge_pixels(self, side: str) -> np.array:
+        """
+        Return the pixels on the inside of given `edge`
+        Pixel values are sorted from TOP to BOTTOM or from LEFT to RIGHT
+        """
+        return self.pixels[SIDE_INDEX[side]]
 
 
 class CellPair:
@@ -199,20 +229,21 @@ class CellPair:
     """
 
     def __init__(self, leak_detector: LeakDetector, reference_cell: Cell, neigh_cell: Cell):
+        self.leak_detector = leak_detector
         self.reference_cell = reference_cell
         self.neigh_cell = neigh_cell
         self.edge = leak_detector.find_edge(reference_cell, neigh_cell)
-        neigh_primary_location, neigh_secondary_location = self.locate(NEIGH)
-        reference_primary_location, reference_secondary_location = self.locate(REFERENCE)
+        self.neigh_primary_location, self.neigh_secondary_location = self.locate(NEIGH)
+        self.reference_primary_location, self.reference_secondary_location = self.locate(REFERENCE)
         smallest_cell = self.smallest()
         if smallest_cell:
             fill_array = smallest_cell.pixels * 0 - min(np.nanmin(reference_cell.pixels), np.nanmin(neigh_cell.pixels))
             if reference_cell.id == smallest_cell.id:
-                smallest_secondary_location = reference_secondary_location
+                smallest_secondary_location = self.reference_secondary_location
             else:
-                smallest_secondary_location = neigh_secondary_location
+                smallest_secondary_location = self.neigh_secondary_location
 
-        if neigh_primary_location == TOP:
+        if self.neigh_primary_location == TOP:
             if not smallest_cell:
                 self.pixels = np.vstack([neigh_cell.pixels, reference_cell.pixels])
             else:
@@ -225,7 +256,7 @@ class CellPair:
                 else:
                     self.pixels = np.vstack([smallest_cell_pixels, reference_cell.pixels])
 
-        elif neigh_primary_location == RIGHT:
+        elif self.neigh_primary_location == RIGHT:
             if not smallest_cell:
                 self.pixels = np.hstack([reference_cell.pixels, neigh_cell.pixels])
             else:
@@ -238,7 +269,7 @@ class CellPair:
                 else:
                     self.pixels = np.hstack([reference_cell.pixels, smallest_cell_pixels])
 
-        elif neigh_primary_location == BOTTOM:
+        elif self.neigh_primary_location == BOTTOM:
             if not smallest_cell:
                 self.pixels = np.vstack([reference_cell.pixels, neigh_cell.pixels])
             else:
@@ -251,7 +282,7 @@ class CellPair:
                 else:
                     self.pixels = np.vstack([reference_cell.pixels, smallest_cell_pixels])
 
-        elif neigh_primary_location == LEFT:
+        elif self.neigh_primary_location == LEFT:
             if not smallest_cell:
                 self.pixels = np.hstack([neigh_cell.pixels, reference_cell.pixels])
             else:
@@ -265,6 +296,8 @@ class CellPair:
                     self.pixels = np.hstack([smallest_cell_pixels, reference_cell.pixels])
         else:
             raise ValueError("Input cells are not neighbours")
+        self.width = self.pixels.shape[1]
+        self.height = self.pixels.shape[0]
 
         # Determine shifts, i.e. paramaters to transform coordinates between ref cell, neigh cell and merged
         # {pos in ref cell} + self.reference_cell_shift = {pos in merged pixels}
@@ -272,34 +305,34 @@ class CellPair:
 
         # Reference
         # x
-        if neigh_primary_location == LEFT:
+        if self.neigh_primary_location == LEFT:
             reference_cell_shift_x = self.neigh_cell.width
-        elif reference_secondary_location == RIGHT:
+        elif self.reference_secondary_location == RIGHT:
             reference_cell_shift_x = self.reference_cell.width
         else:
             reference_cell_shift_x = 0
 
         # y
-        if neigh_primary_location == TOP:
+        if self.neigh_primary_location == TOP:
             reference_cell_shift_y = self.neigh_cell.height
-        elif reference_secondary_location == BOTTOM:
+        elif self.reference_secondary_location == BOTTOM:
             reference_cell_shift_y = self.reference_cell.height
         else:
             reference_cell_shift_y = 0
 
         # Neigh
         # x
-        if neigh_primary_location == RIGHT:
+        if self.neigh_primary_location == RIGHT:
             neigh_cell_shift_x = self.reference_cell.width
-        elif neigh_secondary_location == RIGHT:
+        elif self.neigh_secondary_location == RIGHT:
             neigh_cell_shift_x = self.neigh_cell.width
         else:
             neigh_cell_shift_x = 0
 
         # y
-        if neigh_primary_location == BOTTOM:
+        if self.neigh_primary_location == BOTTOM:
             neigh_cell_shift_y = self.reference_cell.height
-        elif neigh_secondary_location == BOTTOM:
+        elif self.neigh_secondary_location == BOTTOM:
             neigh_cell_shift_y = self.neigh_cell.height
         else:
             neigh_cell_shift_y = 0
@@ -307,7 +340,23 @@ class CellPair:
         self.reference_cell_shift = (reference_cell_shift_y, reference_cell_shift_x)
         self.neigh_cell_shift = (neigh_cell_shift_y, neigh_cell_shift_x)
 
-    def locate(self, which_cell: str, decimals: int = 5) -> Tuple[str, str]:
+    @property
+    def bottom_aligned(self) -> bool:
+        return round(self.reference_cell.coords[1], COORD_DECIMALS) == round(self.neigh_cell.coords[1], COORD_DECIMALS)
+
+    @property
+    def top_aligned(self) -> bool:
+        return round(self.reference_cell.coords[3], COORD_DECIMALS) == round(self.neigh_cell.coords[3], COORD_DECIMALS)
+
+    @property
+    def left_aligned(self) -> bool:
+        return round(self.reference_cell.coords[0], COORD_DECIMALS) == round(self.neigh_cell.coords[0], COORD_DECIMALS)
+
+    @property
+    def right_aligned(self) -> bool:
+        return round(self.reference_cell.coords[2], COORD_DECIMALS) == round(self.neigh_cell.coords[2], COORD_DECIMALS)
+
+    def locate(self, which_cell: str) -> Tuple[str, str]:
         """
         Return primary and secondary location of `which_cell` relative to the other cell in the pair
         If `which_cell` is the largest of the two or both cells are of the same size, secondary location is NA
@@ -338,24 +387,20 @@ class CellPair:
         if cell_to_locate.width >= other_cell.width:
             secondary_location = NA
         elif primary_location in [LEFT, RIGHT]:
-            bottom_aligned = round(self.reference_cell.coords[1], decimals) == round(self.neigh_cell.coords[1], decimals)
-            top_aligned = round(self.reference_cell.coords[3], decimals) == round(self.neigh_cell.coords[3], decimals)
-            if bottom_aligned and top_aligned:
+            if self.bottom_aligned and self.top_aligned:
                 secondary_location = NA
-            elif bottom_aligned:
+            elif self.bottom_aligned:
                 secondary_location = BOTTOM
-            elif top_aligned:
+            elif self.top_aligned:
                 secondary_location = TOP
             else:
                 raise ValueError("Could not locate with given arguments")
         elif primary_location in [TOP, BOTTOM]:
-            left_aligned = round(self.reference_cell.coords[0], decimals) == round(self.neigh_cell.coords[0], decimals)
-            right_aligned = round(self.reference_cell.coords[2], decimals) == round(self.neigh_cell.coords[2], decimals)
-            if left_aligned and right_aligned:
+            if self.left_aligned and self.right_aligned:
                 secondary_location = NA
-            elif left_aligned:
+            elif self.left_aligned:
                 secondary_location = LEFT
-            elif right_aligned:
+            elif self.right_aligned:
                 secondary_location = RIGHT
             else:
                 raise ValueError("Could not locate with given arguments")
@@ -374,5 +419,40 @@ class CellPair:
         else:
             return None
 
-    def find_maxima(self):
-        pass
+    def find_maxima(self) -> Dict[np.ndarray]:
+        """
+        Return a dict of right-hand-side and left-hand-side indices of maximum locations (cell pair coordinates)
+         {rhs: [maxima], lhs: [maxima]}
+        """
+        if self.neigh_primary_location == RIGHT:
+            # right-hand-side edges are BOTTOM
+            if self.bottom_aligned:
+                rhs_pixels = np.hstack([
+                    self.reference_cell.edge_pixels(BOTTOM),
+                    self.neigh_cell.edge_pixels(BOTTOM)
+                ])
+                rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.leak_detector.min_peak_prominence)
+                row_indices = np.ones(rhs_maxima_1d.shape)*(self.height-1)
+                rhs_maxima = np.vstack([row_indices, rhs_maxima_1d]).T
+                print(rhs_maxima)
+
+            else:
+                pass
+
+            # left-hand-side edges are TOP
+            if self.top_aligned:
+                pass
+            else:
+                pass
+
+        if self.neigh_primary_location == TOP:
+            # right-hand-side edges are RIGHT
+            if self.right_aligned:
+                pass
+            else:
+                pass
+            # left-hand-side edges are LEFT
+            if self.left_aligned:
+                pass
+            else:
+                pass
