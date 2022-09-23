@@ -1,4 +1,4 @@
-from typing import Union, List, Tuple
+from typing import Dict, Union, List, Tuple
 
 import numpy as np
 from osgeo import gdal
@@ -167,7 +167,6 @@ class Edge:
     """
     Edge between two cells
     """
-
     def __init__(self):
         pass
 
@@ -200,16 +199,17 @@ class Cell:
                                           leak_detector.search_precision
         self.width = self.pixels.shape[1]
         self.height = self.pixels.shape[0]
+        self.neigh_cells = None
 
     def set_neighbours(self):
         """Identify cells to the top and right of this cell"""
         self.neigh_cells = {RIGHT: [], TOP: []}
         cell_x_coords = self.coords[[0, 2]]
-        cell1_xmax = np.max(cell_x_coords)
+        self_xmax = np.max(cell_x_coords)
         next_cell_ids = self.leak_detector.line_nodes[np.where(self.leak_detector.line_nodes[:, 0] == self.id), 1].flatten()
         for next_cell_id in next_cell_ids:
-            cell2_xmin = np.min(self.leak_detector.cell(next_cell_id).coords[[0, 2]])
-            if cell1_xmax == cell2_xmin:  # aligned horizontally if True
+            neigh_xmin = np.min(self.leak_detector.cell(next_cell_id).coords[[0, 2]])
+            if self_xmax == neigh_xmin:  # aligned horizontally if True
                 self.neigh_cells[RIGHT].append(self.leak_detector.cell(next_cell_id))
             else:
                 self.neigh_cells[TOP].append(self.leak_detector.cell(next_cell_id))
@@ -220,6 +220,30 @@ class Cell:
         Pixel values are sorted from TOP to BOTTOM or from LEFT to RIGHT
         """
         return self.pixels[SIDE_INDEX[side]]
+
+    def maxima(self, side):
+        """
+        Return the pixel indices of the local maxima (peaks) along the edge at given `side`
+        """
+
+        maxima_1d, _ = find_peaks(self.edge_pixels(side), prominence=self.leak_detector.min_peak_prominence)
+        if side == TOP:
+            row_indices = np.zeros(maxima_1d.shape)
+            result = np.vstack([row_indices, maxima_1d]).T
+
+        elif side == BOTTOM:
+            row_indices = np.ones(maxima_1d.shape) * (self.height - 1)
+            result = np.vstack([row_indices, maxima_1d]).T
+
+        elif side == LEFT:
+            col_indices = np.zeros(maxima_1d.shape)
+            result = np.vstack([maxima_1d, col_indices]).T
+
+        elif side == RIGHT:
+            col_indices = np.ones(maxima_1d.shape) * (self.width - 1)
+            result = np.vstack([maxima_1d, col_indices]).T
+
+        return result
 
 
 class CellPair:
@@ -232,7 +256,7 @@ class CellPair:
         self.leak_detector = leak_detector
         self.reference_cell = reference_cell
         self.neigh_cell = neigh_cell
-        self.edge = leak_detector.find_edge(reference_cell, neigh_cell)
+        # self.edge = leak_detector.find_edge(reference_cell, neigh_cell)
         self.neigh_primary_location, self.neigh_secondary_location = self.locate(NEIGH)
         self.reference_primary_location, self.reference_secondary_location = self.locate(REFERENCE)
         smallest_cell = self.smallest()
@@ -378,7 +402,7 @@ class CellPair:
         primary_location = None
         for where in [TOP, RIGHT]:
             if self.neigh_cell in self.reference_cell.neigh_cells[where]:
-                primary_location = where if which_cell == REFERENCE else OPPOSITE[where]
+                primary_location = where if which_cell == NEIGH else OPPOSITE[where]
                 break
         if not primary_location:
             raise ValueError("Could determine primary location with given arguments")
@@ -419,7 +443,35 @@ class CellPair:
         else:
             return None
 
-    def find_maxima(self) -> Dict[np.ndarray]:
+    def transform(self, pos, from_array, to_array):
+        """
+        Transforms pixel position from one array to another
+
+        :param from_array: 'reference', 'neigh', or 'merged'
+        :param to_array: 'reference', 'neigh' or 'merged'
+        """
+        if from_array == REFERENCE and to_array == MERGED:
+            return (
+                pos[0] + self.reference_cell_shift[0],
+                pos[1] + self.reference_cell_shift[1]
+            )
+        if from_array == MERGED and to_array == REFERENCE:
+            return (
+                pos[0] - self.reference_cell_shift[0],
+                pos[1] - self.reference_cell_shift[1]
+            )
+        if from_array == NEIGH and to_array == MERGED:
+            return (
+                pos[0] + self.neigh_cell_shift[0],
+                pos[1] + self.neigh_cell_shift[1]
+             )
+        if from_array == MERGED and to_array == NEIGH:
+            return (
+                pos[0] - self.neigh_cell_shift[0],
+                pos[1] - self.neigh_cell_shift[1]
+             )
+
+    def maxima(self) -> Dict[str, np.ndarray]:
         """
         Return a dict of right-hand-side and left-hand-side indices of maximum locations (cell pair coordinates)
          {rhs: [maxima], lhs: [maxima]}
@@ -427,6 +479,7 @@ class CellPair:
         if self.neigh_primary_location == RIGHT:
             # right-hand-side edges are BOTTOM
             if self.bottom_aligned:
+                # Calculate maxima in the continuous string of values at this side of the cell pair
                 rhs_pixels = np.hstack([
                     self.reference_cell.edge_pixels(BOTTOM),
                     self.neigh_cell.edge_pixels(BOTTOM)
@@ -434,25 +487,75 @@ class CellPair:
                 rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.leak_detector.min_peak_prominence)
                 row_indices = np.ones(rhs_maxima_1d.shape)*(self.height-1)
                 rhs_maxima = np.vstack([row_indices, rhs_maxima_1d]).T
-                print(rhs_maxima)
 
             else:
-                pass
+                # Calculate maxima in each cell separately and stack them
+                ref_maxima = self.reference_cell.maxima(BOTTOM)
+                ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
+                neigh_maxima = self.neigh_cell.maxima(BOTTOM)
+                neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
+                print(f"ref_maxima_transformed: {ref_maxima_transformed}")
+                print(f"neigh_maxima_transformed: {neigh_maxima_transformed}")
+                rhs_maxima = np.array(ref_maxima_transformed.tolist() + neigh_maxima_transformed.tolist())
 
             # left-hand-side edges are TOP
             if self.top_aligned:
-                pass
-            else:
-                pass
+                # Calculate maxima in the continuous string of values at this side of the cell pair
+                lhs_pixels = np.hstack([
+                    self.reference_cell.edge_pixels(TOP),
+                    self.neigh_cell.edge_pixels(TOP)
+                ])
+                lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.leak_detector.min_peak_prominence)
+                row_indices = np.zeros(lhs_maxima_1d.shape)
+                lhs_maxima = np.vstack([row_indices, lhs_maxima_1d]).T
 
-        if self.neigh_primary_location == TOP:
+            else:
+                # Calculate maxima in each cell separately and stack them
+                ref_maxima = self.reference_cell.maxima(TOP)
+                ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
+                neigh_maxima = self.neigh_cell.maxima(TOP)
+                neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
+                lhs_maxima = np.vstack([ref_maxima_transformed, neigh_maxima_transformed])
+
+        elif self.neigh_primary_location == TOP:
             # right-hand-side edges are RIGHT
             if self.right_aligned:
-                pass
+                # Calculate maxima in the continuous string of values at this side of the cell pair
+                rhs_pixels = np.hstack([
+                    self.reference_cell.edge_pixels(RIGHT),
+                    self.neigh_cell.edge_pixels(RIGHT)
+                ])
+                rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.leak_detector.min_peak_prominence)
+                col_indices = np.ones(rhs_maxima_1d.shape)*(self.width-1)
+                rhs_maxima = np.vstack([rhs_maxima_1d, col_indices]).T
+
             else:
-                pass
+                # Calculate maxima in each cell separately and stack them
+                ref_maxima = self.reference_cell.maxima(RIGHT)
+                ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
+                neigh_maxima = self.neigh_cell.maxima(RIGHT)
+                neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
+                rhs_maxima = np.vstack([ref_maxima_transformed, neigh_maxima_transformed])
+
             # left-hand-side edges are LEFT
             if self.left_aligned:
-                pass
+                # Calculate maxima in the continuous string of values at this side of the cell pair
+                lhs_pixels = np.hstack([
+                    self.reference_cell.edge_pixels(LEFT),
+                    self.neigh_cell.edge_pixels(LEFT)
+                ])
+                lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.leak_detector.min_peak_prominence)
+                col_indices = np.zeros(lhs_maxima_1d.shape)
+                lhs_maxima = np.vstack([lhs_maxima_1d, col_indices]).T
+
             else:
-                pass
+                # Calculate maxima in each cell separately and stack them
+                ref_maxima = self.reference_cell.maxima(LEFT)
+                ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
+                neigh_maxima = self.neigh_cell.maxima(LEFT)
+                neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
+                lhs_maxima = np.vstack([ref_maxima_transformed, neigh_maxima_transformed])
+        else:
+            raise ValueError(f"self.neigh_primary_location = {self.neigh_primary_location}")
+
+        return {"rhs": rhs_maxima, "lhs": lhs_maxima}
