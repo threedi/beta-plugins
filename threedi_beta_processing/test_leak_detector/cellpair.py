@@ -48,7 +48,7 @@ def locate():
     ref = leak_detector.cell(158)
     neigh = leak_detector.cell(204)
     cell_pair = CellPair(leak_detector, ref, neigh)
-    assert cell_pair.locate(NEIGH) == (RIGHT, TOP)
+    assert cell_pair.locate_cell(NEIGH) == (RIGHT, TOP)
 
 
 def maxima():

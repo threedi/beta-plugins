@@ -7,7 +7,6 @@ from scipy.signal import find_peaks
 from threedigrid.admin.gridadmin import GridH5Admin
 from threedigrid.admin.lines.models import Lines
 
-
 SEARCH_STRUCTURE = generate_binary_structure(2, 2)
 TOP = 'top'
 RIGHT = 'right'
@@ -30,6 +29,7 @@ REFERENCE = 'reference'
 NEIGH = 'neigh'
 MERGED = 'merged'
 COORD_DECIMALS = 5
+PSEUDO_INFINITE = 9999
 
 gdal.UseExceptions()
 
@@ -91,6 +91,20 @@ def filter_lines_by_node_ids(lines: Lines, node_ids: np.array):
     return result
 
 
+def intersection(line_coords1, line_coords2, decimals: int = 5):
+    (start_x1, start_y1), (end_x1, end_y1) = np.round(line_coords1, decimals)
+    (start_x2, start_y2), (end_x2, end_y2) = np.round(line_coords2, decimals)
+    if start_x1 == end_x1 == start_x2 == end_x2 == start_x1:
+        x = start_x1
+        if (start_y1 >= start_y2 and end_y1 <= end_y2) or (start_y2 >= start_y1 and end_y2 <= end_y1):
+            return (x, max(start_y1, start_y2)), (x, min(end_y1, end_y2))
+    elif start_y1 == end_y1 == start_y2 == end_y2:
+        y = start_y1
+        if (start_x1 >= start_x2 and end_x1 <= end_x2) or (start_x2 >= start_x1 and end_x2 <= end_x1):
+            return (max(start_x1, start_x2), y), (min(end_x1, end_x2), y)
+    return None
+
+
 class LeakDetector:
     """
     Interface between the gridadmin and the classes in this module
@@ -137,24 +151,27 @@ class LeakDetector:
         # Create cells
         threedigrid_cells = gridadmin.cells.filter(id__in=self.line_nodes.flatten())
         cell_properties = threedigrid_cells.only('id', 'cell_coords').data
-        cell_properties_dict = dict(zip(cell_properties['id'], np.round(cell_properties['cell_coords'].T, COORD_DECIMALS)))
+        cell_properties_dict = dict(
+            zip(cell_properties['id'], np.round(cell_properties['cell_coords'].T, COORD_DECIMALS)))
 
         self._cell_dict = dict()
         for cell_id, cell_coords in cell_properties_dict.items():
-            self._cell_dict[cell_id] = Cell(leak_detector=self, id=cell_id, coords=cell_coords)
+            self._cell_dict[cell_id] = Cell(ld=self, id=cell_id, coords=cell_coords)
 
         for cell in self.cells:
             cell.set_neighbours()
 
+        # Create edges
+        self._edge_dict = dict()  # {line_nodes: Edge}
+        flowlines_list = flowlines.to_list()
+        for flowline in flowlines_list:
+            cell_ids: Tuple = flowline["line"]
+            edge = Edge(ld=self, cell_ids=cell_ids, exchange_level=flowline["dpumax"])
+            self._edge_dict[tuple(cell_ids)] = edge
+
     @property
     def cells(self) -> List:
         return list(self._cell_dict.values())
-
-    def find_edge(self, reference_cell, neigh_cell):
-        """
-        Find the edge between reference_cell (left/bottom) and neigh_cell (top/right)
-        """
-        return self._edge_dict[(reference_cell.id, neigh_cell.id)]
 
     def cell(self, cell_id):
         """
@@ -162,21 +179,70 @@ class LeakDetector:
         """
         return self._cell_dict[cell_id]
 
+    @property
+    def edges(self):
+        """
+        Find the edge between reference_cell (left/bottom) and neigh_cell (top/right)
+        """
+        return list(self._edge_dict.values())
+
+    def edge(self, reference_cell, neigh_cell):
+        """
+        Find the edge between reference_cell (left/bottom) and neigh_cell (top/right)
+        """
+        return self._edge_dict[(reference_cell.id, neigh_cell.id)]
+
 
 class Obstacle:
     """
     Obstacle between two sides of a CellPair
     """
-    def __init__(self):
-        pass
+
+    def __init__(self, crest_level):
+        self.crest_level = crest_level
 
 
 class Edge:
     """
     Edge between two cells
+    Drawing direction is always left -> right or bottom -> top.
     """
-    def __init__(self):
-        pass
+
+    def __init__(self, ld: LeakDetector, cell_ids: Tuple[int], exchange_level: float = None):
+        self.ld = ld
+        self.cell_ids = cell_ids
+        self.obstacles: List[Obstacle] = list()
+
+        # set start and end coordinates
+        cell_1, cell_2 = [ld.cell(i) for i in cell_ids]
+        side_coords1 = cell_1.side_coords()
+        side_coords2 = cell_2.side_coords()
+        for side_1 in [TOP, BOTTOM, LEFT, RIGHT]:
+            for side_2 in [TOP, BOTTOM, LEFT, RIGHT]:
+                intersection_coords = intersection(side_coords1[side_1], side_coords2[side_2])
+                if intersection_coords:
+                    self.start_coord, self.end_coord = intersection_coords
+
+        # set exchange_level
+        if np.isnan(exchange_level):
+            exchange_level = None
+        if exchange_level:
+            self.exchange_level = exchange_level
+        else:
+            # calculate exchange level from DEM: 1D array of max of pixel pairs along the edge
+            pxsize = self.ld.dem.GetGeoTransform()[1]
+            if self.is_bottom_up():
+                bbox = [self.start_coord[0] - pxsize, self.start_coord[1], self.end_coord[0] + pxsize,
+                        self.end_coord[1]]
+            else:
+                bbox = [self.start_coord[0], self.start_coord[1] - pxsize, self.end_coord[0],
+                        self.end_coord[1] + pxsize]
+            arr = read_as_array(raster=self.ld.dem, bbox=bbox, pad=True)
+            exchange_levels = np.nanmax(arr, axis=int(self.is_bottom_up()))
+            self.exchange_level = np.nanmin(exchange_levels)
+
+    def is_bottom_up(self):
+        return self.start_coord[0] == self.end_coord[0]
 
 
 class Cell:
@@ -186,41 +252,78 @@ class Cell:
 
     def __init__(
             self,
-            leak_detector: LeakDetector,
+            ld: LeakDetector,
             id: int,
             coords: np.ndarray
     ):
         """
         :param id: cell id
-        :param leak_detector:
+        :param ld:
         :param coords: corner coordinates the crs of the dem: [min_x, min_y, max_x, max_y]
         """
-        self.leak_detector = leak_detector
+        self.ld = ld
         self.id = id
         self.coords = coords
-        self.pixels = read_as_array(raster=leak_detector.dem, bbox=coords, pad=True)
-        band = leak_detector.dem.GetRasterBand(1)
+        self.pixels = read_as_array(raster=ld.dem, bbox=coords, pad=True)
+        band = ld.dem.GetRasterBand(1)
         ndv = band.GetNoDataValue()
         maxval = np.nanmax(self.pixels)
         self.pixels[self.pixels == ndv] = maxval + \
-                                          leak_detector.min_obstacle_height + \
-                                          leak_detector.search_precision
+                                          ld.min_obstacle_height + \
+                                          ld.search_precision
         self.width = self.pixels.shape[1]
         self.height = self.pixels.shape[0]
         self.neigh_cells = None
 
     def set_neighbours(self):
         """Identify cells to the top and right of this cell"""
-        self.neigh_cells = {RIGHT: [], TOP: []}
+        self.neigh_cells = {TOP: [], RIGHT: [], BOTTOM: [], LEFT: []}
         cell_x_coords = self.coords[[0, 2]]
         self_xmax = np.max(cell_x_coords)
-        next_cell_ids = self.leak_detector.line_nodes[np.where(self.leak_detector.line_nodes[:, 0] == self.id), 1].flatten()
+        self_xmin = np.min(cell_x_coords)
+
+        # next_cells: cells up / to the right
+        next_cell_ids = self. \
+            ld. \
+            line_nodes[np.where(self.ld.line_nodes[:, 0] == self.id), 1]. \
+            flatten()
         for next_cell_id in next_cell_ids:
-            neigh_xmin = np.min(self.leak_detector.cell(next_cell_id).coords[[0, 2]])
+            neigh_xmin = np.min(self.ld.cell(next_cell_id).coords[[0, 2]])
             if self_xmax == neigh_xmin:  # aligned horizontally if True
-                self.neigh_cells[RIGHT].append(self.leak_detector.cell(next_cell_id))
+                self.neigh_cells[RIGHT].append(self.ld.cell(next_cell_id))
             else:
-                self.neigh_cells[TOP].append(self.leak_detector.cell(next_cell_id))
+                self.neigh_cells[TOP].append(self.ld.cell(next_cell_id))
+
+        # previous_cells: cells down / to the left
+        previous_cell_ids = self. \
+            ld. \
+            line_nodes[np.where(self.ld.line_nodes[:, 1] == self.id), 0]. \
+            flatten()
+        for previous_cell_id in previous_cell_ids:
+            neigh_xmax = np.max(self.ld.cell(previous_cell_id).coords[[0, 2]])
+            if self_xmin == neigh_xmax:  # aligned horizontally if True
+                self.neigh_cells[LEFT].append(self.ld.cell(previous_cell_id))
+            else:
+                self.neigh_cells[BOTTOM].append(self.ld.cell(previous_cell_id))
+
+    @property
+    def edges(self):
+        return {
+            TOP: [self.ld.edge(self, i) for i in self.neigh_cells[TOP]],
+            BOTTOM: [self.ld.edge(i, self) for i in self.neigh_cells[BOTTOM]],
+            LEFT: [self.ld.edge(i, self) for i in self.neigh_cells[LEFT]],
+            RIGHT: [self.ld.edge(self, i) for i in self.neigh_cells[RIGHT]]
+        }
+
+    def side_coords(self):
+        """Return dict with the coordinates of all sides of the cell"""
+        xmin, ymin, xmax, ymax = self.coords
+        return {
+            TOP: ((xmin, ymax), (xmax, ymax)),
+            BOTTOM: ((xmin, ymin), (xmax, ymin)),
+            LEFT: ((xmin, ymin), (xmin, ymax)),
+            RIGHT: ((xmax, ymin), (xmax, ymax)),
+        }
 
     def edge_pixels(self, side: str) -> np.array:
         """
@@ -234,7 +337,7 @@ class Cell:
         Return the pixel indices of the local maxima (peaks) along the edge at given `side`
         """
 
-        maxima_1d, _ = find_peaks(self.edge_pixels(side), prominence=self.leak_detector.min_peak_prominence)
+        maxima_1d, _ = find_peaks(self.edge_pixels(side), prominence=self.ld.min_peak_prominence)
         if side == TOP:
             row_indices = np.zeros(maxima_1d.shape)
             result = np.vstack([row_indices, maxima_1d]).T
@@ -260,18 +363,18 @@ class CellPair:
     The reference cell is always the left / bottom of the pair
     """
 
-    def __init__(self, leak_detector: LeakDetector, reference_cell: Cell, neigh_cell: Cell):
-        self.leak_detector = leak_detector
+    def __init__(self, ld: LeakDetector, reference_cell: Cell, neigh_cell: Cell):
+        self.ld = ld
         self.reference_cell = reference_cell
         self.neigh_cell = neigh_cell
         # self.edge = leak_detector.find_edge(reference_cell, neigh_cell)
-        self.neigh_primary_location, self.neigh_secondary_location = self.locate(NEIGH)
+        self.neigh_primary_location, self.neigh_secondary_location = self.locate_cell(NEIGH)
         if self.neigh_primary_location not in [TOP, RIGHT]:
             raise ValueError(
                 f"neigh_cell is located at the {self.neigh_primary_location} of reference_cell. It must be located at "
                 f"the top or right of reference_cell"
             )
-        self.reference_primary_location, self.reference_secondary_location = self.locate(REFERENCE)
+        self.reference_primary_location, self.reference_secondary_location = self.locate_cell(REFERENCE)
         smallest_cell = self.smallest()
         if smallest_cell:
             fill_array = smallest_cell.pixels * 0 - min(np.nanmin(reference_cell.pixels), np.nanmin(neigh_cell.pixels))
@@ -377,6 +480,17 @@ class CellPair:
         self.reference_cell_shift = (reference_cell_shift_y, reference_cell_shift_x)
         self.neigh_cell_shift = (neigh_cell_shift_y, neigh_cell_shift_x)
 
+        # Set edges
+        self.edges = {}
+        if self.neigh_primary_location == TOP:
+            self.edges[0] = self.reference_cell.edges[BOTTOM]
+            self.edges[1] = [self.ld.edge(self.reference_cell, self.neigh_cell)]
+            self.edges[2] = self.neigh_cell.edges[TOP]
+        if self.neigh_primary_location == RIGHT:
+            self.edges[0] = self.reference_cell.edges[LEFT]
+            self.edges[1] = [self.ld.edge(self.reference_cell, self.neigh_cell)]
+            self.edges[2] = self.neigh_cell.edges[RIGHT]
+
     @property
     def bottom_aligned(self) -> bool:
         return round(self.reference_cell.coords[1], COORD_DECIMALS) == round(self.neigh_cell.coords[1], COORD_DECIMALS)
@@ -393,7 +507,27 @@ class CellPair:
     def right_aligned(self) -> bool:
         return round(self.reference_cell.coords[2], COORD_DECIMALS) == round(self.neigh_cell.coords[2], COORD_DECIMALS)
 
-    def locate(self, which_cell: str) -> Tuple[str, str]:
+    @property
+    def lowest_edge(self):
+        return lowest(self.edges[0] + self.edges[1] + self.edges[2])
+
+    def locate_pos(self, pos: Tuple[int, int]) -> str:
+        """
+        Returns the cell ('reference' or 'neigh') in which given pixel position (index) is located
+        """
+        self.pixels[pos]  # to raise IndexError if out of bounds for this CellPair
+        if self.neigh_primary_location == TOP:
+            if pos[1] >= self.neigh_cell.height:
+                return REFERENCE
+            else:
+                return NEIGH
+        if self.neigh_primary_location == RIGHT:
+            if pos[0] >= self.reference_cell.width:
+                return NEIGH
+            else:
+                return REFERENCE
+
+    def locate_cell(self, which_cell: str) -> Tuple[str, str]:
         """
         Return primary and secondary location of `which_cell` relative to the other cell in the pair
         If `which_cell` is the largest of the two or both cells are of the same size, secondary location is NA
@@ -456,7 +590,7 @@ class CellPair:
         else:
             return None
 
-    def transform(self, pos, from_array, to_array):
+    def transform(self, pos: Tuple[int, int], from_array, to_array) -> Tuple[int, int]:
         """
         Transforms pixel position from one array to another
 
@@ -477,17 +611,19 @@ class CellPair:
             return (
                 pos[0] + self.neigh_cell_shift[0],
                 pos[1] + self.neigh_cell_shift[1]
-             )
+            )
         if from_array == MERGED and to_array == NEIGH:
             return (
                 pos[0] - self.neigh_cell_shift[0],
                 pos[1] - self.neigh_cell_shift[1]
-             )
+            )
 
-    def maxima(self) -> Dict[str, np.ndarray]:
+    def maxima(self) -> Dict[str, List[Tuple[int, int]]]:
         """
         Return a dict of right-hand-side and left-hand-side indices of maximum locations (cell pair coordinates)
-         {rhs: [maxima], lhs: [maxima]}
+        {rhs: [maxima], lhs: [maxima]}.
+        \n
+        Only maxima higher than `min_obstacle_height` - `search_precision` are included.
         """
         if self.neigh_primary_location == RIGHT:
             # right-hand-side edges are BOTTOM
@@ -497,8 +633,8 @@ class CellPair:
                     self.reference_cell.edge_pixels(BOTTOM),
                     self.neigh_cell.edge_pixels(BOTTOM)
                 ])
-                rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.leak_detector.min_peak_prominence)
-                row_indices = np.ones(rhs_maxima_1d.shape)*(self.height-1)
+                rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.ld.min_peak_prominence)
+                row_indices = np.ones(rhs_maxima_1d.shape) * (self.height - 1)
                 rhs_maxima = np.vstack([row_indices, rhs_maxima_1d]).T
 
             else:
@@ -518,7 +654,7 @@ class CellPair:
                     self.reference_cell.edge_pixels(TOP),
                     self.neigh_cell.edge_pixels(TOP)
                 ])
-                lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.leak_detector.min_peak_prominence)
+                lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.ld.min_peak_prominence)
                 row_indices = np.zeros(lhs_maxima_1d.shape)
                 lhs_maxima = np.vstack([row_indices, lhs_maxima_1d]).T
 
@@ -538,12 +674,9 @@ class CellPair:
                     self.neigh_cell.edge_pixels(RIGHT),
                     self.reference_cell.edge_pixels(RIGHT)
                 ])
-                print(f"rhs_pixels {rhs_pixels}")
-                rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.leak_detector.min_peak_prominence)
-                col_indices = np.ones(rhs_maxima_1d.shape) * (self.width-1)
-                print(f"col_indices: {col_indices}")
+                rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.ld.min_peak_prominence)
+                col_indices = np.ones(rhs_maxima_1d.shape) * (self.width - 1)
                 rhs_maxima = np.vstack([rhs_maxima_1d, col_indices]).T
-                print(f"rhs_maxima: {rhs_maxima}")
 
             else:
                 # Calculate maxima in each cell separately and stack them
@@ -560,7 +693,7 @@ class CellPair:
                     self.neigh_cell.edge_pixels(LEFT),
                     self.reference_cell.edge_pixels(LEFT),
                 ])
-                lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.leak_detector.min_peak_prominence)
+                lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.ld.min_peak_prominence)
                 col_indices = np.zeros(lhs_maxima_1d.shape)
                 lhs_maxima = np.vstack([lhs_maxima_1d, col_indices]).T
 
@@ -575,8 +708,160 @@ class CellPair:
         else:
             raise ValueError(f"self.neigh_primary_location = {self.neigh_primary_location}")
 
-        return {"rhs": rhs_maxima, "lhs": lhs_maxima}
+        # Filter out maxima with too low pixel values
+        filtered_rhs_maxima = []
+        for i in rhs_maxima:
+            pos = tuple(i)
+            pixel_value = self.pixels[pos]
+            if pixel_value > self.lowest_edge.exchange_level + \
+                    self.ld.min_obstacle_height - \
+                    self.ld.search_precision:
+                filtered_rhs_maxima.append(pos)
 
-    def connect_maxima(self) -> List[Obstacle]:
-        pass
+        filtered_lhs_maxima = []
+        for i in lhs_maxima:
+            pos = tuple(i)
+            pixel_value = self.pixels[pos]
+            if pixel_value > self.lowest_edge.exchange_level + \
+                    self.ld.min_obstacle_height - \
+                    self.ld.search_precision:
+                filtered_lhs_maxima.append(pos)
 
+        return {"rhs": filtered_rhs_maxima, "lhs": filtered_lhs_maxima}
+
+    def obstacle_from_pixels(
+            self,
+            from_pos: Tuple[int, int],
+            to_pos: Tuple[int, int]
+    ) -> Union[Obstacle, None]:
+        """
+        Find obstacle segment in self.pixels
+
+        Returns None if no obstacle is found
+        """
+        from_val = self.pixels[from_pos]
+        to_val = self.pixels[to_pos]
+
+        # case: flat(ish) cellpair (from_val or max_to_val is not significantly higher than lowest pixel)
+        if np.nanmin([from_val, to_val]) - np.nanmin(self.pixels) < self.ld.search_precision:
+            return None
+
+        # now find the obstacle crest level iteratively
+        hmin = np.nanmin(self.pixels)
+        hmax = np.nanmax([from_val, to_val])
+
+        # case: from and to positions already connect at hmax
+        labelled_pixels, labelled_pixels_nr_features = label(self.pixels >= hmax, structure=SEARCH_STRUCTURE)
+        from_pixel_label = int(labelled_pixels[from_pos])
+        to_pixel_label = labelled_pixels[to_pos]
+        if from_pixel_label != 0 and np.any(to_pixel_label == from_pixel_label):
+            obstacle_crest_level = hmax
+
+        # all other cases
+        else:
+            while (hmax - hmin) > self.ld.search_precision:
+                hcurrent = np.nanmean([hmin, hmax])
+                labelled_pixels, _ = label(self.pixels > hcurrent, structure=SEARCH_STRUCTURE)
+                from_pixel_label = int(labelled_pixels[from_pos])
+                to_pixel_label = labelled_pixels[to_pos]
+                if from_pixel_label != 0 and np.any(to_pixel_label == from_pixel_label):
+                    # the two sides are connected at this threshold
+                    hmin = hcurrent
+                else:
+                    # the two sides are NOT connected at this threshold
+                    hmax = hcurrent
+
+            obstacle_crest_level = np.mean([hmin, hmax])
+
+        obstacle = Obstacle(crest_level=obstacle_crest_level)
+        return obstacle
+
+    def find_obstacles(self):
+        """
+        Obstacles are identified and assigned to the appropriate Edge
+        """
+        maxima = self.maxima()
+        cells = {REFERENCE: self.reference_cell, NEIGH: self.neigh_cell}
+        for from_pos in maxima["lhs"]:
+            for to_pos in maxima["rhs"]:
+                obstacle = self.obstacle_from_pixels(from_pos=from_pos, to_pos=to_pos)
+
+                # find the appropriate edge
+                from_pos_cell = self.locate_pos(from_pos)
+                to_pos_cell = self.locate_pos(to_pos)
+                if from_pos_cell != to_pos_cell:
+                    self.edges[1][0].obstacles.append(obstacle)
+                elif from_pos_cell == to_pos_cell:
+                    edges = determine_edges(
+                        ld=self.ld,
+                        obstacle=obstacle,
+                        cell=cells[from_pos_cell],
+                        from_pos=self.transform(pos=from_pos, from_array=MERGED, to_array=from_pos_cell),
+                        is_left_to_right=self.neigh_primary_location == TOP
+                    )
+                    for edge in edges:
+                        edge.obstacles.append(obstacle)
+
+
+def highest(elements: List[Union[Obstacle, Edge]]):
+    """
+    Return the highest element from a list of obstacles or edges.
+    """
+    max_element_height = -PSEUDO_INFINITE
+    highest_element = None
+    for element in elements:
+        attr_name = 'exchange_level' if isinstance(element, Edge) else 'crest_level'
+        if getattr(element, attr_name) >= max_element_height:
+            max_element_height = getattr(element, attr_name)
+            highest_element = element
+    return highest_element
+
+
+def lowest(elements: List[Union[Obstacle, Edge]]):
+    """
+    Return the lowest element from a list of obstaclesor edges.
+    """
+    min_element_height = PSEUDO_INFINITE
+    lowest_element = None
+    for element in elements:
+        attr_name = 'exchange_level' if isinstance(element, Edge) else 'crest_level'
+        if getattr(element, attr_name) <= min_element_height:
+            min_element_height = getattr(element, attr_name)
+            lowest_element = element
+    return lowest_element
+
+
+def determine_edges(
+        ld: LeakDetector,
+        obstacle: Obstacle,
+        cell: Cell,
+        from_pos: Tuple[int, int],
+        is_left_to_right: bool
+) -> List[Edge]:
+    """
+    For given `obstacle`, determine to which edge of `cell` it should be assigned
+    Obstacle from_pos and to_pos should be within `cell`
+
+    :param is_left_to_right: True if `obstacle` connects the left side of the cell to the right, False if top to bottom
+    """
+    labelled_pixels, labelled_pixels_nr_features = label(
+        cell.pixels >= obstacle.crest_level - ld.search_precision,
+        structure=SEARCH_STRUCTURE
+    )
+    obstacle_pixels = labelled_pixels == labelled_pixels[from_pos]
+    nr_obstacle_pixels_left = np.nansum(obstacle_pixels[:, 0:int(cell.width / 2)] == 1)
+    nr_obstacle_pixels_right = np.nansum(obstacle_pixels[:, int(cell.width / 2):] == 1)
+    nr_obstacle_pixels_top = np.nansum(obstacle_pixels[0:int(cell.height / 2), :] == 1)
+    nr_obstacle_pixels_bottom = np.nansum(obstacle_pixels[int(cell.height / 2):, :] == 1)
+
+    if is_left_to_right:
+        if nr_obstacle_pixels_top > nr_obstacle_pixels_bottom:
+            preferred_side = TOP
+        else:
+            preferred_side = BOTTOM
+    else:
+        if nr_obstacle_pixels_left > nr_obstacle_pixels_right:
+            preferred_side = LEFT
+        else:
+            preferred_side = RIGHT
+    return cell.edges[preferred_side]
