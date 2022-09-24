@@ -163,6 +163,14 @@ class LeakDetector:
         return self._cell_dict[cell_id]
 
 
+class Obstacle:
+    """
+    Obstacle between two sides of a CellPair
+    """
+    def __init__(self):
+        pass
+
+
 class Edge:
     """
     Edge between two cells
@@ -258,6 +266,11 @@ class CellPair:
         self.neigh_cell = neigh_cell
         # self.edge = leak_detector.find_edge(reference_cell, neigh_cell)
         self.neigh_primary_location, self.neigh_secondary_location = self.locate(NEIGH)
+        if self.neigh_primary_location not in [TOP, RIGHT]:
+            raise ValueError(
+                f"neigh_cell is located at the {self.neigh_primary_location} of reference_cell. It must be located at "
+                f"the top or right of reference_cell"
+            )
         self.reference_primary_location, self.reference_secondary_location = self.locate(REFERENCE)
         smallest_cell = self.smallest()
         if smallest_cell:
@@ -494,8 +507,8 @@ class CellPair:
                 ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
                 neigh_maxima = self.neigh_cell.maxima(BOTTOM)
                 neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
-                print(f"ref_maxima_transformed: {ref_maxima_transformed}")
-                print(f"neigh_maxima_transformed: {neigh_maxima_transformed}")
+                # print(f"ref_maxima_transformed: {ref_maxima_transformed}")
+                # print(f"neigh_maxima_transformed: {neigh_maxima_transformed}")
                 rhs_maxima = np.array(ref_maxima_transformed.tolist() + neigh_maxima_transformed.tolist())
 
             # left-hand-side edges are TOP
@@ -515,19 +528,22 @@ class CellPair:
                 ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
                 neigh_maxima = self.neigh_cell.maxima(TOP)
                 neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
-                lhs_maxima = np.vstack([ref_maxima_transformed, neigh_maxima_transformed])
+                lhs_maxima = np.array(ref_maxima_transformed.tolist() + neigh_maxima_transformed.tolist())
 
         elif self.neigh_primary_location == TOP:
             # right-hand-side edges are RIGHT
             if self.right_aligned:
                 # Calculate maxima in the continuous string of values at this side of the cell pair
                 rhs_pixels = np.hstack([
-                    self.reference_cell.edge_pixels(RIGHT),
-                    self.neigh_cell.edge_pixels(RIGHT)
+                    self.neigh_cell.edge_pixels(RIGHT),
+                    self.reference_cell.edge_pixels(RIGHT)
                 ])
+                print(f"rhs_pixels {rhs_pixels}")
                 rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.leak_detector.min_peak_prominence)
-                col_indices = np.ones(rhs_maxima_1d.shape)*(self.width-1)
+                col_indices = np.ones(rhs_maxima_1d.shape) * (self.width-1)
+                print(f"col_indices: {col_indices}")
                 rhs_maxima = np.vstack([rhs_maxima_1d, col_indices]).T
+                print(f"rhs_maxima: {rhs_maxima}")
 
             else:
                 # Calculate maxima in each cell separately and stack them
@@ -535,14 +551,14 @@ class CellPair:
                 ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
                 neigh_maxima = self.neigh_cell.maxima(RIGHT)
                 neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
-                rhs_maxima = np.vstack([ref_maxima_transformed, neigh_maxima_transformed])
+                rhs_maxima = np.array(neigh_maxima_transformed.tolist() + ref_maxima_transformed.tolist())
 
             # left-hand-side edges are LEFT
             if self.left_aligned:
                 # Calculate maxima in the continuous string of values at this side of the cell pair
                 lhs_pixels = np.hstack([
+                    self.neigh_cell.edge_pixels(LEFT),
                     self.reference_cell.edge_pixels(LEFT),
-                    self.neigh_cell.edge_pixels(LEFT)
                 ])
                 lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.leak_detector.min_peak_prominence)
                 col_indices = np.zeros(lhs_maxima_1d.shape)
@@ -554,8 +570,13 @@ class CellPair:
                 ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
                 neigh_maxima = self.neigh_cell.maxima(LEFT)
                 neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
-                lhs_maxima = np.vstack([ref_maxima_transformed, neigh_maxima_transformed])
+                lhs_maxima = np.array(neigh_maxima_transformed.tolist() + ref_maxima_transformed.tolist())
+
         else:
             raise ValueError(f"self.neigh_primary_location = {self.neigh_primary_location}")
 
         return {"rhs": rhs_maxima, "lhs": lhs_maxima}
+
+    def connect_maxima(self) -> List[Obstacle]:
+        pass
+
