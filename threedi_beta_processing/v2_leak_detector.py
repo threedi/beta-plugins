@@ -135,8 +135,6 @@ class LeakDetector:
         self.min_obstacle_height = min_obstacle_height
         self.search_precision = search_precision
         self.min_peak_prominence = min_peak_prominence
-        self.edges = list()
-        self._edge_dict = dict()
 
         # Get all flowlines that are connected to any of the cell_ids
         flowlines = filter_lines_by_node_ids(gridadmin.lines.subset('2D_OPEN_WATER'), node_ids=cell_ids)
@@ -340,19 +338,19 @@ class Cell:
         maxima_1d, _ = find_peaks(self.edge_pixels(side), prominence=self.ld.min_peak_prominence)
         if side == TOP:
             row_indices = np.zeros(maxima_1d.shape)
-            result = np.vstack([row_indices, maxima_1d]).T
+            result = np.vstack([row_indices, maxima_1d]).T.astype(int)
 
         elif side == BOTTOM:
             row_indices = np.ones(maxima_1d.shape) * (self.height - 1)
-            result = np.vstack([row_indices, maxima_1d]).T
+            result = np.vstack([row_indices, maxima_1d]).T.astype(int)
 
         elif side == LEFT:
             col_indices = np.zeros(maxima_1d.shape)
-            result = np.vstack([maxima_1d, col_indices]).T
+            result = np.vstack([maxima_1d, col_indices]).T.astype(int)
 
         elif side == RIGHT:
             col_indices = np.ones(maxima_1d.shape) * (self.width - 1)
-            result = np.vstack([maxima_1d, col_indices]).T
+            result = np.vstack([maxima_1d, col_indices]).T.astype(int)
 
         return result
 
@@ -517,12 +515,12 @@ class CellPair:
         """
         self.pixels[pos]  # to raise IndexError if out of bounds for this CellPair
         if self.neigh_primary_location == TOP:
-            if pos[1] >= self.neigh_cell.height:
+            if pos[0] >= self.neigh_cell.height:
                 return REFERENCE
             else:
                 return NEIGH
         if self.neigh_primary_location == RIGHT:
-            if pos[0] >= self.reference_cell.width:
+            if pos[1] >= self.reference_cell.width:
                 return NEIGH
             else:
                 return REFERENCE
@@ -635,7 +633,7 @@ class CellPair:
                 ])
                 rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.ld.min_peak_prominence)
                 row_indices = np.ones(rhs_maxima_1d.shape) * (self.height - 1)
-                rhs_maxima = np.vstack([row_indices, rhs_maxima_1d]).T
+                rhs_maxima = np.vstack([row_indices, rhs_maxima_1d]).T.astype(int)
 
             else:
                 # Calculate maxima in each cell separately and stack them
@@ -643,8 +641,6 @@ class CellPair:
                 ref_maxima_transformed = np.array([self.transform(i, REFERENCE, MERGED) for i in ref_maxima])
                 neigh_maxima = self.neigh_cell.maxima(BOTTOM)
                 neigh_maxima_transformed = np.array([self.transform(i, NEIGH, MERGED) for i in neigh_maxima])
-                # print(f"ref_maxima_transformed: {ref_maxima_transformed}")
-                # print(f"neigh_maxima_transformed: {neigh_maxima_transformed}")
                 rhs_maxima = np.array(ref_maxima_transformed.tolist() + neigh_maxima_transformed.tolist())
 
             # left-hand-side edges are TOP
@@ -656,7 +652,7 @@ class CellPair:
                 ])
                 lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.ld.min_peak_prominence)
                 row_indices = np.zeros(lhs_maxima_1d.shape)
-                lhs_maxima = np.vstack([row_indices, lhs_maxima_1d]).T
+                lhs_maxima = np.vstack([row_indices, lhs_maxima_1d]).T.astype(int)
 
             else:
                 # Calculate maxima in each cell separately and stack them
@@ -676,7 +672,7 @@ class CellPair:
                 ])
                 rhs_maxima_1d, _ = find_peaks(rhs_pixels, prominence=self.ld.min_peak_prominence)
                 col_indices = np.ones(rhs_maxima_1d.shape) * (self.width - 1)
-                rhs_maxima = np.vstack([rhs_maxima_1d, col_indices]).T
+                rhs_maxima = np.vstack([rhs_maxima_1d, col_indices]).T.astype(int)
 
             else:
                 # Calculate maxima in each cell separately and stack them
@@ -695,7 +691,7 @@ class CellPair:
                 ])
                 lhs_maxima_1d, _ = find_peaks(lhs_pixels, prominence=self.ld.min_peak_prominence)
                 col_indices = np.zeros(lhs_maxima_1d.shape)
-                lhs_maxima = np.vstack([lhs_maxima_1d, col_indices]).T
+                lhs_maxima = np.vstack([lhs_maxima_1d, col_indices]).T.astype(int)
 
             else:
                 # Calculate maxima in each cell separately and stack them
@@ -710,8 +706,8 @@ class CellPair:
 
         # Filter out maxima with too low pixel values
         filtered_rhs_maxima = []
-        for i in rhs_maxima:
-            pos = tuple(i)
+        for pos in rhs_maxima:
+            pos = tuple(pos)
             pixel_value = self.pixels[pos]
             if pixel_value > self.lowest_edge.exchange_level + \
                     self.ld.min_obstacle_height - \
@@ -719,8 +715,8 @@ class CellPair:
                 filtered_rhs_maxima.append(pos)
 
         filtered_lhs_maxima = []
-        for i in lhs_maxima:
-            pos = tuple(i)
+        for pos in lhs_maxima:
+            pos = tuple(pos)
             pixel_value = self.pixels[pos]
             if pixel_value > self.lowest_edge.exchange_level + \
                     self.ld.min_obstacle_height - \
@@ -790,15 +786,21 @@ class CellPair:
                 from_pos_cell = self.locate_pos(from_pos)
                 to_pos_cell = self.locate_pos(to_pos)
                 if from_pos_cell != to_pos_cell:
-                    self.edges[1][0].obstacles.append(obstacle)
+                    edges = self.edges[1]
                 elif from_pos_cell == to_pos_cell:
+                    from_pos_transformed = self.transform(pos=from_pos, from_array=MERGED, to_array=from_pos_cell)
                     edges = determine_edges(
                         ld=self.ld,
                         obstacle=obstacle,
                         cell=cells[from_pos_cell],
-                        from_pos=self.transform(pos=from_pos, from_array=MERGED, to_array=from_pos_cell),
+                        from_pos=from_pos_transformed,
                         is_left_to_right=self.neigh_primary_location == TOP
                     )
+
+                # assign obstacles to edges if they are high enough
+                if obstacle.crest_level > lowest(edges).exchange_level + \
+                        self.ld.min_obstacle_height - \
+                        self.ld.search_precision:
                     for edge in edges:
                         edge.obstacles.append(obstacle)
 
