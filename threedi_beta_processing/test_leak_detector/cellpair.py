@@ -5,7 +5,7 @@ import numpy as np
 from osgeo import gdal
 from threedigrid.admin.gridadmin import GridH5Admin
 
-from v2_leak_detector import CellPair, LeakDetector, REFERENCE, NEIGH, RIGHT, TOP
+from v2_leak_detector import CellPair, LeakDetector, REFERENCE, NEIGH, RIGHT, TOP, LEFTHANDSIDE, RIGHTHANDSIDE
 
 DATA_DIR = Path(__file__).parent / 'data' / 'grid_refinement'
 DEM_FILENAME = DATA_DIR / 'dem_0_01.tif'
@@ -92,8 +92,8 @@ def maxima():
     neigh = leak_detector.cell(204)
     cell_pair = CellPair(leak_detector, ref, neigh)
     all_maxima = cell_pair.maxima()
-    assert np.all(all_maxima["rhs"] == np.array([[39, 7]]))
-    assert np.all(all_maxima["lhs"] == np.array([[0, 54]]))
+    assert np.all(all_maxima[RIGHTHANDSIDE] == np.array([[39, 7]]))
+    assert np.all(all_maxima[LEFTHANDSIDE] == np.array([[0, 54]]))
 
     # Neigh is smaller, location is (RIGHT, TOP)
     # There are no right-hand-side nor left-hand-side maxima
@@ -101,24 +101,24 @@ def maxima():
     neigh = leak_detector.cell(206)
     cell_pair = CellPair(leak_detector, ref, neigh)
     all_maxima = cell_pair.maxima()
-    assert len(all_maxima["rhs"]) == 0
-    assert len(all_maxima["lhs"]) == 0
+    assert len(all_maxima[RIGHTHANDSIDE]) == 0
+    assert len(all_maxima[LEFTHANDSIDE]) == 0
 
     # Neigh is same size, location is (TOP, N/A)
     ref = leak_detector.cell(205)
     neigh = leak_detector.cell(206)
     cell_pair = CellPair(leak_detector, ref, neigh)
     all_maxima = cell_pair.maxima()
-    assert np.all(all_maxima["rhs"] == np.array([[16, 19]]))
-    assert np.all(all_maxima["lhs"] == np.array([[11, 0]]))
+    assert np.all(all_maxima[RIGHTHANDSIDE] == np.array([[16, 19]]))
+    assert np.all(all_maxima[LEFTHANDSIDE] == np.array([[11, 0]]))
 
     # Neigh is smaller, location is (RIGHT, BOTTOM)
     ref = leak_detector.cell(156)
     neigh = leak_detector.cell(199)
     cell_pair = CellPair(leak_detector, ref, neigh)
     all_maxima = cell_pair.maxima()
-    assert np.all(all_maxima["rhs"] == np.array([[39, 51]]))
-    assert np.all(all_maxima["lhs"] == np.array([[0, 4]]))
+    assert np.all(all_maxima[RIGHTHANDSIDE] == np.array([[39, 51]]))
+    assert np.all(all_maxima[LEFTHANDSIDE] == np.array([[0, 4]]))
 
     # Neigh is bigger, location is (RIGHT, N/A)
     # Ref location is (LEFT, TOP)
@@ -126,8 +126,8 @@ def maxima():
     neigh = leak_detector.cell(190)
     cell_pair = CellPair(leak_detector, ref, neigh)
     all_maxima = cell_pair.maxima()
-    assert np.all(all_maxima["rhs"] == np.array([[39, 52]]))
-    assert np.all(all_maxima["lhs"] == np.array([[0, 38]]))
+    assert np.all(all_maxima[RIGHTHANDSIDE] == np.array([[39, 52]]))
+    assert np.all(all_maxima[LEFTHANDSIDE] == np.array([[0, 38]]))
 
 
 def find_obstacles_helper(cell_ids: List[int],
@@ -149,7 +149,11 @@ def find_obstacles_helper(cell_ids: List[int],
     cell_pair = CellPair(leak_detector, ref, neigh)
     cell_pair.find_obstacles()
     edge = cell_pair.edges[result_obstacle_side][0]
-    assert len(edge.obstacles) == result_nr_obstacles
+    try:
+        assert len(edge.obstacles) == result_nr_obstacles
+    except AssertionError:
+        print(f"len(edge.obstacles): {len(edge.obstacles)}")
+        raise
     crest_levels = [obstacle.crest_level for obstacle in edge.obstacles]
     crest_levels.sort()
     result_crest_levels.sort()

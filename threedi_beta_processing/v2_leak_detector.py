@@ -12,6 +12,8 @@ TOP = 'top'
 RIGHT = 'right'
 BOTTOM = 'bottom'
 LEFT = 'left'
+LEFTHANDSIDE = "left-hand side"
+RIGHTHANDSIDE = "right-hand side"
 NA = 'N/A'
 SIDE_INDEX = {
     TOP: np.index_exp[0, :],
@@ -196,8 +198,25 @@ class Obstacle:
     Obstacle between two sides of a CellPair
     """
 
-    def __init__(self, crest_level):
+    def __init__(
+            self,
+            crest_level,
+            from_edges,
+            to_edges,
+            from_cell,
+            to_cell,
+            from_pos: Tuple[int, int],
+            to_pos: Tuple[int, int],
+            edges=None,
+    ):
         self.crest_level = crest_level
+        self.from_edges = from_edges
+        self.to_edges = to_edges
+        self.from_cell = from_cell
+        self.to_cell = to_cell
+        self.from_pos = from_pos
+        self.to_pos = to_pos
+        self.edges = edges if edges else []
 
 
 class Edge:
@@ -365,7 +384,6 @@ class CellPair:
         self.ld = ld
         self.reference_cell = reference_cell
         self.neigh_cell = neigh_cell
-        # self.edge = leak_detector.find_edge(reference_cell, neigh_cell)
         self.neigh_primary_location, self.neigh_secondary_location = self.locate_cell(NEIGH)
         if self.neigh_primary_location not in [TOP, RIGHT]:
             raise ValueError(
@@ -723,15 +741,15 @@ class CellPair:
                     self.ld.search_precision:
                 filtered_lhs_maxima.append(pos)
 
-        return {"rhs": filtered_rhs_maxima, "lhs": filtered_lhs_maxima}
+        return {RIGHTHANDSIDE: filtered_rhs_maxima, LEFTHANDSIDE: filtered_lhs_maxima}
 
-    def obstacle_from_pixels(
+    def crest_level_from_pixels(
             self,
             from_pos: Tuple[int, int],
             to_pos: Tuple[int, int]
-    ) -> Union[Obstacle, None]:
+    ) -> Union[float, None]:
         """
-        Find obstacle segment in self.pixels
+        Fin obstacle in self.pixels and return its crest level
 
         Returns None if no obstacle is found
         """
@@ -767,10 +785,9 @@ class CellPair:
                     # the two sides are NOT connected at this threshold
                     hmax = hcurrent
 
-            obstacle_crest_level = np.mean([hmin, hmax])
+            obstacle_crest_level = float(np.mean([hmin, hmax]))
 
-        obstacle = Obstacle(crest_level=obstacle_crest_level)
-        return obstacle
+        return obstacle_crest_level
 
     def find_obstacles(self):
         """
@@ -778,31 +795,79 @@ class CellPair:
         """
         maxima = self.maxima()
         cells = {REFERENCE: self.reference_cell, NEIGH: self.neigh_cell}
-        for from_pos in maxima["lhs"]:
-            for to_pos in maxima["rhs"]:
-                obstacle = self.obstacle_from_pixels(from_pos=from_pos, to_pos=to_pos)
+        for from_pos in maxima[LEFTHANDSIDE]:
+            for to_pos in maxima[RIGHTHANDSIDE]:
+                crest_level = self.crest_level_from_pixels(from_pos=from_pos, to_pos=to_pos)
+                if crest_level is None:
+                    break
 
-                # find the appropriate edge
+                # determine other obstacle properties
                 from_pos_cell = self.locate_pos(from_pos)
+                from_pos_transformed = self.transform(pos=from_pos, from_array=MERGED, to_array=from_pos_cell)
                 to_pos_cell = self.locate_pos(to_pos)
+                to_pos_transformed = self.transform(pos=to_pos, from_array=MERGED, to_array=to_pos_cell)
+
+                # # from_edges, to_edges, from_cell, to_cell, from_pos, to_pos
+                if self.neigh_primary_location == TOP:
+                    from_side = LEFT
+                    to_side = RIGHT
+                else:
+                    from_side = TOP
+                    to_side = BOTTOM
+                from_edges = cells[from_pos_cell].edges[from_side]
+                to_edges = cells[to_pos_cell].edges[to_side]
+                from_cell = cells[from_pos_cell]
+                to_cell = cells[to_pos_cell]
+
+                obstacle = Obstacle(
+                    crest_level=crest_level,
+                    from_edges=from_edges,
+                    to_edges=to_edges,
+                    from_cell=from_cell,
+                    to_cell=to_cell,
+                    from_pos=from_pos_transformed,
+                    to_pos=to_pos_transformed
+                )
+
+                # # edge
                 if from_pos_cell != to_pos_cell:
                     edges = self.edges[1]
                 elif from_pos_cell == to_pos_cell:
-                    from_pos_transformed = self.transform(pos=from_pos, from_array=MERGED, to_array=from_pos_cell)
                     edges = determine_edges(
                         ld=self.ld,
-                        obstacle=obstacle,
+                        crest_level=crest_level,
                         cell=cells[from_pos_cell],
                         from_pos=from_pos_transformed,
                         is_left_to_right=self.neigh_primary_location == TOP
                     )
 
-                # assign obstacles to edges if they are high enough
-                if obstacle.crest_level > lowest(edges).exchange_level + \
+                # assign obstacle to crossing edges (and v.v.) if they are high enough
+                if crest_level > lowest(edges).exchange_level + \
                         self.ld.min_obstacle_height - \
                         self.ld.search_precision:
                     for edge in edges:
                         edge.obstacles.append(obstacle)
+                        obstacle.edges.append(edge)
+
+    def find_connecting_obstacles(self):
+        """
+        Assumes that 'normal' obstacles have already been found
+
+        If a high line element in the DEM is slightly skewed relative to the grid, the obstacles it produces may
+        contain a gap at the location where it switches sides. This method generates an obstacle that connects the
+        two sides, e.g.:
+
+            |                   |
+            |         --->      |
+            |         --->      |___
+                |     --->          |
+                |                   |
+                |                   |
+        """
+        for lhs_obstacle in self.obstacles[LEFTHANDSIDE]:
+            for rhs_obstacle in self.obstacles[RIGHTHANDSIDE]:
+                pass
+
 
 
 def highest(elements: List[Union[Obstacle, Edge]]):
@@ -835,19 +900,20 @@ def lowest(elements: List[Union[Obstacle, Edge]]):
 
 def determine_edges(
         ld: LeakDetector,
-        obstacle: Obstacle,
+        crest_level: float,
         cell: Cell,
         from_pos: Tuple[int, int],
         is_left_to_right: bool
 ) -> List[Edge]:
     """
-    For given `obstacle`, determine to which edge of `cell` it should be assigned
+    For given `obstacle`, determine to which edges of `cell` it should be assigned
     Obstacle from_pos and to_pos should be within `cell`
 
     :param is_left_to_right: True if `obstacle` connects the left side of the cell to the right, False if top to bottom
+    :returns: list of edges
     """
     labelled_pixels, labelled_pixels_nr_features = label(
-        cell.pixels >= obstacle.crest_level - ld.search_precision,
+        cell.pixels >= crest_level - ld.search_precision,
         structure=SEARCH_STRUCTURE
     )
     obstacle_pixels = labelled_pixels == labelled_pixels[from_pos]
