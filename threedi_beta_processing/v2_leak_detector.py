@@ -201,22 +201,54 @@ class Obstacle:
     def __init__(
             self,
             crest_level,
-            from_edges,
-            to_edges,
             from_cell,
             to_cell,
+            from_side: str,
+            to_side: str,
             from_pos: Tuple[int, int],
             to_pos: Tuple[int, int],
             edges=None,
     ):
         self.crest_level = crest_level
-        self.from_edges = from_edges
-        self.to_edges = to_edges
         self.from_cell = from_cell
         self.to_cell = to_cell
+        self.from_side = from_side
+        self.to_side = to_side
         self.from_pos = from_pos
         self.to_pos = to_pos
         self.edges = edges if edges else []
+        self._from_edge = None
+        self._to_edge = None
+
+    @staticmethod
+    def _find_edge(cell, side, pos):
+        edges = cell.edges[side]
+        if side in [TOP, BOTTOM]:
+            # edge ordering is determined by x ordinate (col index)
+            if pos[1] + 1 > cell.width / 2:
+                return edges[-1]
+            else:
+                return edges[0]
+        elif side in [LEFT, RIGHT]:
+            # edge ordering is determined by y ordinate (row index)
+            if pos[0] + 1 > cell.height / 2:
+                return edges[-1]
+            else:
+                return edges[0]
+        else:
+            raise ValueError(f"Invalid value for parameter side: {side}")
+
+    @property
+    def from_edge(self):
+        if not self._from_edge:
+            self._from_edge=self._find_edge(cell=self.from_cell, side=self.from_side, pos=self.from_pos)
+        return self._from_edge
+
+    @property
+    def to_edge(self):
+        if not self._to_edge:
+            self._to_edge=self._find_edge(cell=self.to_cell, side=self.to_side, pos=self.to_pos)
+        return self._to_edge
 
 
 class Edge:
@@ -326,10 +358,10 @@ class Cell:
     @property
     def edges(self):
         return {
-            TOP: [self.ld.edge(self, i) for i in self.neigh_cells[TOP]],
-            BOTTOM: [self.ld.edge(i, self) for i in self.neigh_cells[BOTTOM]],
-            LEFT: [self.ld.edge(i, self) for i in self.neigh_cells[LEFT]],
-            RIGHT: [self.ld.edge(self, i) for i in self.neigh_cells[RIGHT]]
+            TOP: sorted([self.ld.edge(self, i) for i in self.neigh_cells[TOP]], key=lambda a: a.start_coord),
+            BOTTOM: sorted([self.ld.edge(i, self) for i in self.neigh_cells[BOTTOM]], key=lambda a: a.start_coord),
+            LEFT: sorted([self.ld.edge(i, self) for i in self.neigh_cells[LEFT]], key=lambda a: a.start_coord),
+            RIGHT: sorted([self.ld.edge(self, i) for i in self.neigh_cells[RIGHT]], key=lambda a: a.start_coord)
         }
 
     def side_coords(self):
@@ -814,15 +846,13 @@ class CellPair:
                 else:
                     from_side = TOP
                     to_side = BOTTOM
-                from_edges = cells[from_pos_cell].edges[from_side]
-                to_edges = cells[to_pos_cell].edges[to_side]
                 from_cell = cells[from_pos_cell]
                 to_cell = cells[to_pos_cell]
 
                 obstacle = Obstacle(
                     crest_level=crest_level,
-                    from_edges=from_edges,
-                    to_edges=to_edges,
+                    from_side=from_side,
+                    to_side=to_side,
                     from_cell=from_cell,
                     to_cell=to_cell,
                     from_pos=from_pos_transformed,
