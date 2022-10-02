@@ -2,6 +2,7 @@ from typing import Dict, Union, List, Tuple
 
 import numpy as np
 from osgeo import gdal
+from shapely.geometry import LineString, Point
 from scipy.ndimage import label, generate_binary_structure, maximum_position
 from scipy.signal import find_peaks
 from threedigrid.admin.gridadmin import GridH5Admin
@@ -200,6 +201,7 @@ class Obstacle:
 
     def __init__(
             self,
+            ld: LeakDetector,
             crest_level,
             from_cell,
             to_cell,
@@ -209,6 +211,7 @@ class Obstacle:
             to_pos: Tuple[int, int],
             edges=None,
     ):
+        self.ld = ld
         self.crest_level = crest_level
         self.from_cell = from_cell
         self.to_cell = to_cell
@@ -219,6 +222,18 @@ class Obstacle:
         self.edges = edges if edges else []
         self._from_edge = None
         self._to_edge = None
+
+        # calculate geometry
+        gt = self.ld.dem.GetGeoTransform()
+        from_pos_y = self.from_pos[0]
+        from_pos_x = self.from_pos[1]
+        to_pos_y = self.to_pos[0]
+        to_pos_x = self.to_pos[1]
+        from_x = self.from_cell.coords[0] + from_pos_x * abs(gt[1]) + abs(gt[1]) / 2
+        from_y = self.from_cell.coords[3] - (from_pos_y * abs(gt[5]) + abs(gt[5]) / 2)
+        to_x = self.to_cell.coords[0] + to_pos_x * abs(gt[1]) + abs(gt[1]) / 2
+        to_y = self.to_cell.coords[3] - (to_pos_y * abs(gt[5]) + abs(gt[5]) / 2)
+        self.geometry = LineString([Point(from_x, from_y), Point(to_x, to_y)])
 
     @staticmethod
     def _find_edge(cell, side, pos):
@@ -850,6 +865,7 @@ class CellPair:
                 to_cell = cells[to_pos_cell]
 
                 obstacle = Obstacle(
+                    ld=self.ld,
                     crest_level=crest_level,
                     from_side=from_side,
                     to_side=to_side,
