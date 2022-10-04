@@ -885,7 +885,7 @@ class CellPair:
 
                 # # edge
                 if from_pos_cell != to_pos_cell:
-                    # edges are all those that are intersected by the obstacle, except the from_edge and to_edge
+                    # edges are all whose flowline is intersected by the obstacle, except the from_edge and to_edge
                     potential_edges = []
                     for edge_list in self.reference_cell.edges.values():
                         for edge in edge_list:
