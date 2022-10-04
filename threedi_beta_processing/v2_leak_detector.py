@@ -167,7 +167,7 @@ class LeakDetector:
         flowlines_list = flowlines.to_list()
         for flowline in flowlines_list:
             cell_ids: Tuple = flowline["line"]
-            edge = Edge(ld=self, cell_ids=cell_ids, exchange_level=flowline["dpumax"])
+            edge = Edge(ld=self, cell_ids=cell_ids, flowline_coords=flowline["line_coords"], exchange_level=flowline["dpumax"])
             self._edge_dict[tuple(cell_ids)] = edge
 
     @property
@@ -272,9 +272,17 @@ class Edge:
     Drawing direction is always left -> right or bottom -> top.
     """
 
-    def __init__(self, ld: LeakDetector, cell_ids: Tuple[int], exchange_level: float = None):
+    def __init__(
+            self,
+            ld: LeakDetector,
+            cell_ids: Tuple[int],
+            line_coords: Tuple[float, float, float, float],
+            exchange_level: float = None
+    ):
         self.ld = ld
         self.cell_ids = cell_ids
+        x0, y0, x1, y1 = line_coords
+        self.flowline_geometry = LineString([Point(x0, y0), Point(x1, y1)])
         self.obstacles: List[Obstacle] = list()
 
         # set start and end coordinates
@@ -877,7 +885,13 @@ class CellPair:
 
                 # # edge
                 if from_pos_cell != to_pos_cell:
-                    edges = self.edges[1]
+                    # edges are all those that are intersected by the obstacle, except the from_edge and to_edge
+                    potential_edges = []
+                    for edge_list in self.reference_cell.edges.values():
+                        for edge in edge_list:
+                            if edge not in [obstacle.from_edge, obstacle.to_edge]:
+                                potential_edges.append(edge)
+                    edges = [pe for pe in potential_edges if pe.flowline_geometry.intersects(obstacle.geometry)]
                 elif from_pos_cell == to_pos_cell:
                     edges = determine_edges(
                         ld=self.ld,
@@ -913,7 +927,6 @@ class CellPair:
         for lhs_obstacle in self.obstacles[LEFTHANDSIDE]:
             for rhs_obstacle in self.obstacles[RIGHTHANDSIDE]:
                 pass
-
 
 
 def highest(elements: List[Union[Obstacle, Edge]]):
