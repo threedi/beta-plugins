@@ -242,8 +242,37 @@ def find_obstacles():
     )
 
 
+def find_connecting_obstacles():
+    cell_ids = [29, 30, 49, 50]
+    leak_detector = LeakDetector(
+        gridadmin=GR,
+        dem=DEM_DATASOURCE,
+        cell_ids=cell_ids,
+        min_obstacle_height=MIN_OBSTACLE_HEIGHT,
+        search_precision=SEARCH_PRECISION,
+        min_peak_prominence=MIN_PEAK_PROMINENCE
+    )
+
+    for ref_id, neigh_id in [(29, 30), (29, 49), (30, 50)]:
+        ref = leak_detector.cell(ref_id)
+        neigh = leak_detector.cell(neigh_id)
+        cell_pair = CellPair(leak_detector, ref, neigh)
+        cell_pair.find_obstacles()
+
+    assert len(leak_detector.edge(29, 30).obstacles) == 0
+
+    ref = leak_detector.cell(29)
+    neigh = leak_detector.cell(30)
+    cell_pair = CellPair(leak_detector, ref, neigh)
+    cell_pair.find_connecting_obstacles()
+
+    print(leak_detector.edge(29, 30).obstacles)
+    assert len(leak_detector.edge(29, 30).obstacles) == 1
+
+
 width_and_height()
 locate_cell()
 locate_pos()
 maxima()
 find_obstacles()
+find_connecting_obstacles()

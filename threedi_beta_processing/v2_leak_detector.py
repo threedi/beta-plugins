@@ -212,11 +212,11 @@ class Obstacle:
             crest_level,
             from_cell,
             to_cell,
-            from_side: str,
-            to_side: str,
             from_pos: Tuple[int, int],
             to_pos: Tuple[int, int],
-            edges=None,
+            from_side: str = None,
+            to_side: str = None,
+            edges=None
     ):
         self.ld = ld
         self.crest_level = crest_level
@@ -244,6 +244,8 @@ class Obstacle:
 
     @staticmethod
     def _find_edge(cell, side, pos):
+        if side is None:
+            raise ValueError("Cannot identify edge if from_edge or to_edge has not been set")
         edges = cell.edges[side]
         if side in [TOP, BOTTOM]:
             # edge ordering is determined by x ordinate (col index)
@@ -266,12 +268,19 @@ class Obstacle:
             self._from_edge=self._find_edge(cell=self.from_cell, side=self.from_side, pos=self.from_pos)
         return self._from_edge
 
+    @from_edge.setter
+    def from_edge(self, edge):
+        self._from_edge = edge
+
     @property
     def to_edge(self):
         if not self._to_edge:
             self._to_edge=self._find_edge(cell=self.to_cell, side=self.to_side, pos=self.to_pos)
         return self._to_edge
 
+    @to_edge.setter
+    def to_edge(self, edge):
+        self._to_edge = edge
 
 class Edge:
     """
@@ -446,6 +455,7 @@ class CellPair:
         self.ld = ld
         self.reference_cell = reference_cell
         self.neigh_cell = neigh_cell
+        self.cells = {REFERENCE: self.reference_cell, NEIGH: self.neigh_cell}
         self.neigh_primary_location, self.neigh_secondary_location = self.locate_cell(NEIGH)
         if self.neigh_primary_location not in [TOP, RIGHT]:
             raise ValueError(
@@ -811,7 +821,7 @@ class CellPair:
             to_pos: Tuple[int, int]
     ) -> Union[float, None]:
         """
-        Fin obstacle in self.pixels and return its crest level
+        Find obstacle in self.pixels and return its crest level
 
         Returns None if no obstacle is found
         """
@@ -856,7 +866,6 @@ class CellPair:
         Obstacles are identified and assigned to the appropriate Edge
         """
         maxima = self.maxima()
-        cells = {REFERENCE: self.reference_cell, NEIGH: self.neigh_cell}
         for from_pos in maxima[LEFTHANDSIDE]:
             for to_pos in maxima[RIGHTHANDSIDE]:
                 crest_level = self.crest_level_from_pixels(from_pos=from_pos, to_pos=to_pos)
@@ -876,8 +885,8 @@ class CellPair:
                 else:
                     from_side = TOP
                     to_side = BOTTOM
-                from_cell = cells[from_pos_cell]
-                to_cell = cells[to_pos_cell]
+                from_cell = self.cells[from_pos_cell]
+                to_cell = self.cells[to_pos_cell]
 
                 obstacle = Obstacle(
                     ld=self.ld,
@@ -891,22 +900,14 @@ class CellPair:
                 )
 
                 # # edge
-                if from_pos_cell != to_pos_cell:
-                    # edges are all whose flowline is intersected by the obstacle, except the from_edge and to_edge
-                    potential_edges = []
-                    for edge_list in self.reference_cell.edges.values():
+                # edges are all whose flowline is intersected by the obstacle, except the from_edge and to_edge
+                potential_edges = []
+                for cell in self.cells.values():
+                    for edge_list in cell.edges.values():
                         for edge in edge_list:
-                            if edge not in [obstacle.from_edge, obstacle.to_edge]:
+                            if edge not in [obstacle.from_edge, obstacle.to_edge] + potential_edges:
                                 potential_edges.append(edge)
-                    edges = [pe for pe in potential_edges if pe.flowline_geometry.intersects(obstacle.geometry)]
-                elif from_pos_cell == to_pos_cell:
-                    edges = determine_edges(
-                        ld=self.ld,
-                        crest_level=crest_level,
-                        cell=cells[from_pos_cell],
-                        from_pos=from_pos_transformed,
-                        is_left_to_right=self.neigh_primary_location == TOP
-                    )
+                edges = [pe for pe in potential_edges if pe.flowline_geometry.intersects(obstacle.geometry)]
 
                 # assign obstacle to crossing edges (and v.v.) if they are high enough
                 if crest_level > lowest(edges).exchange_level + \
@@ -931,9 +932,70 @@ class CellPair:
                 |                   |
                 |                   |
         """
-        for lhs_obstacle in self.obstacles[LEFTHANDSIDE]:
-            for rhs_obstacle in self.obstacles[RIGHTHANDSIDE]:
-                pass
+        middle_edge = self.edges[1][0]
+
+        if self.neigh_primary_location == TOP:
+            lhs = LEFT
+            rhs = RIGHT
+        else:
+            lhs = TOP
+            rhs = BOTTOM
+
+        lhs_edges = [
+            self.reference_cell.edges[lhs][-1],  # top-left edge of reference cell
+            self.neigh_cell.edges[lhs][0]  # bottom-left edge of reference cell
+        ]
+        rhs_edges = [
+            self.reference_cell.edges[rhs][-1],  # top-left edge of reference cell
+            self.neigh_cell.edges[rhs][0]  # bottom-left edge of reference cell
+        ]
+
+        for lhs_idx, rhs_idx in [(0, 1), (1, 0)]:
+            for lhs_obstacle in lhs_edges[lhs_idx].obstacles:
+                for rhs_obstacle in rhs_edges[rhs_idx].obstacles:
+                    # find the position of the lhs_obstacle on the middle edge
+                    if lhs_obstacle.from_edge == middle_edge:
+                        lhs_pos = lhs_obstacle.from_pos
+                        lhs_cell = REFERENCE if lhs_obstacle.from_cell == self.reference_cell else NEIGH
+                    elif lhs_obstacle.to_edge == middle_edge:
+                        lhs_pos = lhs_obstacle.to_pos
+                        lhs_cell = REFERENCE if lhs_obstacle.to_cell == self.reference_cell else NEIGH
+                    else:
+                        continue
+                    lhs_pos_in_cell_pair = self.transform(pos=lhs_pos, from_array=lhs_cell, to_array=MERGED)
+
+                    # find the position of the rhs_obstacle on the middle edge
+                    if rhs_obstacle.from_edge == middle_edge:
+                        rhs_pos = rhs_obstacle.from_pos
+                        rhs_cell = REFERENCE if rhs_obstacle.from_cell == self.reference_cell else NEIGH
+                    elif rhs_obstacle.to_edge == middle_edge:
+                        rhs_pos = rhs_obstacle.to_pos
+                        rhs_cell = REFERENCE if rhs_obstacle.to_cell == self.reference_cell else NEIGH
+                    else:
+                        continue
+                    rhs_pos_in_cell_pair = self.transform(pos=rhs_pos, from_array=rhs_cell, to_array=MERGED)
+
+                    # connect lhs_pos and rhs_pos. If possible at sufficient hight, an obstacle is added to middle edge
+                    crest_level = self.crest_level_from_pixels(
+                        from_pos=lhs_pos_in_cell_pair,
+                        to_pos=rhs_pos_in_cell_pair
+                    )
+                    if crest_level:
+                        if crest_level > middle_edge.exchange_level + \
+                                self.ld.min_obstacle_height - \
+                                self.ld.search_precision:
+                            obstacle = Obstacle(
+                                ld=self.ld,
+                                crest_level=crest_level,
+                                from_cell=self.cells[lhs_cell],
+                                to_cell=self.cells[rhs_cell],
+                                from_pos=lhs_pos,
+                                to_pos=rhs_pos,
+                                edges=[middle_edge]
+                            )
+                            obstacle.from_edge = middle_edge
+                            obstacle.to_edge = middle_edge
+                            middle_edge.obstacles.append(obstacle)
 
 
 def highest(elements: List[Union[Obstacle, Edge]]):
@@ -962,40 +1024,3 @@ def lowest(elements: List[Union[Obstacle, Edge]]):
             min_element_height = getattr(element, attr_name)
             lowest_element = element
     return lowest_element
-
-
-def determine_edges(
-        ld: LeakDetector,
-        crest_level: float,
-        cell: Cell,
-        from_pos: Tuple[int, int],
-        is_left_to_right: bool
-) -> List[Edge]:
-    """
-    For given `obstacle`, determine to which edges of `cell` it should be assigned
-    Obstacle from_pos and to_pos should be within `cell`
-
-    :param is_left_to_right: True if `obstacle` connects the left side of the cell to the right, False if top to bottom
-    :returns: list of edges
-    """
-    labelled_pixels, labelled_pixels_nr_features = label(
-        cell.pixels >= crest_level - ld.search_precision,
-        structure=SEARCH_STRUCTURE
-    )
-    obstacle_pixels = labelled_pixels == labelled_pixels[from_pos]
-    nr_obstacle_pixels_left = np.nansum(obstacle_pixels[:, 0:int(cell.width / 2)] == 1)
-    nr_obstacle_pixels_right = np.nansum(obstacle_pixels[:, int(cell.width / 2):] == 1)
-    nr_obstacle_pixels_top = np.nansum(obstacle_pixels[0:int(cell.height / 2), :] == 1)
-    nr_obstacle_pixels_bottom = np.nansum(obstacle_pixels[int(cell.height / 2):, :] == 1)
-
-    if is_left_to_right:
-        if nr_obstacle_pixels_top > nr_obstacle_pixels_bottom:
-            preferred_side = TOP
-        else:
-            preferred_side = BOTTOM
-    else:
-        if nr_obstacle_pixels_left > nr_obstacle_pixels_right:
-            preferred_side = LEFT
-        else:
-            preferred_side = RIGHT
-    return cell.edges[preferred_side]
