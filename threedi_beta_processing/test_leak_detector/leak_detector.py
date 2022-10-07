@@ -15,3 +15,19 @@ MIN_PEAK_PROMINENCE = 0.05
 SEARCH_PRECISION = 0.001
 MIN_OBSTACLE_HEIGHT = 0.05
 
+
+def run():
+    leak_detector = LeakDetector(
+        gridadmin=GR,
+        dem=DEM_DATASOURCE,
+        cell_ids=list(GR.cells.id),
+        # cell_ids=[42, 43],
+        min_obstacle_height=MIN_OBSTACLE_HEIGHT,
+        search_precision=SEARCH_PRECISION,
+        min_peak_prominence=MIN_PEAK_PROMINENCE
+    )
+    leak_detector.run(list(GR.cells.id))
+    # leak_detector.run([42, 43])
+
+
+run()

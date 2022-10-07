@@ -200,6 +200,32 @@ class LeakDetector:
             neigh_cell = neigh_cell.id
         return self._edge_dict[(reference_cell, neigh_cell)]
 
+    def cell_pairs(self, cell_ids: List):
+        """Return an interator of all cell pairs that can be created by using the cell_ids as reference cell"""
+        for cell_id in cell_ids:
+            if cell_id == 0:
+                continue  # somehow gridadmin file also contains cells with id 0, even though it doesn't exist?
+            reference_cell = self.cell(cell_id)
+            neigh_cells = reference_cell.neigh_cells[TOP] + reference_cell.neigh_cells[RIGHT]
+            for neigh_cell in neigh_cells:
+                cell_pair = CellPair(self, reference_cell, neigh_cell)
+                yield cell_pair
+
+    def run(self, cell_ids):
+        # find obstacles
+        for cell_pair in self.cell_pairs(cell_ids):
+            try:
+                cell_pair.find_obstacles()
+            except:
+                print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
+
+        # find connecting obstacles
+        for cell_pair in self.cell_pairs(cell_ids):
+            try:
+                cell_pair.find_connecting_obstacles()
+            except IndexError as e:
+                print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
+                raise e
 
 class Obstacle:
     """
@@ -247,6 +273,8 @@ class Obstacle:
         if side is None:
             raise ValueError("Cannot identify edge if from_edge or to_edge has not been set")
         edges = cell.edges[side]
+        if len(edges) == 0:
+            return None  # e.g. cell at model boundary
         if side in [TOP, BOTTOM]:
             # edge ordering is determined by x ordinate (col index)
             if pos[1] + 1 > cell.width / 2:
@@ -908,7 +936,9 @@ class CellPair:
                             if edge not in [obstacle.from_edge, obstacle.to_edge] + potential_edges:
                                 potential_edges.append(edge)
                 edges = [pe for pe in potential_edges if pe.flowline_geometry.intersects(obstacle.geometry)]
-
+                if len(edges) == 0:
+                    continue  # this can happen e.g. at the model boundary in some cases; there is an obstacle, but it
+                    # doesn't intersect any relevant flowlines
                 # assign obstacle to crossing edges (and v.v.) if they are high enough
                 if crest_level > lowest(edges).exchange_level + \
                         self.ld.min_obstacle_height - \
@@ -941,6 +971,7 @@ class CellPair:
             lhs = TOP
             rhs = BOTTOM
 
+        # TODO handle cases where the cell does not have any edges on that side
         lhs_edges = [
             self.reference_cell.edges[lhs][-1],  # top-left edge of reference cell
             self.neigh_cell.edges[lhs][0]  # bottom-left edge of reference cell
