@@ -190,8 +190,15 @@ class LeakDetector:
     def edge(self, reference_cell, neigh_cell):
         """
         Find the edge between reference_cell (left/bottom) and neigh_cell (top/right)
+
+        :param reference_cell: cell or cell id
+        :param neigh_cell: cell or cell id of a cell to the top or right of reference cell
         """
-        return self._edge_dict[(reference_cell.id, neigh_cell.id)]
+        if isinstance(reference_cell, Cell):
+            reference_cell = reference_cell.id
+        if isinstance(neigh_cell, Cell):
+            neigh_cell = neigh_cell.id
+        return self._edge_dict[(reference_cell, neigh_cell)]
 
 
 class Obstacle:
@@ -276,12 +283,12 @@ class Edge:
             self,
             ld: LeakDetector,
             cell_ids: Tuple[int],
-            line_coords: Tuple[float, float, float, float],
+            flowline_coords: Tuple[float, float, float, float],
             exchange_level: float = None
     ):
         self.ld = ld
         self.cell_ids = cell_ids
-        x0, y0, x1, y1 = line_coords
+        x0, y0, x1, y1 = flowline_coords
         self.flowline_geometry = LineString([Point(x0, y0), Point(x1, y1)])
         self.obstacles: List[Obstacle] = list()
 

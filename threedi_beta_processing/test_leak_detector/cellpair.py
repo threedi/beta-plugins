@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 from pathlib import Path
 
 import numpy as np
@@ -130,11 +130,13 @@ def maxima():
     assert np.all(all_maxima[LEFTHANDSIDE] == np.array([[0, 38]]))
 
 
-def find_obstacles_helper(cell_ids: List[int],
-                          result_obstacle_side: int,
-                          result_nr_obstacles: int,
-                          result_crest_levels: List[float]
-                          ):
+def find_obstacles_helper(
+        cell_ids: List[int],
+        result_obstacle_side: int,
+        result_nr_obstacles: int,
+        result_crest_levels: List[float],
+        extra_edges_with_obstacles: List[Tuple[int, int]] = None
+):
     leak_detector = LeakDetector(
         gridadmin=GR,
         dem=DEM_DATASOURCE,
@@ -158,6 +160,11 @@ def find_obstacles_helper(cell_ids: List[int],
     crest_levels.sort()
     result_crest_levels.sort()
     assert crest_levels == result_crest_levels
+
+    if extra_edges_with_obstacles:
+        for e in extra_edges_with_obstacles:
+            edge = leak_detector.edge(*e)
+            assert len(edge.obstacles) > 0
 
 
 def find_obstacles():
@@ -208,14 +215,16 @@ def find_obstacles():
         cell_ids=[158, 204],
         result_obstacle_side=SIDE_MIDDLE,
         result_nr_obstacles=1,
-        result_crest_levels=[5.0]
+        result_crest_levels=[5.0],
+        extra_edges_with_obstacles=[(158, 203)]
     )
 
     find_obstacles_helper(
         cell_ids=[156, 199],
         result_obstacle_side=SIDE_MIDDLE,
         result_nr_obstacles=1,
-        result_crest_levels=[5.0]
+        result_crest_levels=[5.0],
+        extra_edges_with_obstacles=[(156, 200)]
     )
 
     find_obstacles_helper(
@@ -231,6 +240,7 @@ def find_obstacles():
         result_nr_obstacles=1,
         result_crest_levels=[5.0]
     )
+
 
 width_and_height()
 locate_cell()
