@@ -69,7 +69,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterRasterLayer(
-                self.INPUT_DEM, self.tr("Digital Elevation Model"), optional=True
+                self.INPUT_DEM, self.tr("Digital Elevation Model")
             )
         )
 
@@ -130,7 +130,8 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             cell_ids=list(gr.cells.id),
             min_obstacle_height=min_obstacle_height,
             search_precision=search_precision,
-            min_peak_prominence=min_obstacle_height
+            min_peak_prominence=min_obstacle_height,
+            feedback=feedback
         )
         feedback.setProgressText("Find obstacles...")
         leak_detector.run(feedback=feedback)

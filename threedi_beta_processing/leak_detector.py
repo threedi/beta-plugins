@@ -226,7 +226,7 @@ class LeakDetector:
         for i, cell_pair in enumerate(self.cell_pairs()):
             try:
                 cell_pair.find_obstacles()
-                feedback.setProgress(50*(i+1/len(self.line_nodes)))
+                feedback.setProgress(50*((i+1)/len(self.line_nodes)))
                 if feedback.isCanceled():
                     return
             except Exception as e:
@@ -237,7 +237,7 @@ class LeakDetector:
         for cell_pair in self.cell_pairs():
             try:
                 cell_pair.find_connecting_obstacles()
-                feedback.setProgress(50 + 50*(i+1/len(self.line_nodes)))
+                feedback.setProgress(50 + 50*((i+1)/len(self.line_nodes)))
                 if feedback.isCanceled():
                     return
             except IndexError as e:
