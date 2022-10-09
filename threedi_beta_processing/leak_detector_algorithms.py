@@ -10,8 +10,6 @@
 *                                                                         *
 ***************************************************************************
 """
-from uuid import uuid4
-import numpy as np
 from osgeo import gdal
 
 from threedigrid.admin.gridadmin import GridH5Admin
@@ -46,7 +44,7 @@ from qgis.core import (
     QgsWkbTypes,
 )
 
-from .leak_detector import Topology
+from .leak_detector import LeakDetector
 
 
 class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
@@ -125,74 +123,31 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             crs=crs
         )
 
-        feedback.setProgressText("Reading computational grid...")
-        topo = Topology(gr=gr, cell_ids=list(gr.cells.id), dem=dem_ds, feedback=feedback)
-        if feedback.isCanceled():
-            return
-
-        max_progress = 90  # first 10% has been filled by creating topology
-        nr_progress_steps = 5
-
-
-        # find obstacle segments within cell
-        feedback.setProgressText("Find obstacle segments within cell...")
-        for nr, cell in enumerate(topo.cells.values()):
-            if feedback.isCanceled():
-                return
-            feedback.pushInfo(f"Find obstacle segments within cell {cell.id}...")
-            cell.find_maxima(min_peak_prominence=min_obstacle_height)
-            cell.connect_maxima(search_precision=search_precision, min_obstacle_height=min_obstacle_height)
-            feedback.setProgress(feedback.progress() + (1 / nr_progress_steps) / len(topo.cells) * max_progress)
-
-        # Create obstacles from segments
-        feedback.setProgressText("Create obstacles from segments...")
-        for cell in topo.cells.values():
-            if feedback.isCanceled():
-                return
-            feedback.pushInfo(f"Create obstacles from segments in cell {cell.id}...")
-            cell.create_obstacles_from_segments(
-                direct_connection_preference=min_obstacle_height,
-                search_precision=search_precision,
-                min_obstacle_height=min_obstacle_height
-            )
-            feedback.setProgress(feedback.progress() + (1 / nr_progress_steps) / len(topo.cells) * max_progress)
-
-        # filter obstacles
-        feedback.setProgressText("Filter obstacles...")
-        topo.deduplicate_obstacles(search_precision=search_precision)
-        for edge in topo.edges:
-            if feedback.isCanceled():
-                return
-            edge.filter_obstacles(min_obstacle_height=min_obstacle_height, search_precision=search_precision)
-            feedback.setProgress(feedback.progress() + (1 / nr_progress_steps) / len(topo.edges) * max_progress)
-
-        # generate connecting obstacles
-        feedback.setProgressText("Generate connecting obstacles...")
-        for edge in topo.edges:
-            if feedback.isCanceled():
-                return
-            edge.generate_connecting_obstacle(min_obstacle_height=min_obstacle_height,
-                                              search_precision=search_precision)
-            feedback.setProgress(feedback.progress() + (1 / nr_progress_steps) / len(topo.edges) * max_progress)
-
-        # export features
+        feedback.setProgressText("Read computational grid...")
+        leak_detector = LeakDetector(
+            gridadmin=gr,
+            dem=dem_ds,
+            cell_ids=list(gr.cells.id),
+            min_obstacle_height=min_obstacle_height,
+            search_precision=search_precision,
+            min_peak_prominence=min_obstacle_height
+        )
+        feedback.setProgressText("Find obstacles...")
+        leak_detector.run(feedback=feedback)
         feedback.setProgressText("Create cell edge features...")
-        for edge in topo.edges:
+        for result in leak_detector.result_edges():
             if feedback.isCanceled():
                 return
-            obstacle = edge.highest_obstacle
-            if obstacle is not None:
-                feature = QgsFeature()
-                feature.setFields(edges_sink_fields)
-                feature.setAttribute(0, edge.id)
-                feature.setAttribute(1, edge.threedi_exchange_level)
-                feedback.pushInfo(f"obstacle.height: {obstacle.height}")
-                feature.setAttribute(2, float(obstacle.height))
-                geometry = QgsGeometry()
-                geometry.fromWkb(edge.geometry.ExportToWkb())
-                feature.setGeometry(geometry)
-                edges_sink.addFeature(feature, QgsFeatureSink.FastInsert)
-            feedback.setProgress(feedback.progress() + (1 / nr_progress_steps) / len(topo.edges) * max_progress)
+            feature = QgsFeature()
+            feature.setFields(edges_sink_fields)
+            feature.setAttribute(0, int(result["flowline_id"]))
+            feature.setAttribute(1, float(result["exchange_level"]))
+            feature.setAttribute(2, float(result["crest_level"]))
+            geometry = QgsGeometry()
+            geometry.fromWkb(result["geometry"].wkb)
+            feature.setGeometry(geometry)
+            edges_sink.addFeature(feature, QgsFeatureSink.FastInsert)
+            # feedback.setProgress(feedback.progress() + (1 / nr_progress_steps) / len(topo.edges) * max_progress)
 
         return {self.OUTPUT_EDGES: self.edges_sink_dest_id}
 

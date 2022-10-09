@@ -26,8 +26,7 @@ def run():
         search_precision=SEARCH_PRECISION,
         min_peak_prominence=MIN_PEAK_PROMINENCE
     )
-    leak_detector.run(list(GR.cells.id))
-    # leak_detector.run([42, 43])
+    leak_detector.run()
     for result in leak_detector.result_edges():
         print(result)
 
