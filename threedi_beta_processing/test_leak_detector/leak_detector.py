@@ -28,6 +28,8 @@ def run():
     )
     leak_detector.run(list(GR.cells.id))
     # leak_detector.run([42, 43])
+    for result in leak_detector.result_edges():
+        print(result)
 
 
 run()

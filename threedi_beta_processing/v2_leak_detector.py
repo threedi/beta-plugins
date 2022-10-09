@@ -1,4 +1,4 @@
-from typing import Dict, Union, List, Tuple
+from typing import Dict, Union, List, Tuple, Optional
 
 import numpy as np
 from osgeo import gdal
@@ -94,7 +94,12 @@ def filter_lines_by_node_ids(lines: Lines, node_ids: np.array):
     return result
 
 
-def intersection(line_coords1, line_coords2, decimals: int = 5):
+def intersection(
+        line_coords1,
+        line_coords2,
+        decimals: int = 5
+) -> Optional[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    """Returns None if no intersection is found"""
     (start_x1, start_y1), (end_x1, end_y1) = np.round(line_coords1, decimals)
     (start_x2, start_y2), (end_x2, end_y2) = np.round(line_coords2, decimals)
     if start_x1 == end_x1 == start_x2 == end_x2 == start_x1:
@@ -167,7 +172,7 @@ class LeakDetector:
         flowlines_list = flowlines.to_list()
         for flowline in flowlines_list:
             cell_ids: Tuple = flowline["line"]
-            edge = Edge(ld=self, cell_ids=cell_ids, flowline_coords=flowline["line_coords"], exchange_level=flowline["dpumax"])
+            edge = Edge(ld=self, cell_ids=cell_ids, flowline_id=flowline["id"], flowline_coords=flowline["line_coords"], exchange_level=flowline["dpumax"])
             self._edge_dict[tuple(cell_ids)] = edge
 
     @property
@@ -227,6 +232,18 @@ class LeakDetector:
             except IndexError as e:
                 print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
                 raise e
+
+    def result_edges(self):
+        """Iterate over all edges that have an obstacle"""
+        for edge in self.edges:
+            if edge.obstacles:
+                yield {
+                    "flowline_id": edge.flowline_id,
+                    "exchange_level": edge.exchange_level,
+                    "crest_level": highest(edge.obstacles).crest_level,
+                    "geometry": edge.geometry
+                }
+
 
 class Obstacle:
     """
@@ -311,6 +328,7 @@ class Obstacle:
     def to_edge(self, edge):
         self._to_edge = edge
 
+
 class Edge:
     """
     Edge between two cells
@@ -321,11 +339,13 @@ class Edge:
             self,
             ld: LeakDetector,
             cell_ids: Tuple[int],
+            flowline_id: int,
             flowline_coords: Tuple[float, float, float, float],
             exchange_level: float = None
     ):
         self.ld = ld
         self.cell_ids = cell_ids
+        self.flowline_id = flowline_id
         x0, y0, x1, y1 = flowline_coords
         self.flowline_geometry = LineString([Point(x0, y0), Point(x1, y1)])
         self.obstacles: List[Obstacle] = list()
@@ -339,6 +359,7 @@ class Edge:
                 intersection_coords = intersection(side_coords1[side_1], side_coords2[side_2])
                 if intersection_coords:
                     self.start_coord, self.end_coord = intersection_coords
+        self.geometry = LineString([Point(*self.start_coord), Point(*self.end_coord)])
 
         # set exchange_level
         if np.isnan(exchange_level):
@@ -348,16 +369,17 @@ class Edge:
         else:
             # calculate exchange level from DEM: 1D array of max of pixel pairs along the edge
             pxsize = self.ld.dem.GetGeoTransform()[1]
-            if self.is_bottom_up():
+            if self.is_bottom_up:
                 bbox = [self.start_coord[0] - pxsize, self.start_coord[1], self.end_coord[0] + pxsize,
                         self.end_coord[1]]
             else:
                 bbox = [self.start_coord[0], self.start_coord[1] - pxsize, self.end_coord[0],
                         self.end_coord[1] + pxsize]
             arr = read_as_array(raster=self.ld.dem, bbox=bbox, pad=True)
-            exchange_levels = np.nanmax(arr, axis=int(self.is_bottom_up()))
+            exchange_levels = np.nanmax(arr, axis=int(self.is_bottom_up))
             self.exchange_level = np.nanmin(exchange_levels)
 
+    @property
     def is_bottom_up(self):
         return self.start_coord[0] == self.end_coord[0]
 
