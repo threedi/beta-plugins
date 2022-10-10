@@ -234,7 +234,7 @@ class LeakDetector:
                 raise e
 
         # find connecting obstacles
-        for cell_pair in self.cell_pairs():
+        for i, cell_pair in enumerate(self.cell_pairs()):
             try:
                 cell_pair.find_connecting_obstacles()
                 feedback.setProgress(50 + 50*((i+1)/len(self.line_nodes)))
@@ -989,10 +989,10 @@ class CellPair:
                     continue  # this can happen e.g. at the model boundary in some cases; there is an obstacle, but it
                     # doesn't intersect any relevant flowlines
                 # assign obstacle to crossing edges (and v.v.) if they are high enough
-                if crest_level > lowest(edges).exchange_level + \
-                        self.ld.min_obstacle_height - \
-                        self.ld.search_precision:
-                    for edge in edges:
+                for edge in edges:
+                    if crest_level > edge.exchange_level + \
+                            self.ld.min_obstacle_height - \
+                            self.ld.search_precision:
                         edge.obstacles.append(obstacle)
                         obstacle.edges.append(edge)
 
