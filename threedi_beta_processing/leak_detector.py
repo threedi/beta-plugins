@@ -1,3 +1,13 @@
+# TODO: als obstacle begint en eindigt in dezelfde cel, moet ie ook wel echt met alleen de pixels van die cel te maken
+#  zijn. misschien kijken of lhs_maximum en rhs_maximum in dezelfde cel liggen, en zo ja, dan de crest level bepalen op
+#  basis van alleen die cel?
+# TODO: deze casus goed afhandelen:
+#  |             |
+#  |-------/\    |
+#  |         \   |
+#  |          \__|______
+#  "obstacle" is wel veel hoger dan de edge waar die bij hoort, maar toch is het niet relevant
+
 from typing import Dict, Union, List, Tuple, Optional
 
 import numpy as np
@@ -255,6 +265,17 @@ class LeakDetector:
                     "geometry": edge.geometry
                 }
 
+    def result_obstacles(self):
+        """Iterator of highest obstacle for each edge"""
+        for edge in self.edges:
+            if edge.obstacles:
+                highest_obstacle = highest(edge.obstacles)
+                yield {
+                    "flowline_id": edge.flowline_id,
+                    "exchange_level": edge.exchange_level,
+                    "crest_level": highest_obstacle.crest_level,
+                    "geometry": highest_obstacle.geometry
+                }
 
 class Obstacle:
     """

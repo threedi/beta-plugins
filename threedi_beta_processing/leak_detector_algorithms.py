@@ -58,6 +58,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
     INPUT_SEARCH_PRECISION = "INPUT_SEARCH_PRECISION"
 
     OUTPUT_EDGES = "OUTPUT_EDGES"
+    OUTPUT_OBSTACLES = "OUTPUT_OBSTACLES"
 
     def initAlgorithm(self, config):
 
@@ -90,11 +91,18 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         search_precision_param.setMetadata({"widget_wrapper": {"decimals": 3}})
         self.addParameter(search_precision_param)
 
-
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_EDGES,
                 self.tr('Output: Cell edges with obstacles'),
+                type=QgsProcessing.TypeVectorLine
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT_OBSTACLES,
+                self.tr('Output: obstacles'),
                 type=QgsProcessing.TypeVectorLine
             )
         )
@@ -108,17 +116,30 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         min_obstacle_height = self.parameterAsDouble(parameters, self.INPUT_MIN_OBSTACLE_HEIGHT, context)
         search_precision = self.parameterAsDouble(parameters, self.INPUT_SEARCH_PRECISION, context)
 
+        crs = QgsCoordinateReferenceSystem(f"EPSG:{gr.epsg_code}")
+
         edges_sink_fields = QgsFields()
         edges_sink_fields.append(QgsField(name="id", type=QVariant.Int))
         edges_sink_fields.append(QgsField(name="exchange_level", type=QVariant.Double))
         edges_sink_fields.append(QgsField(name="crest_level", type=QVariant.Double))
-
-        crs = QgsCoordinateReferenceSystem(f"EPSG:{gr.epsg_code}")
         (edges_sink, self.edges_sink_dest_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_EDGES,
             context,
             fields=edges_sink_fields,
+            geometryType=QgsWkbTypes.LineString,
+            crs=crs
+        )
+
+        obstacles_sink_fields = QgsFields()
+        obstacles_sink_fields.append(QgsField(name="id", type=QVariant.Int))
+        obstacles_sink_fields.append(QgsField(name="exchange_level", type=QVariant.Double))
+        obstacles_sink_fields.append(QgsField(name="crest_level", type=QVariant.Double))
+        (obstacles_sink, self.obstacles_sink_dest_id) = self.parameterAsSink(
+            parameters,
+            self.OUTPUT_OBSTACLES,
+            context,
+            fields=obstacles_sink_fields,
             geometryType=QgsWkbTypes.LineString,
             crs=crs
         )
@@ -150,7 +171,24 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             edges_sink.addFeature(feature, QgsFeatureSink.FastInsert)
             # feedback.setProgress(feedback.progress() + (1 / nr_progress_steps) / len(topo.edges) * max_progress)
 
-        return {self.OUTPUT_EDGES: self.edges_sink_dest_id}
+        for result in leak_detector.result_obstacles():
+            if feedback.isCanceled():
+                return
+            feature = QgsFeature()
+            feature.setFields(obstacles_sink_fields)
+            feature.setAttribute(0, int(result["flowline_id"]))
+            feature.setAttribute(1, float(result["exchange_level"]))
+            feature.setAttribute(2, float(result["crest_level"]))
+            geometry = QgsGeometry()
+            geometry.fromWkb(result["geometry"].wkb)
+            feature.setGeometry(geometry)
+            obstacles_sink.addFeature(feature, QgsFeatureSink.FastInsert)
+            # feedback.setProgress(feedback.progress() + (1 / nr_progress_steps) / len(topo.edges) * max_progress)
+
+        return {
+            self.OUTPUT_EDGES: self.edges_sink_dest_id,
+            self.OUTPUT_OBSTACLES: self.obstacles_sink_dest_id
+        }
 
     def name(self):
         """
