@@ -1,13 +1,3 @@
-# TODO: als obstacle begint en eindigt in dezelfde cel, moet ie ook wel echt met alleen de pixels van die cel te maken
-#  zijn. misschien kijken of lhs_maximum en rhs_maximum in dezelfde cel liggen, en zo ja, dan de crest level bepalen op
-#  basis van alleen die cel?
-# TODO: deze casus goed afhandelen:
-#  |             |
-#  |-------/\    |
-#  |         \   |
-#  |          \__|______
-#  "obstacle" is wel veel hoger dan de edge waar die bij hoort, maar toch is het niet relevant
-
 from typing import Dict, Union, List, Tuple, Optional
 
 import numpy as np
@@ -541,6 +531,13 @@ class Cell:
 
         return result
 
+    def locate_edge(self, edge):
+        for side in [TOP, BOTTOM, LEFT, RIGHT]:
+            for cell_edge in self.edges(side):
+                if edge == cell_edge:
+                    return side
+        return None
+
 
 class CellPair:
     """
@@ -1021,8 +1018,21 @@ class CellPair:
                     if crest_level > edge.exchange_level + \
                             self.ld.min_obstacle_height - \
                             self.ld.search_precision:
-                        edge.obstacles.append(obstacle)
-                        obstacle.edges.append(edge)
+                        valid = True
+                        # extra check for "one cell" obstacles: crest level should also be higher than exchange levels
+                        # of opposite edges
+                        if from_pos_cell == to_pos_cell:
+                            obstacle_cell = self.cells[from_pos_cell]
+                            edge_location = obstacle_cell.locate_edge(edge)
+                            opposite_edges = obstacle_cell.edges(OPPOSITE[edge_location])
+                            if opposite_edges:
+                                if crest_level <= lowest(opposite_edges).exchange_level + \
+                                        self.ld.min_obstacle_height - \
+                                        self.ld.search_precision:
+                                    valid = False
+                        if valid:
+                            edge.obstacles.append(obstacle)
+                            obstacle.edges.append(edge)
 
     def find_connecting_obstacles(self):
         """
