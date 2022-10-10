@@ -227,7 +227,6 @@ class LeakDetector:
         """
         Find all obstacles for given cell_ids
 
-        :param cell_ids:
         :param feedback: Object that has .setProgress() method, like QgsProcessingFeedback
         :return: None
         """
@@ -719,7 +718,6 @@ class CellPair:
         If `which_cell` is the largest of the two or both cells are of the same size, secondary location is NA
 
         :param which_cell: REFERENCE or NEIGH
-        :param decimals: the coordinates of the cell will be rounded to `decimals` when determining their location
         """
         # preparations
         if which_cell == REFERENCE:
@@ -915,27 +913,28 @@ class CellPair:
 
     def crest_level_from_pixels(
             self,
+            pixels: np.ndarray,
             from_pos: Tuple[int, int],
             to_pos: Tuple[int, int]
     ) -> Union[float, None]:
         """
-        Find obstacle in self.pixels and return its crest level
+        Find obstacle in `pixels` and return its crest level
 
         Returns None if no obstacle is found
         """
-        from_val = self.pixels[from_pos]
-        to_val = self.pixels[to_pos]
+        from_val = pixels[from_pos]
+        to_val = pixels[to_pos]
 
         # case: flat(ish) cellpair (from_val or max_to_val is not significantly higher than lowest pixel)
-        if np.nanmin([from_val, to_val]) - np.nanmin(self.pixels) < self.ld.search_precision:
+        if np.nanmin([from_val, to_val]) - np.nanmin(pixels) < self.ld.search_precision:
             return None
 
         # now find the obstacle crest level iteratively
-        hmin = np.nanmin(self.pixels)
+        hmin = np.nanmin(pixels)
         hmax = np.nanmax([from_val, to_val])
 
         # case: from and to positions already connect at hmax
-        labelled_pixels, labelled_pixels_nr_features = label(self.pixels >= hmax, structure=SEARCH_STRUCTURE)
+        labelled_pixels, labelled_pixels_nr_features = label(pixels >= hmax, structure=SEARCH_STRUCTURE)
         from_pixel_label = int(labelled_pixels[from_pos])
         to_pixel_label = labelled_pixels[to_pos]
         if from_pixel_label != 0 and np.any(to_pixel_label == from_pixel_label):
@@ -945,7 +944,7 @@ class CellPair:
         else:
             while (hmax - hmin) > self.ld.search_precision:
                 hcurrent = np.nanmean([hmin, hmax])
-                labelled_pixels, _ = label(self.pixels > hcurrent, structure=SEARCH_STRUCTURE)
+                labelled_pixels, _ = label(pixels > hcurrent, structure=SEARCH_STRUCTURE)
                 from_pixel_label = int(labelled_pixels[from_pos])
                 to_pixel_label = labelled_pixels[to_pos]
                 if from_pixel_label != 0 and np.any(to_pixel_label == from_pixel_label):
@@ -966,16 +965,24 @@ class CellPair:
         maxima = self.maxima()
         for from_pos in maxima[LEFTHANDSIDE]:
             for to_pos in maxima[RIGHTHANDSIDE]:
-                crest_level = self.crest_level_from_pixels(from_pos=from_pos, to_pos=to_pos)
-                if crest_level is None:
-                    break
-
-                # determine other obstacle properties
                 from_pos_cell = self.locate_pos(from_pos)
                 from_pos_transformed = self.transform(pos=from_pos, from_array=MERGED, to_array=from_pos_cell)
                 to_pos_cell = self.locate_pos(to_pos)
                 to_pos_transformed = self.transform(pos=to_pos, from_array=MERGED, to_array=to_pos_cell)
+                if from_pos_cell == to_pos_cell:
+                    # find obstacle in that cell
+                    crest_level = self.crest_level_from_pixels(
+                        pixels=self.cells[from_pos_cell].pixels,
+                        from_pos=from_pos_transformed,
+                        to_pos=to_pos_transformed
+                    )
+                else:
+                    # find obstacle in the cell pair
+                    crest_level = self.crest_level_from_pixels(pixels=self.pixels, from_pos=from_pos, to_pos=to_pos)
+                if crest_level is None:
+                    break
 
+                # determine other obstacle properties
                 # # from_edges, to_edges, from_cell, to_cell, from_pos, to_pos
                 if self.neigh_primary_location == TOP:
                     from_side = LEFT
@@ -1072,8 +1079,9 @@ class CellPair:
                             continue
                         rhs_pos_in_cell_pair = self.transform(pos=rhs_pos, from_array=rhs_cell, to_array=MERGED)
 
-                        # connect lhs_pos and rhs_pos. If possible at sufficient hight, an obstacle is added to middle edge
+                        # connect lhs_pos and rhs_pos. If possible @ sufficient height, obstacle is added to middle edge
                         crest_level = self.crest_level_from_pixels(
+                            pixels=self.pixels,
                             from_pos=lhs_pos_in_cell_pair,
                             to_pos=rhs_pos_in_cell_pair
                         )
