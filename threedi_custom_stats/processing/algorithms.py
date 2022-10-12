@@ -29,24 +29,31 @@ __copyright__ = "(C) 2022 by Nelen en Schuurmans"
 __revision__ = "$Format:%H$"
 import numpy as np
 import os
-from osgeo import ogr
 from pathlib import Path
+from typing import Tuple, Union
+
+from osgeo import ogr
 from qgis.core import QgsCoordinateReferenceSystem
 from qgis.core import QgsFeature
 from qgis.core import QgsFeatureSink
 from qgis.core import QgsField
 from qgis.core import QgsFields
+from qgis.core import QgsMarkerSymbol
 from qgis.core import QgsProcessing
 from qgis.core import QgsProcessingAlgorithm
 from qgis.core import QgsProcessingContext
+from qgis.core import QgsProcessingFeatureSource
 from qgis.core import QgsProcessingParameterNumber
 from qgis.core import QgsProcessingParameterEnum
 from qgis.core import QgsProcessingParameterFeatureSink
-from qgis.core import QgsProcessingParameterFeatureSource
+from qgis.core import QgsProcessingParameterVectorLayer
 from qgis.core import QgsProcessingParameterFile
 from qgis.core import QgsProcessingParameterFileDestination
 from qgis.core import QgsProcessingParameterString
+from qgis.core import QgsProperty
+from qgis.core import QgsSymbolLayer
 from qgis.core import QgsVectorLayer
+from qgis.core import QgsVectorLayerSimpleLabeling
 from qgis.core import QgsWkbTypes
 from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
 from shapely import wkt
@@ -63,6 +70,7 @@ from ..ogr2qgis import ogr_feature_as_qgis_feature
 
 MEMORY_DRIVER = ogr.GetDriverByName("MEMORY")
 STYLE_DIR = Path(__file__).parent.parent / "style"
+
 
 class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
     # Constants used to refer to parameters and outputs. They will be
@@ -106,9 +114,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
+            QgsProcessingParameterVectorLayer(
                 self.CROSS_SECTION_LINES_INPUT,
-                self.tr('Cross-section lines input'),
+                self.tr('Cross-section lines'),
                 [QgsProcessing.TypeVectorLine]
             )
         )
@@ -150,26 +158,18 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
-            QgsProcessingParameterFeatureSink(
-                self.OUTPUT_FLOWLINES,
-                self.tr('Output: Intersected flowlines'),
-                type=QgsProcessing.TypeVectorLine
-            )
-        )
-
-        self.addParameter(
-            QgsProcessingParameterFeatureSink(
-                self.OUTPUT_CROSS_SECTION_LINES,
-                self.tr('Output: Cross-section lines'),
-                type=QgsProcessing.TypeVectorLine
-            )
-        )
-
-        self.addParameter(
             QgsProcessingParameterString(
                 self.FIELD_NAME_INPUT,
                 self.tr('Output field name'),
                 defaultValue="q_net_sum"
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT_FLOWLINES,
+                self.tr('Output: Intersected flowlines'),
+                type=QgsProcessing.TypeVectorLine
             )
         )
 
@@ -186,7 +186,8 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         gridadmin_fn = self.parameterAsFile(parameters, self.GRIDADMIN_INPUT, context)
         results_3di_fn = self.parameterAsFile(parameters, self.RESULTS_3DI_INPUT, context)
         gr = GridH5ResultAdmin(gridadmin_fn, results_3di_fn)
-        cross_section_lines_source = self.parameterAsSource(parameters, self.CROSS_SECTION_LINES_INPUT, context)
+        cross_section_lines = self.parameterAsVectorLayer(parameters, self.CROSS_SECTION_LINES_INPUT, context)
+        self.cross_section_lines_id = cross_section_lines.id()
         start_time = self.parameterAsInt(parameters, self.START_TIME, context) \
             if parameters[self.START_TIME] is not None else None  # use `is not None` to handle `== 0` properly
         end_time = self.parameterAsInt(parameters, self.END_TIME, context) \
@@ -196,7 +197,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo(f"Using subset: {subset}")
         content_types = [self.TYPES_1D[i] for i in parameters[self.INCLUDE_TYPES_1D]]
         feedback.pushInfo(f"Using content_types: {content_types}")
-        field_name = self.parameterAsString(parameters, self.FIELD_NAME_INPUT, context)
+        self.field_name = self.parameterAsString(parameters, self.FIELD_NAME_INPUT, context)
         self.csv_output_file_path = self.parameterAsFileOutput(parameters, self.OUTPUT_TIME_SERIES, context)
         self.csv_output_file_path = f"{os.path.splitext(self.csv_output_file_path)[0]}.csv"
 
@@ -219,20 +220,27 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             crs=crs
         )
 
-        cross_section_lines_sink_fields = QgsFields()
-        cross_section_lines_sink_fields.append(QgsField(name='id', type=QVariant.Int))
-        cross_section_lines_sink_fields.append(QgsField(name=field_name, type=QVariant.Double))
-        (cross_section_lines_sink, self.cross_section_lines_sink_dest_id) = self.parameterAsSink(
-            parameters,
-            self.OUTPUT_CROSS_SECTION_LINES,
-            context,
-            fields=cross_section_lines_sink_fields,
-            geometryType=QgsWkbTypes.LineString,
-            crs=cross_section_lines_source.sourceCrs()
-        )
-        
+        self.target_field_idx = cross_section_lines.dataProvider().fieldNameIndex(self.field_name)
+        if self.target_field_idx == -1:
+            attribute = QgsField(
+                name=self.field_name,
+                type=QVariant.Double,
+                len=16,
+                prec=3
+            )
+            cross_section_lines.dataProvider().addAttributes([attribute])
+            cross_section_lines.updateFields()
+            self.target_field_idx = cross_section_lines.dataProvider().fieldNameIndex(self.field_name)
+
         feedback.setProgress(0)
-        for i, gauge_line in enumerate(cross_section_lines_source.getFeatures()):
+        self.total_discharges = dict()
+        if cross_section_lines.selectedFeatureCount() > 0:
+            iterator = cross_section_lines.getSelectedFeatures()
+            nr_features = cross_section_lines.selectedFeatureCount()
+        else:
+            iterator = cross_section_lines.getFeatures()
+            nr_features = cross_section_lines.featureCount()
+        for i, gauge_line in enumerate(iterator):
             if feedback.isCanceled():
                 return {}
             feedback.setProgressText(f"Processing cross-section line {gauge_line.id()}...")
@@ -257,14 +265,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                 ts_all_cross_section_lines = np.column_stack([ts_all_cross_section_lines, ts_gauge_line[:, 1]])
                 column_names.append(f'"{gauge_line.id()}"')
                 formatting.append("%.6f")
-            gaugeline_feature = QgsFeature(cross_section_lines_sink_fields)
-            gaugeline_feature[0] = gauge_line.id()
-            gaugeline_feature[1] = float(total_discharge)
-            gaugeline_feature.setGeometry(gauge_line.geometry())
-            cross_section_lines_sink.addFeature(
-                gaugeline_feature,
-                QgsFeatureSink.FastInsert
-            )
+            self.total_discharges[gauge_line.id()] = total_discharge  # update attr vals in postprocessing (main thread)
             ogr_layer = tgt_ds.GetLayerByName("flowline")
             for ogr_feature in ogr_layer:
                 qgs_feature = ogr_feature_as_qgis_feature(
@@ -274,8 +275,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                     tgt_fields=flowlines_sink_fields
                 )
                 flowlines_sink.addFeature(qgs_feature, QgsFeatureSink.FastInsert)
-            feedback.setProgress(100 * i / cross_section_lines_source.featureCount())
-
+            feedback.setProgress(100 * i / nr_features)
 
         np.savetxt(
             self.csv_output_file_path,
@@ -294,23 +294,47 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
         return {
             self.OUTPUT_FLOWLINES: self.flowlines_sink_dest_id,
-            self.OUTPUT_CROSS_SECTION_LINES: self.cross_section_lines_sink_dest_id,
             self.OUTPUT_TIME_SERIES: self.csv_output_file_path
         }
 
     def postProcessAlgorithm(self, context, feedback):
         """Set styling of output vector layers"""
-        cross_section_lines_output_layer = context.getMapLayer(self.cross_section_lines_sink_dest_id)
-        cross_section_lines_output_layer.loadNamedStyle(str(STYLE_DIR / "cross_sectional_discharge.qml"))
+        cross_section_lines = context.getMapLayer(self.cross_section_lines_id)
+
+        # update attr vals in postprocessing (main thread)
+        cross_section_lines.startEditing()
+        for fid, total_discharge in self.total_discharges.items():
+            cross_section_lines.changeAttributeValue(fid, self.target_field_idx, float(total_discharge))
+        cross_section_lines.commitChanges()
+
+        cross_section_lines.loadNamedStyle(str(STYLE_DIR / "cross_sectional_discharge.qml"))
+
+        # set label
+        label_settings = cross_section_lines.labeling().settings()
+        label_settings.fieldName = f"round(abs({self.field_name})) || ' m³'"
+        labelling = QgsVectorLayerSimpleLabeling(label_settings)
+        cross_section_lines.setLabeling(labelling)
+
+        # set arrow rotation
+        rotation_expression = f'if( "{self.field_name}" < 0, 0, 180)'
+        data_defined_angle = QgsMarkerSymbol().dataDefinedAngle().fromExpression(rotation_expression)
+        cross_section_lines.renderer().symbol()[0].subSymbol().setDataDefinedAngle(data_defined_angle)
+
+        # make arrow invisible if attribute value for field self.field_name is NULL
+        enable_symbol_layer = QgsProperty.fromExpression(f'"{self.field_name}" is not null')
+        cross_section_lines.renderer().symbol()[0].setDataDefinedProperty(
+            QgsSymbolLayer.PropertyLayerEnabled,
+            enable_symbol_layer
+        )
+        context.project().addMapLayer(cross_section_lines)
+
         flowlines_output_layer = context.getMapLayer(self.flowlines_sink_dest_id)
         flowlines_output_layer.loadNamedStyle(str(STYLE_DIR / "cross_sectional_discharge_flowlines.qml"))
 
         return {
             self.OUTPUT_FLOWLINES: self.flowlines_sink_dest_id,
-            self.OUTPUT_CROSS_SECTION_LINES: self.cross_section_lines_sink_dest_id,
             self.OUTPUT_TIME_SERIES: self.csv_output_file_path
         }
-
 
     def name(self):
         return "crosssectionaldischarge"
@@ -326,18 +350,35 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return self.tr(
-            "Calculate total net discharge over a gauge line. \n\n The sign (positive/negative) of the output "
-            "values depend on the drawing direction of the gauge line. Positive values indicate flow from "
-            "the left-hand side of the gauge line to the right-hand side. Negative values indicate flow from right "
-            "to left.\n\n"
-            "Specify start time (in seconds since start of simulation) to exclude all data before that time.\n\n"
-            "Specify end time (in seconds since start of simulation) to exclude all data after that time.\n\n"
-            "Specify output field name to write the results to a specific field. Useful for combining results of "
-            "multiple simulations in one output layer\n\n"
-            "By choosing a subset, you can tell the algorithm to limit the analysis to flowlines in a specific "
-            "domain.\n\n"
-            "Further filtering of specific 1D flowlines can be achieved by changing '1D Flowline types to include' "
-            "settings. This does not affect 2D or 1D/2D flowlines.\n\n"
+            """
+            <h3>Calculate total net discharge over a cross-section line.</h3> 
+            <p>The result will be written to a field specified by <i>output field name</i>. This field will be created if it does not exist.</p>
+            <p>The sign (positive/negative) of the output values depends on the drawing direction of the cross-section line. Positive values indicate flow from the left-hand side of the cross-section line to the right-hand side. Negative values indicate flow from right to left.</p>
+            <h3>Parameters</h3>
+            <h4>Gridadmin file</h4>
+            <p>HDF5 file (*.h5) containing the computational grid of a 3Di model</p>
+            <h4>Results 3Di file</h4>
+            <p>NetCDF (*.nc) containing the results of a 3Di simulation</p>
+            <h4>Cross-section lines</h4>
+            <p>Lines for which to calculate the total net discharge passing that line</p>
+            <h4>Start time</h4>
+            <p>If specified, all data before <i>start time</i> will be excluded. Units: seconds since start of simulation.</p>
+            <h4>End time</h4>
+            <p>If specified, all data after <i>end time</i> will be excluded. Units: seconds since start of simulation.</p>
+            <h4>Subset</h4>
+            <p>Limit the analysis to flowlines in a specific flow domain.</p>
+            <h4>1D Flowline types to include</h4>
+            <p>Further filtering of specific 1D flowlines. This setting does not affect 2D or 1D/2D flowlines.</p>
+            <h4>Output field name</h4>            
+            <p>Name of the field in the <i>cross-section lines</i> layer to which total net discharge will be written.</p>
+            <h3>Outputs</h3>
+            <h4>Total net discharge per cross-section line</h4>
+            <p>This result will be written to the <i>cross-section lines</i> layer, in a field specified by <i>output field name</i>. This field will be created if it does not exist.</p>
+            <h4>Intersected flowlines</h4>
+            <p>Flowlines that are included in the analysis. The styling will indicate if there is positive (left-hand side to right-hand side of the cross-section line) or negative net flow through each of these flowlines.<p>
+            <h4>Time series</h4>
+            <p>Table (CSV file) with time series of net flow over each cross-section line. Tip: use the DataPlotly QGIS plugin to visualize these time series.</p>
+            """
         )
 
     def tr(self, string):

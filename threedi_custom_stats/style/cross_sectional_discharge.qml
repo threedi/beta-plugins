@@ -187,7 +187,7 @@
   </renderer-v2>
   <labeling type="simple">
     <settings calloutType="simple">
-      <text-style fontLetterSpacing="0" capitalization="0" legendString="Aa" fontUnderline="0" fontFamily="Open Sans" previewBkgrdColor="255,255,255,255" allowHtml="0" textColor="50,50,50,255" multilineHeight="1" fontWeight="50" fontSize="10" fontKerning="1" fontStrikeout="0" fontWordSpacing="0" blendMode="0" useSubstitutions="0" textOpacity="1" fontItalic="0" isExpression="1" textOrientation="horizontal" fontSizeMapUnitScale="3x:0,0,0,0,0,0" fontSizeUnit="Point" namedStyle="Regular" fieldName="round(q_net_sum) || ' m³'">
+      <text-style fontLetterSpacing="0" capitalization="0" legendString="Aa" fontUnderline="0" fontFamily="Open Sans" previewBkgrdColor="255,255,255,255" allowHtml="0" textColor="50,50,50,255" multilineHeight="1" fontWeight="50" fontSize="10" fontKerning="1" fontStrikeout="0" fontWordSpacing="0" blendMode="0" useSubstitutions="0" textOpacity="1" fontItalic="0" isExpression="1" textOrientation="horizontal" fontSizeMapUnitScale="3x:0,0,0,0,0,0" fontSizeUnit="Point" namedStyle="Regular" fieldName="round(abs(q_net_sum)) || ' m³'">
         <families/>
         <text-buffer bufferJoinStyle="128" bufferSizeUnits="MM" bufferNoFill="0" bufferSize="0.75" bufferDraw="1" bufferBlendMode="0" bufferColor="255,255,255,255" bufferSizeMapUnitScale="3x:0,0,0,0,0,0" bufferOpacity="1"/>
         <text-mask maskEnabled="0" maskSizeMapUnitScale="3x:0,0,0,0,0,0" maskOpacity="1" maskedSymbolLayers="" maskType="0" maskSizeUnits="MM" maskJoinStyle="128" maskSize="1"/>
