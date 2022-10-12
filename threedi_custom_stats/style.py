@@ -7,6 +7,7 @@ from qgis import utils
 
 STYLE_DIR = os.path.join(os.path.dirname(__file__), 'style')
 
+
 class Style:
     def __init__(self, name: str, output_type: str, params: dict, qml: str, styling_method):
         self.name = name
