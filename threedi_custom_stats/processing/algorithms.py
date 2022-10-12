@@ -116,7 +116,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterVectorLayer(
                 self.CROSS_SECTION_LINES_INPUT,
-                self.tr('Cross-section lines input'),
+                self.tr('Cross-section lines'),
                 [QgsProcessing.TypeVectorLine]
             )
         )
@@ -350,18 +350,35 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return self.tr(
-            "Calculate total net discharge over a gauge line. \n\n The sign (positive/negative) of the output "
-            "values depend on the drawing direction of the gauge line. Positive values indicate flow from "
-            "the left-hand side of the gauge line to the right-hand side. Negative values indicate flow from right "
-            "to left.\n\n"
-            "Specify start time (in seconds since start of simulation) to exclude all data before that time.\n\n"
-            "Specify end time (in seconds since start of simulation) to exclude all data after that time.\n\n"
-            "Specify output field name to write the results to a specific field. Useful for combining results of "
-            "multiple simulations in one output layer\n\n"
-            "By choosing a subset, you can tell the algorithm to limit the analysis to flowlines in a specific "
-            "domain.\n\n"
-            "Further filtering of specific 1D flowlines can be achieved by changing '1D Flowline types to include' "
-            "settings. This does not affect 2D or 1D/2D flowlines.\n\n"
+            """
+            <h3>Calculate total net discharge over a cross-section line.</h3> 
+            <p>The result will be written to a field specified by <i>output field name</i>. This field will be created if it does not exist.</p>
+            <p>The sign (positive/negative) of the output values depends on the drawing direction of the cross-section line. Positive values indicate flow from the left-hand side of the cross-section line to the right-hand side. Negative values indicate flow from right to left.</p>
+            <h3>Parameters</h3>
+            <h4>Gridadmin file</h4>
+            <p>HDF5 file (*.h5) containing the computational grid of a 3Di model</p>
+            <h4>Results 3Di file</h4>
+            <p>NetCDF (*.nc) containing the results of a 3Di simulation</p>
+            <h4>Cross-section lines</h4>
+            <p>Lines for which to calculate the total net discharge passing that line</p>
+            <h4>Start time</h4>
+            <p>If specified, all data before <i>start time</i> will be excluded. Units: seconds since start of simulation.</p>
+            <h4>End time</h4>
+            <p>If specified, all data after <i>end time</i> will be excluded. Units: seconds since start of simulation.</p>
+            <h4>Subset</h4>
+            <p>Limit the analysis to flowlines in a specific flow domain.</p>
+            <h4>1D Flowline types to include</h4>
+            <p>Further filtering of specific 1D flowlines. This setting does not affect 2D or 1D/2D flowlines.</p>
+            <h4>Output field name</h4>            
+            <p>Name of the field in the <i>cross-section lines</i> layer to which total net discharge will be written.</p>
+            <h3>Outputs</h3>
+            <h4>Total net discharge per cross-section line</h4>
+            <p>This result will be written to the <i>cross-section lines</i> layer, in a field specified by <i>output field name</i>. This field will be created if it does not exist.</p>
+            <h4>Intersected flowlines</h4>
+            <p>Flowlines that are included in the analysis. The styling will indicate if there is positive (left-hand side to right-hand side of the cross-section line) or negative net flow through each of these flowlines.<p>
+            <h4>Time series</h4>
+            <p>Table (CSV file) with time series of net flow over each cross-section line. Tip: use the DataPlotly QGIS plugin to visualize these time series.</p>
+            """
         )
 
     def tr(self, string):
