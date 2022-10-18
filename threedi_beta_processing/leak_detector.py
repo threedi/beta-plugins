@@ -174,7 +174,13 @@ class LeakDetector:
         flowlines_list = flowlines.to_list()
         for flowline in flowlines_list:
             cell_ids: Tuple = flowline["line"]
-            edge = Edge(ld=self, cell_ids=cell_ids, flowline_id=flowline["id"], flowline_coords=flowline["line_coords"], exchange_level=flowline["dpumax"])
+            edge = Edge(
+                ld=self,
+                cell_ids=cell_ids,
+                flowline_id=flowline["id"],
+                flowline_coords=flowline["line_coords"],
+                # exchange_level=flowline["dpumax"]  # Commented out because of a bug in how Tables writes to h5 file
+            )
             self._edge_dict[tuple(cell_ids)] = edge
 
         # Update edge exchange level from obstacles
@@ -397,8 +403,9 @@ class Edge:
         self.geometry = LineString([Point(*self.start_coord), Point(*self.end_coord)])
 
         # set exchange_level
-        if np.isnan(exchange_level):
-            exchange_level = None
+        if exchange_level:
+            if np.isnan(exchange_level):
+                exchange_level = None
         if exchange_level:
             self.exchange_level = exchange_level
         else:
