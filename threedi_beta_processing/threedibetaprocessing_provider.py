@@ -39,7 +39,7 @@ from .dem_sampling_algorithms import (
     SurfaceLevelAlgorithm
 )
 from .rasterize_channel_algorithms import RasterizeChannelsAlgorithm
-
+from .leak_detector_algorithms import DetectLeakingObstaclesAlgorithm
 
 class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
 
@@ -66,6 +66,7 @@ class ThreeDiBetaAlgorithmsProvider(QgsProcessingProvider):
         self.addAlgorithm(BankLevelAlgorithm())
         self.addAlgorithm(SurfaceLevelAlgorithm())
         self.addAlgorithm(RasterizeChannelsAlgorithm())
+        self.addAlgorithm(DetectLeakingObstaclesAlgorithm())
 
     def id(self):
         """
