@@ -7,7 +7,7 @@ from threedigrid.admin.gridadmin import GridH5Admin
 
 from v2_leak_detector import LeakDetector, TOP, BOTTOM, LEFT, RIGHT
 
-DATA_DIR = Path(__file__).parent / 'data' / 'grid_refinement'
+DATA_DIR = Path(__file__).parent / 'data'
 DEM_FILENAME = DATA_DIR / 'dem_0_01.tif'
 DEM_DATASOURCE = gdal.Open(str(DEM_FILENAME), gdal.GA_ReadOnly)
 GRIDADMIN_FILENAME = DATA_DIR / 'gridadmin.h5'
