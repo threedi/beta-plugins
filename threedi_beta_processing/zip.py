@@ -17,6 +17,7 @@ ROOT_DIR_FILES = [
 DIRECTORIES = [
     'linemerge',
     'raster_tools',
+    'style',
 ]
 
 

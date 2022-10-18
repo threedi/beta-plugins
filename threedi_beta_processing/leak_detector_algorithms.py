@@ -13,6 +13,9 @@
 from pathlib import Path
 
 from osgeo import gdal
+from typing import Any, Dict, Tuple
+
+from shapely import wkt
 
 from threedigrid.admin.gridadmin import GridH5Admin
 from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
@@ -31,6 +34,7 @@ from qgis.core import (
     QgsPoint,
     QgsProcessing,
     QgsProcessingAlgorithm,
+    QgsProcessingContext,
     QgsProcessingException,
     QgsProcessingFeedback,
     QgsProcessingParameterFeatureSink,
@@ -59,6 +63,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
 
     INPUT_GRIDADMIN = "INPUT_GRIDADMIN"
     INPUT_DEM = "INPUT_DEM"
+    INPUT_OBSTACLES = "INPUT_OBSTACLES"
     INPUT_MIN_OBSTACLE_HEIGHT = "INPUT_MIN_OBSTACLE_HEIGHT"
     INPUT_SEARCH_PRECISION = "INPUT_SEARCH_PRECISION"
 
@@ -76,6 +81,14 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterRasterLayer(
                 self.INPUT_DEM, self.tr("Digital Elevation Model")
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSource(
+                self.INPUT_OBSTACLES,
+                self.tr('Linear obstacles'),
+                [QgsProcessing.TypeVectorLine]
             )
         )
 
@@ -112,12 +125,24 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+    def checkParameterValues(self, parameters: Dict[str, Any], context: QgsProcessingContext) -> Tuple[bool, str]:
+        success, msg = super().checkParameterValues(parameters, context)
+        if success:
+            msg_list = list()
+            source = self.parameterAsSource(parameters, self.INPUT_OBSTACLES, context)
+            if 'crest_level' not in source.fields().names():
+                msg_list.append('Obstacle lines layer does not contain crest_level field')
+            success = len(msg_list) == 0
+            msg = '; '.join(msg_list)
+        return success, msg
+
     def processAlgorithm(self, parameters, context, feedback):
         gridadmin_fn = self.parameterAsFile(parameters, self.INPUT_GRIDADMIN, context)
         gr = GridH5Admin(gridadmin_fn)
         dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
         dem_fn = dem.dataProvider().dataSourceUri()
         dem_ds = gdal.Open(dem_fn)
+        obstacles_source = self.parameterAsSource(parameters, self.INPUT_OBSTACLES, context)
         min_obstacle_height = self.parameterAsDouble(parameters, self.INPUT_MIN_OBSTACLE_HEIGHT, context)
         search_precision = self.parameterAsDouble(parameters, self.INPUT_SEARCH_PRECISION, context)
 
@@ -149,6 +174,15 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             crs=crs
         )
 
+        feedback.setProgressText("Read linear obstacles input...")
+        crest_level_field_idx = obstacles_source.fields().indexFromName("crest_level")
+
+        input_obstacles = list()
+        for input_obstacle in obstacles_source.getFeatures():
+            geom = wkt.loads(input_obstacle.geometry().asWkt())
+            crest_level = float(input_obstacle[crest_level_field_idx])
+            input_obstacles.append((geom, crest_level))
+
         feedback.setProgressText("Read computational grid...")
         leak_detector = LeakDetector(
             gridadmin=gr,
@@ -157,6 +191,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             min_obstacle_height=min_obstacle_height,
             search_precision=search_precision,
             min_peak_prominence=min_obstacle_height,
+            obstacles=input_obstacles,
             feedback=feedback
         )
         feedback.setProgressText("Find obstacles...")
@@ -246,6 +281,17 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
                 <h3>Introduction</h3>
                 <p>The elevation at which flow between 2D cells is possible (the 'exchange level'), depends on the elevation of the pixels directly adjacent to the cell edge. Obstacles in the DEM that do not cover the entire edge will therefore not stop the flow, i.e. water 'leaks' through the obstacle. This is more likely to occur if obstacles are diagonal and/or narrow compared to the computational grid size.</p>
                 <p>This processing algorithm detects such cases. Please inspect the locations where the algorithm identifies leaking obstacles and add grid refinement and/or obstacles to the schematisation to solve the issue if needed.</p>
+                <h3>Parameters</h3>
+                <h4>Gridadmin file</h4>
+                <p>HDF-file (*.h5) containing a 3Di computational grid. Note that gridadmin files generated on the server contain exchange levels for 2D flowlines, whereas locally generated gridadmin files do not. In the latter case, the processing algorithm will analyse the DEM to obtain these values.</p>
+                <h4>Digital elevation model</h4>
+                <p>Raster of the schematisation's digital elevation model (DEM).</p>
+                <h4>Linear obstacles</h4>
+                <p>Obstacles in this layer will be used to update cell edge exchange levels, <i>in addition to</i> any obstacles already present in the gridadmin file (i.e. in files that were downloaded from the server). This input must be a vector layer with line geometry and a <i>crest_level</i> field</p>
+                <h4>Minimum obstacle height (m)</h4>
+                <p>Only obstacles with a crest level that is significantly higher than the exchange level will be identified. 'Significantly higher' is defined as <em>crest level &gt; exchange level + minimum obstacle height</em>.</p>
+                <h4>Vertical search precision (m)</h4>
+                <p>The crest level found by the obstacle will always be within <em>vertical search precision</em> of the actual crest level. A smaller value will yield more precise results; a higher value will make the algorithm faster to execute.</p>
                 <h3>Outputs</h3>
                 <h4>Obstacle in DEM&nbsp;</h4>
                 <p>Approximate location of the obstacle in the DEM. Its geometry is a straight line between the highest pixels of the obstacle on the cell edges. Attributes:</p>
@@ -258,15 +304,6 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
                 <h4>Obstacle on cell edge</h4>
                 <p>Suggested obstacle to add to the schematisation. In most cases, it is recommended solve any leaking obstacle issues with grid refinement, and only add obstacles if this does not solve the issue.</p>
                 <p>The styling is shows the difference between the crest level and the exchange level</p>
-                <h3>Parameters</h3>
-                <h4>Gridadmin file</h4>
-                <p>HDF-file (*.h5) containing a 3Di computational grid. Note that gridadmin files generated on the server contain exchange levels for 2D flowlines, whereas locally generated gridadmin files do not. In the latter case, the processing algorithm will analyse the DEM to obtain these values.</p>
-                <h4>Digital elevation model</h4>
-                <p>Raster of the schematisation's digital elevation model (DEM).</p>
-                <h4>Minimum obstacle height (m)</h4>
-                <p>Only obstacles with a crest level that is significantly higher than the exchange level will be identified. 'Significantly higher' is defined as <em>crest level &gt; exchange level + minimum obstacle height</em>.</p>
-                <h4>Vertical search precision (m)</h4>
-                <p>The crest level found by the obstacle will always be within <em>vertical search precision</em> of the actual crest level. A smaller value will yield more precise results; a higher value will make the algorithm faster to execute.</p>
             """
         )
 

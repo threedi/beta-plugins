@@ -127,6 +127,7 @@ class LeakDetector:
             min_obstacle_height: float,
             search_precision: float,
             min_peak_prominence: float,
+            obstacles: List[Tuple[LineString, float]] = None,
             feedback=None
     ):
         """
@@ -147,11 +148,12 @@ class LeakDetector:
         # Get all flowlines that are connected to any of the cell_ids
         flowlines = filter_lines_by_node_ids(gridadmin.lines.subset('2D_OPEN_WATER'), node_ids=cell_ids)
         if np.all(np.isnan(flowlines.dpumax)):
-            if feedback:
-                feedback.pushWarning(
-                    "Gridadmin file does not contain elevation data. Exchange levels will be derived from the DEM. "
-                    "Obstacles will be ignored. Please use a gridadmin file that was generated on the server instead."
-                )
+            if not obstacles:
+                if feedback:
+                    feedback.pushWarning(
+                        "Gridadmin file does not contain elevation data. Exchange levels will be derived from the DEM. "
+                        "Obstacles were not supplied and will be ignored."
+                    )
         self.line_nodes = flowlines.line_nodes
 
         # Create cells
@@ -174,6 +176,18 @@ class LeakDetector:
             cell_ids: Tuple = flowline["line"]
             edge = Edge(ld=self, cell_ids=cell_ids, flowline_id=flowline["id"], flowline_coords=flowline["line_coords"], exchange_level=flowline["dpumax"])
             self._edge_dict[tuple(cell_ids)] = edge
+
+        # Update edge exchange level from obstacles
+        for geom, crest_level in obstacles or []:
+            intersected_lines = gridadmin.lines \
+                .filter(line_coords__intersects_bbox=geom.bounds) \
+                .filter(line_coords__intersects_geometry=geom) \
+                .to_list()
+            for line in intersected_lines:
+                edge = self.edge(*line["line"])
+                if edge.exchange_level < crest_level:
+                    edge.exchange_level = crest_level
+
 
     @property
     def cells(self) -> List:
