@@ -88,7 +88,8 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_OBSTACLES,
                 self.tr('Linear obstacles'),
-                [QgsProcessing.TypeVectorLine]
+                [QgsProcessing.TypeVectorLine],
+                optional=True
             )
         )
 
@@ -130,10 +131,13 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         if success:
             msg_list = list()
             source = self.parameterAsSource(parameters, self.INPUT_OBSTACLES, context)
-            if 'crest_level' not in source.fields().names():
-                msg_list.append('Obstacle lines layer does not contain crest_level field')
-            success = len(msg_list) == 0
-            msg = '; '.join(msg_list)
+            if source:
+                if 'crest_level' not in source.fields().names():
+                    msg_list.append('Obstacle lines layer does not contain crest_level field')
+                success = len(msg_list) == 0
+                msg = '; '.join(msg_list)
+            else:
+                success = True
         return success, msg
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -174,14 +178,21 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             crs=crs
         )
 
-        feedback.setProgressText("Read linear obstacles input...")
-        crest_level_field_idx = obstacles_source.fields().indexFromName("crest_level")
+        if obstacles_source:
+            feedback.setProgressText("Read linear obstacles input...")
+            if obstacles_source.sourceCrs() != crs:
+                raise QgsProcessingException(
+                    "Obstacles input has different Coordinate Reference System than the gridadmin file"
+                )
+            crest_level_field_idx = obstacles_source.fields().indexFromName("crest_level")
 
-        input_obstacles = list()
-        for input_obstacle in obstacles_source.getFeatures():
-            geom = wkt.loads(input_obstacle.geometry().asWkt())
-            crest_level = float(input_obstacle[crest_level_field_idx])
-            input_obstacles.append((geom, crest_level))
+            input_obstacles = list()
+            for input_obstacle in obstacles_source.getFeatures():
+                geom = wkt.loads(input_obstacle.geometry().asWkt())
+                crest_level = float(input_obstacle[crest_level_field_idx])
+                input_obstacles.append((geom, crest_level))
+        else:
+            input_obstacles = None
 
         feedback.setProgressText("Read computational grid...")
         leak_detector = LeakDetector(
