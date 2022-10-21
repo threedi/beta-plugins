@@ -210,7 +210,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText("Create cell edge features...")
         for result in leak_detector.result_edges():
             if feedback.isCanceled():
-                return
+                return {}
             feature = QgsFeature()
             feature.setFields(edges_sink_fields)
             feature.setAttribute(0, int(result["flowline_id"]))
@@ -223,7 +223,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
 
         for result in leak_detector.result_obstacles():
             if feedback.isCanceled():
-                return
+                return {}
             feature = QgsFeature()
             feature.setFields(obstacles_sink_fields)
             feature.setAttribute(0, int(result["flowline_id"]))
@@ -267,7 +267,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr("Detect leaking obstacles")
+        return self.tr("Detect leaking obstacles in DEM")
 
     def group(self):
         """

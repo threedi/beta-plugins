@@ -159,7 +159,7 @@ class LeakDetector:
         flowlines_list = flowlines.to_list()
 
         # Create cells
-        feedback.pushInfo("Read cells...")
+        feedback.setProgressText("Read cells...")
         threedigrid_cells = gridadmin.cells.filter(id__in=self.line_nodes.flatten())
         cell_properties = threedigrid_cells.only('id', 'cell_coords').data
         cell_properties_dict = dict(
@@ -171,7 +171,7 @@ class LeakDetector:
             feedback.setProgress(100*i/len(cell_properties_dict))
 
         # Find cell neighbours
-        feedback.pushInfo("Find cell neighbours...")
+        feedback.setProgressText("Find cell neighbours...")
         for i, flowline in enumerate(flowlines_list):
             cell_ids: Tuple = flowline["line"]
             reference_cell = self.cell(cell_ids[0])
@@ -181,7 +181,7 @@ class LeakDetector:
             feedback.setProgress(100*i/len(self.cells))
 
         # Create edges
-        feedback.pushInfo("Create edges...")
+        feedback.setProgressText("Create edges...")
         self._edge_dict = dict()  # {line_nodes: Edge}
 
         for i, flowline in enumerate(flowlines_list):
@@ -197,16 +197,15 @@ class LeakDetector:
             feedback.setProgress(100*i/len(flowlines_list))
 
         # Update edge exchange level from obstacles
-        feedback.pushInfo("Update edge exchange level from obstacles...")
-        for i, (geom, crest_level) in enumerate(obstacles or []):
-            intersected_lines = gridadmin \
-                .lines \
-                .subset("2D_OPEN_WATER") \
-                .filter(line_coords__intersects_bbox=geom.bounds) \
-                .filter(line_coords__intersects_geometry=geom) \
-                .to_list()
-            for line in intersected_lines:
-                edge = self.edge(*line["line"])
+        feedback.setProgressText("Update edge exchange level from obstacles...")
+        feedback.setProgress(0)
+        flowline_geometries = [edge.flowline_geometry for edge in self.edges]
+        flowline_geometry_idx = STRtree(flowline_geometries)
+        edge_finder = dict((id(edge.flowline_geometry), edge) for edge in self.edges)
+        for i, (obstacle_geom, crest_level) in enumerate(obstacles or []):
+            intersected_flowline_geometries = flowline_geometry_idx.query(obstacle_geom)
+            for flowline_geometry in intersected_flowline_geometries:
+                edge = edge_finder[id(flowline_geometry)]
                 if edge.exchange_level < crest_level:
                     edge.exchange_level = crest_level
             feedback.setProgress(100*i/len(obstacles))
