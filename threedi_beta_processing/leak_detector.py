@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, Union, List, Tuple, Optional
 
 import numpy as np
@@ -159,6 +160,7 @@ class LeakDetector:
         flowlines_list = flowlines.to_list()
 
         # Create cells
+        feedback.pushInfo(f"{datetime.now()}")
         feedback.setProgressText("Read cells...")
         threedigrid_cells = gridadmin.cells.filter(id__in=self.line_nodes.flatten())
         cell_properties = threedigrid_cells.only('id', 'cell_coords').data
@@ -171,16 +173,19 @@ class LeakDetector:
             feedback.setProgress(100*i/len(cell_properties_dict))
 
         # Find cell neighbours
+        feedback.pushInfo(f"{datetime.now()}")
         feedback.setProgressText("Find cell neighbours...")
         for i, flowline in enumerate(flowlines_list):
             cell_ids: Tuple = flowline["line"]
             reference_cell = self.cell(cell_ids[0])
             neigh_cell = self.cell(cell_ids[1])
-            reference_cell.add_neigh(neigh_cell=neigh_cell, neigh_is_next=True)
-            neigh_cell.add_neigh(neigh_cell=reference_cell, neigh_is_next=False)
+            location = reference_cell.locate_cell(neigh_cell, neigh_is_next=True)
+            reference_cell.add_neigh(neigh_cell=neigh_cell, location=location)
+            neigh_cell.add_neigh(neigh_cell=reference_cell, location=OPPOSITE[location])
             feedback.setProgress(100*i/len(self.cells))
 
         # Create edges
+        feedback.pushInfo(f"{datetime.now()}")
         feedback.setProgressText("Create edges...")
         self._edge_dict = dict()  # {line_nodes: Edge}
 
@@ -197,6 +202,7 @@ class LeakDetector:
             feedback.setProgress(100*i/len(flowlines_list))
 
         # Update edge exchange level from obstacles
+        feedback.pushInfo(f"{datetime.now()}")
         feedback.setProgressText("Update edge exchange level from obstacles...")
         feedback.setProgress(0)
         flowline_geometries = [edge.flowline_geometry for edge in self.edges]
@@ -461,6 +467,8 @@ class Cell:
         self.ld = ld
         self.id = id
         self.coords = coords
+        self.xmax = np.max(coords[[0, 2]])
+        self.xmin = np.min(coords[[0, 2]])
         self.pixels = read_as_array(raster=ld.dem, bbox=coords, pad=True)
         band = ld.dem.GetRasterBand(1)
         ndv = band.GetNoDataValue()
@@ -472,22 +480,20 @@ class Cell:
         self.height = self.pixels.shape[0]
         self.neigh_cells = {TOP: [], RIGHT: [], BOTTOM: [], LEFT: []}
 
-    def add_neigh(self, neigh_cell, neigh_is_next: bool):
-        cell_x_coords = self.coords[[0, 2]]
-        self_xmax = np.max(cell_x_coords)
-        self_xmin = np.min(cell_x_coords)
+    def locate_cell(self, neigh_cell, neigh_is_next: bool) -> str:
         if neigh_is_next:
-            neigh_xmin = np.min(neigh_cell.coords[[0, 2]])
-            if self_xmax == neigh_xmin:  # aligned horizontally if True
-                self.neigh_cells[RIGHT].append(neigh_cell)
+            if self.xmax == neigh_cell.xmin:  # aligned horizontally if True
+                return RIGHT
             else:
-                self.neigh_cells[TOP].append(neigh_cell)
+                return TOP
         else:
-            neigh_xmax = np.max(neigh_cell.coords[[0, 2]])
-            if self_xmin == neigh_xmax:  # aligned horizontally if True
-                self.neigh_cells[LEFT].append(neigh_cell)
+            if self.xmin == neigh_cell.xmax:  # aligned horizontally if True
+                return LEFT
             else:
-                self.neigh_cells[BOTTOM].append(neigh_cell)
+                return BOTTOM
+
+    def add_neigh(self, neigh_cell, location: str):
+        self.neigh_cells[location].append(neigh_cell)
 
     def edges(self, primary_location: str, secondary_location: Union[str, int] = None) -> Union[Edge, List[Edge]]:
         """Returns list of Edges, or, if secondary location is specified, a single Edge"""
