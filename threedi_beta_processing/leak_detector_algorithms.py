@@ -294,7 +294,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
                 <p>This processing algorithm detects such cases. Please inspect the locations where the algorithm identifies leaking obstacles and add grid refinement and/or obstacles to the schematisation to solve the issue if needed.</p>
                 <h3>Parameters</h3>
                 <h4>Gridadmin file</h4>
-                <p>HDF-file (*.h5) containing a 3Di computational grid. Note that gridadmin files generated on the server contain exchange levels for 2D flowlines, whereas locally generated gridadmin files do not. In the latter case, the processing algorithm will analyse the DEM to obtain these values.</p>
+                <p>HDF5-file (*.h5) containing a 3Di computational grid. Note that gridadmin files generated on the server contain exchange levels for 2D flowlines, whereas locally generated gridadmin files do not. In the latter case, the processing algorithm will analyse the DEM to obtain these values.</p>
                 <h4>Digital elevation model</h4>
                 <p>Raster of the schematisation's digital elevation model (DEM).</p>
                 <h4>Linear obstacles</h4>
@@ -302,7 +302,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
                 <h4>Minimum obstacle height (m)</h4>
                 <p>Only obstacles with a crest level that is significantly higher than the exchange level will be identified. 'Significantly higher' is defined as <em>crest level &gt; exchange level + minimum obstacle height</em>.</p>
                 <h4>Vertical search precision (m)</h4>
-                <p>The crest level found by the obstacle will always be within <em>vertical search precision</em> of the actual crest level. A smaller value will yield more precise results; a higher value will make the algorithm faster to execute.</p>
+                <p>The crest level of the identified obstacle will always be within <em>vertical search precision</em> of the actual crest level. A smaller value will yield more precise results; a higher value will make the algorithm faster to execute.</p>
                 <h3>Outputs</h3>
                 <h4>Obstacle in DEM&nbsp;</h4>
                 <p>Approximate location of the obstacle in the DEM. Its geometry is a straight line between the highest pixels of the obstacle on the cell edges. Attributes:</p>

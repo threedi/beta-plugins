@@ -3,6 +3,7 @@ from typing import Dict, Union, List, Tuple, Optional
 import numpy as np
 from osgeo import gdal
 from shapely.geometry import LineString, Point
+from shapely.strtree import STRtree
 from scipy.ndimage import label, generate_binary_structure, maximum_position
 from scipy.signal import find_peaks
 from threedigrid.admin.gridadmin import GridH5Admin
@@ -155,24 +156,35 @@ class LeakDetector:
                         "Obstacles were not supplied and will be ignored."
                     )
         self.line_nodes = flowlines.line_nodes
+        flowlines_list = flowlines.to_list()
 
         # Create cells
+        feedback.pushInfo("Read cells...")
         threedigrid_cells = gridadmin.cells.filter(id__in=self.line_nodes.flatten())
         cell_properties = threedigrid_cells.only('id', 'cell_coords').data
         cell_properties_dict = dict(
             zip(cell_properties['id'], np.round(cell_properties['cell_coords'].T, COORD_DECIMALS)))
 
         self._cell_dict = dict()
-        for cell_id, cell_coords in cell_properties_dict.items():
+        for i, (cell_id, cell_coords) in enumerate(cell_properties_dict.items()):
             self._cell_dict[cell_id] = Cell(ld=self, id=cell_id, coords=cell_coords)
+            feedback.setProgress(100*i/len(cell_properties_dict))
 
-        for cell in self.cells:
-            cell.set_neighbours()
+        # Find cell neighbours
+        feedback.pushInfo("Find cell neighbours...")
+        for i, flowline in enumerate(flowlines_list):
+            cell_ids: Tuple = flowline["line"]
+            reference_cell = self.cell(cell_ids[0])
+            neigh_cell = self.cell(cell_ids[1])
+            reference_cell.add_neigh(neigh_cell=neigh_cell, neigh_is_next=True)
+            neigh_cell.add_neigh(neigh_cell=reference_cell, neigh_is_next=False)
+            feedback.setProgress(100*i/len(self.cells))
 
         # Create edges
+        feedback.pushInfo("Create edges...")
         self._edge_dict = dict()  # {line_nodes: Edge}
-        flowlines_list = flowlines.to_list()
-        for flowline in flowlines_list:
+
+        for i, flowline in enumerate(flowlines_list):
             cell_ids: Tuple = flowline["line"]
             edge = Edge(
                 ld=self,
@@ -182,10 +194,14 @@ class LeakDetector:
                 # exchange_level=flowline["dpumax"]  # Commented out because of a bug in how Tables writes to h5 file
             )
             self._edge_dict[tuple(cell_ids)] = edge
+            feedback.setProgress(100*i/len(flowlines_list))
 
         # Update edge exchange level from obstacles
-        for geom, crest_level in obstacles or []:
-            intersected_lines = gridadmin.lines \
+        feedback.pushInfo("Update edge exchange level from obstacles...")
+        for i, (geom, crest_level) in enumerate(obstacles or []):
+            intersected_lines = gridadmin \
+                .lines \
+                .subset("2D_OPEN_WATER") \
                 .filter(line_coords__intersects_bbox=geom.bounds) \
                 .filter(line_coords__intersects_geometry=geom) \
                 .to_list()
@@ -193,7 +209,7 @@ class LeakDetector:
                 edge = self.edge(*line["line"])
                 if edge.exchange_level < crest_level:
                     edge.exchange_level = crest_level
-
+            feedback.setProgress(100*i/len(obstacles))
 
     @property
     def cells(self) -> List:
@@ -285,6 +301,7 @@ class LeakDetector:
                     "crest_level": highest_obstacle.crest_level,
                     "geometry": highest_obstacle.geometry
                 }
+
 
 class Obstacle:
     """
@@ -454,38 +471,24 @@ class Cell:
                                           ld.search_precision
         self.width = self.pixels.shape[1]
         self.height = self.pixels.shape[0]
-        self.neigh_cells = None
-
-    def set_neighbours(self):
-        """Identify cells to the top and right of this cell"""
         self.neigh_cells = {TOP: [], RIGHT: [], BOTTOM: [], LEFT: []}
+
+    def add_neigh(self, neigh_cell, neigh_is_next: bool):
         cell_x_coords = self.coords[[0, 2]]
         self_xmax = np.max(cell_x_coords)
         self_xmin = np.min(cell_x_coords)
-
-        # next_cells: cells up / to the right
-        next_cell_ids = self. \
-            ld. \
-            line_nodes[np.where(self.ld.line_nodes[:, 0] == self.id), 1]. \
-            flatten()
-        for next_cell_id in next_cell_ids:
-            neigh_xmin = np.min(self.ld.cell(next_cell_id).coords[[0, 2]])
+        if neigh_is_next:
+            neigh_xmin = np.min(neigh_cell.coords[[0, 2]])
             if self_xmax == neigh_xmin:  # aligned horizontally if True
-                self.neigh_cells[RIGHT].append(self.ld.cell(next_cell_id))
+                self.neigh_cells[RIGHT].append(neigh_cell)
             else:
-                self.neigh_cells[TOP].append(self.ld.cell(next_cell_id))
-
-        # previous_cells: cells down / to the left
-        previous_cell_ids = self. \
-            ld. \
-            line_nodes[np.where(self.ld.line_nodes[:, 1] == self.id), 0]. \
-            flatten()
-        for previous_cell_id in previous_cell_ids:
-            neigh_xmax = np.max(self.ld.cell(previous_cell_id).coords[[0, 2]])
+                self.neigh_cells[TOP].append(neigh_cell)
+        else:
+            neigh_xmax = np.max(neigh_cell.coords[[0, 2]])
             if self_xmin == neigh_xmax:  # aligned horizontally if True
-                self.neigh_cells[LEFT].append(self.ld.cell(previous_cell_id))
+                self.neigh_cells[LEFT].append(neigh_cell)
             else:
-                self.neigh_cells[BOTTOM].append(self.ld.cell(previous_cell_id))
+                self.neigh_cells[BOTTOM].append(neigh_cell)
 
     def edges(self, primary_location: str, secondary_location: Union[str, int] = None) -> Union[Edge, List[Edge]]:
         """Returns list of Edges, or, if secondary location is specified, a single Edge"""
