@@ -2,39 +2,26 @@
 """
 Created on Fri Apr  8 12:01:52 2022
 
-Tooltje Ivar: https://github.com/threedi/beta-plugins/tree/master/build2dmodel (World DEM ipv AHN, nieuwste spatialite)
-Citybuilder (downloaden uitsnede raster obv polygoon): https://github.com/nens/citybuilder_plugin
-Aanmaken schematisation & revision & threedimodel: G:\Projecten W (2021)\W0273 - Klimaatstresstesten en kansen Provinciale infrastructuur Utrecht\Gegevens\Bewerking\Scripts\01. 3Di\05. Simulatie
+@author: Kizje.marif; Leendert van Wolfswinkel
 
-@author: Kizje.marif
-
-This script creates a 3Di model for an area defined by a polygon.
-
-
-Step 1: Define area by polygon
-Step 2: Download required data
-Step 3: Make tables
-Step 4: Create and upload sqlite
-    
+Creates a 3Di model for an area defined by a polygon.
 """
 from math import sqrt
+import requests
+import shutil
 from typing import Union, Tuple
 import time
 from pathlib import Path
 
 import sqlite3
-import requests
 from osgeo import ogr
-import shutil
+from threedi_api_client.api import ThreediApi
+
+from threedi_api.constants import THREEDI_API_HOST
 from threedi_api.upload import upload_and_process
-from login import get_login_details
+
 from epsg import utm_zone_epsg_for_polygon
 
-HEADERS = {
-    "username": "__key__",
-    "password": get_login_details(section="lizard", option="api_key"),
-    "Content-Type": "application/json",
-}
 SQL_DIR = Path(__file__).parent / "sql"
 DATA_DIR = Path(__file__).parent / "data"
 SPATIALITE_TEMPLATE_PATH = DATA_DIR / "template.sqlite"
@@ -55,12 +42,21 @@ def read_geom(filename: Union[Path, str]) -> Tuple[str, int, int, float]:
     if not srs.IsProjected():
         raise ValueError("Input polygon does not have a Projected CRS. Cannot calculate its area in meters.")
     epsg_code = srs.GetAuthorityCode(None)
-    feature = layer.GetFeature(0)
+    layer.ResetReading()
+    feature = layer.GetNextFeature()
     geom = feature.GetGeometryRef()
     utm_zone_epsg = utm_zone_epsg_for_polygon(geom=geom, srs=srs)
     geom_wkt = geom.ExportToWkt()
     geom_area = geom.GetArea()
     return geom_wkt, epsg_code, utm_zone_epsg, geom_area
+
+
+def get_headers(api_key: str):
+    return {
+        "username": "__key__",
+        "password": api_key,
+        "Content-Type": "application/json",
+    }
 
 
 def download_rasters(
@@ -69,7 +65,7 @@ def download_rasters(
         extent_wkt: str,
         extent_srs,
         target_srs,
-        headers,
+        api_key: str,
         max_attempts=100,
         wait_time=5
 ):
@@ -85,6 +81,7 @@ def download_rasters(
                            f"srs={extent_srs}&" \
                            f"target_srs={target_srs}"
     print(create_tiff_task_url)
+    headers = get_headers(api_key)
     r = requests.get(create_tiff_task_url, headers=headers).json()
     progress_url = r["url"]
     task_status = ""
@@ -118,7 +115,6 @@ def download_file(url, output_path: Union[Path, str], headers):
             f.write(response.content)
         else:
             dl = 0
-            total_length = int(total_length)
             for data in response.iter_content(chunk_size=4096):
                 dl += len(data)
                 f.write(data)
@@ -143,7 +139,7 @@ def fill_settings(sqlite_filename, epsg_code, grid_space):
     # Path to spatialite
     conn = sqlite3.connect(sqlite_filename)
     c = conn.cursor()
-    sql = """UPDATE v2_global_settings SET epsg_code = {epsg_code}, grid_space = {grid_space};"""
+    sql = f"""UPDATE v2_global_settings SET epsg_code = {epsg_code}, grid_space = {grid_space};"""
     c.execute(sql)
     return
 
@@ -155,7 +151,14 @@ def create_temp_dir(local_dir: [Path, str], schematisation_name: str):
     rasters_dir.mkdir(parents=True, exist_ok=True)
 
 
-def download_dem(local_dir: [Path, str], schematisation_name: str, uuid, extent_filename: [Path, str], pixel_size):
+def download_dem(
+        local_dir: [Path, str],
+        schematisation_name: str,
+        uuid,
+        extent_filename: [Path, str],
+        pixel_size: float,
+        api_key: str
+):
     extent_filename = Path(extent_filename)
     geom_extent, extent_epsg_code, utm_zone_epsg, area = read_geom(extent_filename)
     dem_download_url = download_rasters(
@@ -164,11 +167,11 @@ def download_dem(local_dir: [Path, str], schematisation_name: str, uuid, extent_
         extent_wkt=geom_extent,
         extent_srs=f"EPSG:{extent_epsg_code}",
         target_srs=f"EPSG:{utm_zone_epsg}",
-        headers=HEADERS
+        api_key=api_key
     )
     print("Downloading DEM...")
     dem_path = Path(local_dir) / schematisation_name / "rasters" / "dem.tif"
-    download_file(url=dem_download_url, output_path=dem_path, headers=HEADERS)
+    download_file(url=dem_download_url, output_path=dem_path, headers=get_headers(api_key))
 
 
 def prepare_spatialite(
@@ -191,8 +194,16 @@ def create_threedimodel(
         extent_filename: Union[Path, str],
         pixel_size,
         nr_cells,
+        lizard_api_key: str,
+        threedi_api_key: str,
         dem_raster_uuid: str = "eae92c48-cd68-4820-9d82-f86f763b4186"
 ):
+    config = {
+        "THREEDI_API_HOST": THREEDI_API_HOST,
+        "THREEDI_API_PERSONAL_API_TOKEN": threedi_api_key
+    }
+    threedi_api = ThreediApi(config=config, version='v3-beta')
+
     print("Creating local (temp) folder structure...")
     create_temp_dir(local_dir=local_dir, schematisation_name=schematisation_name)
     print("Requesting DEM download link from Lizard...")
@@ -201,7 +212,8 @@ def create_threedimodel(
         schematisation_name=schematisation_name,
         extent_filename=extent_filename,
         pixel_size=pixel_size,
-        uuid=dem_raster_uuid
+        uuid=dem_raster_uuid,
+        api_key=lizard_api_key
     )
     print("Preparing sqlite...")
     prepare_spatialite(
@@ -213,9 +225,11 @@ def create_threedimodel(
     )
     print("Uploading...")
     threedimodel_id, schematisation_id = upload_and_process(
+        threedi_api=threedi_api,
         schematisation_name=schematisation_name,
         sqlite_path=Path(local_dir) / schematisation_name / f"{schematisation_name}.sqlite",
         raster_names={"dem_file": "dem"}
     )
-    print(f"Created 3Di Model with ID {threedimodel_id}: https://management.3di.live/schematisations/{schematisation_id}")
-
+    print(
+        f"Created 3Di Model with ID {threedimodel_id}: https://management.3di.live/schematisations/{schematisation_id}"
+    )
