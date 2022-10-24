@@ -4,7 +4,8 @@ from typing import Dict, Union, List, Tuple, Optional
 import numpy as np
 from osgeo import gdal
 from shapely.geometry import LineString, Point
-from shapely.strtree import STRtree
+from pygeos import STRtree
+from pygeos.io import from_shapely
 from scipy.ndimage import label, generate_binary_structure, maximum_position
 from scipy.signal import find_peaks
 from threedigrid.admin.gridadmin import GridH5Admin
@@ -187,6 +188,7 @@ class LeakDetector:
         # Create edges
         feedback.pushInfo(f"{datetime.now()}")
         feedback.setProgressText("Create edges...")
+        self.edges = list()
         self._edge_dict = dict()  # {line_nodes: Edge}
 
         for i, flowline in enumerate(flowlines_list):
@@ -198,6 +200,7 @@ class LeakDetector:
                 flowline_coords=flowline["line_coords"],
                 # exchange_level=flowline["dpumax"]  # Commented out because of a bug in how Tables writes to h5 file
             )
+            self.edges.append(edge)
             self._edge_dict[tuple(cell_ids)] = edge
             feedback.setProgress(100*i/len(flowlines_list))
 
@@ -205,16 +208,26 @@ class LeakDetector:
         feedback.pushInfo(f"{datetime.now()}")
         feedback.setProgressText("Update edge exchange level from obstacles...")
         feedback.setProgress(0)
-        flowline_geometries = [edge.flowline_geometry for edge in self.edges]
-        flowline_geometry_idx = STRtree(flowline_geometries)
-        edge_finder = dict((id(edge.flowline_geometry), edge) for edge in self.edges)
-        for i, (obstacle_geom, crest_level) in enumerate(obstacles or []):
-            intersected_flowline_geometries = flowline_geometry_idx.query(obstacle_geom)
-            for flowline_geometry in intersected_flowline_geometries:
-                edge = edge_finder[id(flowline_geometry)]
+        flowline_geometries_pygeos = [edge.flowline_geometry_pygeos for edge in self.edges]
+        flowline_geometry_tree = STRtree(flowline_geometries_pygeos)
+        obstacle_flowline_intersection = flowline_geometry_tree.query_bulk(
+            [from_shapely(obstacle[0]) for obstacle in obstacles],
+            predicate='intersects'
+        )
+        obstacle_indices = np.unique(obstacle_flowline_intersection[0, :])
+        edge_indices = np.split(
+            obstacle_flowline_intersection[1, :],
+            np.unique(obstacle_flowline_intersection[0, :], return_index=True)[1][1:]
+        )  # "group by", see https://stackoverflow.com/a/43094244/5780984
+        edge_finder = dict(zip(obstacle_indices, edge_indices))
+        for obstacle_index in obstacle_indices:
+            crest_level = obstacles[obstacle_index][1]
+            intersected_edge_indices = edge_finder[obstacle_index]
+            for i in intersected_edge_indices:
+                edge = self.edges[i]
                 if edge.exchange_level < crest_level:
                     edge.exchange_level = crest_level
-            feedback.setProgress(100*i/len(obstacles))
+            feedback.setProgress(100*i/len(obstacle_indices))
 
     @property
     def cells(self) -> List:
@@ -225,13 +238,6 @@ class LeakDetector:
         Return the cell indicated by `cell_id`
         """
         return self._cell_dict[cell_id]
-
-    @property
-    def edges(self):
-        """
-        Find the edge between reference_cell (left/bottom) and neigh_cell (top/right)
-        """
-        return list(self._edge_dict.values())
 
     def edge(self, reference_cell, neigh_cell):
         """
@@ -423,6 +429,7 @@ class Edge:
                 if intersection_coords:
                     self.start_coord, self.end_coord = intersection_coords
         self.geometry = LineString([Point(*self.start_coord), Point(*self.end_coord)])
+        self.flowline_geometry_pygeos = from_shapely(self.flowline_geometry)
 
         # set exchange_level
         if exchange_level:
