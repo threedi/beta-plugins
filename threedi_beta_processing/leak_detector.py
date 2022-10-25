@@ -170,6 +170,9 @@ class LeakDetector:
 
         self._cell_dict = dict()
         for i, (cell_id, cell_coords) in enumerate(cell_properties_dict.items()):
+            if feedback:
+                if feedback.isCanceled():
+                    return
             self._cell_dict[cell_id] = Cell(ld=self, id=cell_id, coords=cell_coords)
             feedback.setProgress(100*i/len(cell_properties_dict))
 
@@ -177,13 +180,16 @@ class LeakDetector:
         feedback.pushInfo(f"{datetime.now()}")
         feedback.setProgressText("Find cell neighbours...")
         for i, flowline in enumerate(flowlines_list):
+            if feedback:
+                if feedback.isCanceled():
+                    return
             cell_ids: Tuple = flowline["line"]
             reference_cell = self.cell(cell_ids[0])
             neigh_cell = self.cell(cell_ids[1])
             location = reference_cell.locate_cell(neigh_cell, neigh_is_next=True)
             reference_cell.add_neigh(neigh_cell=neigh_cell, location=location)
             neigh_cell.add_neigh(neigh_cell=reference_cell, location=OPPOSITE[location])
-            feedback.setProgress(100*i/len(self.cells))
+            feedback.setProgress(100*i/len(flowlines_list))
 
         # Create edges
         feedback.pushInfo(f"{datetime.now()}")
@@ -192,6 +198,9 @@ class LeakDetector:
         self._edge_dict = dict()  # {line_nodes: Edge}
 
         for i, flowline in enumerate(flowlines_list):
+            if feedback:
+                if feedback.isCanceled():
+                    return
             cell_ids: Tuple = flowline["line"]
             edge = Edge(
                 ld=self,
@@ -210,10 +219,16 @@ class LeakDetector:
         feedback.setProgress(0)
         flowline_geometries_pygeos = [edge.flowline_geometry_pygeos for edge in self.edges]
         flowline_geometry_tree = STRtree(flowline_geometries_pygeos)
+        if feedback:
+            if feedback.isCanceled():
+                return
         obstacle_flowline_intersection = flowline_geometry_tree.query_bulk(
             [from_shapely(obstacle[0]) for obstacle in obstacles],
             predicate='intersects'
         )
+        if feedback:
+            if feedback.isCanceled():
+                return
         obstacle_indices = np.unique(obstacle_flowline_intersection[0, :])
         edge_indices = np.split(
             obstacle_flowline_intersection[1, :],
@@ -221,6 +236,9 @@ class LeakDetector:
         )  # "group by", see https://stackoverflow.com/a/43094244/5780984
         edge_finder = dict(zip(obstacle_indices, edge_indices))
         for obstacle_index in obstacle_indices:
+            if feedback:
+                if feedback.isCanceled():
+                    return
             crest_level = obstacles[obstacle_index][1]
             intersected_edge_indices = edge_finder[obstacle_index]
             for i in intersected_edge_indices:

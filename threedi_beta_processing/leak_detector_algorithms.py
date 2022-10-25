@@ -205,9 +205,11 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             obstacles=input_obstacles,
             feedback=feedback
         )
+        if feedback.isCanceled():
+            return {}
         feedback.setProgressText("Find obstacles...")
         leak_detector.run(feedback=feedback)
-        feedback.setProgressText("Create cell edge features...")
+        feedback.setProgressText("Create 'Obstacle on cell edge' features...")
         for result in leak_detector.result_edges():
             if feedback.isCanceled():
                 return {}
@@ -221,6 +223,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             feature.setGeometry(geometry)
             edges_sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
+        feedback.setProgressText("Create 'Obstacle in DEM' features...")
         for result in leak_detector.result_obstacles():
             if feedback.isCanceled():
                 return {}
