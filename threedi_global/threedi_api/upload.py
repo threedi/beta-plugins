@@ -31,11 +31,10 @@ def md5(fname):
 def get_or_create_schematisation(
         threedi_api,
         schematisation_name: str,
-        organisation_uuid=ORGANISATION_UUID,
+        organisation_uuid: str,
         tags: List = None
 ) -> Schematisation:
-    print(ORGANISATION_UUID)
-    tags = [] if not tags else tags
+    tags = tags or []
     resp = threedi_api.schematisations_list(
         name=schematisation_name, owner__unique_id=organisation_uuid
     )
@@ -58,7 +57,6 @@ def get_or_create_schematisation(
 def upload_sqlite(threedi_api, schematisation, revision, sqlite_path: Union[str, Path]):
     sqlite_path = Path(sqlite_path)
     sqlite_zip_path = sqlite_path.with_suffix('.zip')
-    print(f'sqlite_zip_path = {sqlite_zip_path}')
     ZipFile(sqlite_zip_path, mode='w').write(str(sqlite_path), arcname=str(sqlite_path.name))
     upload = threedi_api.schematisations_revisions_sqlite_upload(
         id=revision.id,
@@ -144,7 +142,7 @@ def create_threedimodel(
             threedimodel = threedi_api.schematisations_revisions_create_threedimodel(revision.id, schematisation.id)
             print(f"Creating threedimodel with id {threedimodel.id}...")
             break
-        except ApiException:
+        except:
             time.sleep(wait_time_creation)
             continue
     if threedimodel:
@@ -164,6 +162,7 @@ def create_threedimodel(
 
 def upload_and_process(
         threedi_api,
+        organisation_uuid: str,
         schematisation_name: str,
         sqlite_path: Union[str, Path],
         raster_names: Dict[str, str],
@@ -175,10 +174,10 @@ def upload_and_process(
     # Schematisatie maken als die nog niet bestaat
     schematisation = get_or_create_schematisation(
         threedi_api=threedi_api,
+        organisation_uuid=organisation_uuid,
         schematisation_name=schematisation_name,
         tags=schematisation_create_tags
     )
-    print(schematisation)
     # Nieuwe (lege) revisie aanmaken
     revision = threedi_api.schematisations_revisions_create(schematisation.id, data={"empty": True})
 
@@ -213,6 +212,7 @@ def upload_and_process(
     )
 
     # 3Di model en simulation template genereren
+    print("Waiting for the revision to be ready...")
     threedimodel = create_threedimodel(threedi_api=threedi_api, schematisation=schematisation, revision=revision)
     return threedimodel, schematisation.id
 

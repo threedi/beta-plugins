@@ -17,10 +17,12 @@ import sqlite3
 from osgeo import ogr
 from threedi_api_client.api import ThreediApi
 
-from threedi_api.constants import THREEDI_API_HOST
+from threedi_api.constants import THREEDI_API_HOST, ORGANISATION_UUID
 from threedi_api.upload import upload_and_process
 
 from epsg import utm_zone_epsg_for_polygon
+
+VERSION = "0.1"
 
 SQL_DIR = Path(__file__).parent / "sql"
 DATA_DIR = Path(__file__).parent / "data"
@@ -80,7 +82,6 @@ def download_rasters(
                            f"geom={extent_wkt}&" \
                            f"srs={extent_srs}&" \
                            f"target_srs={target_srs}"
-    print(create_tiff_task_url)
     headers = get_headers(api_key)
     r = requests.get(create_tiff_task_url, headers=headers).json()
     progress_url = r["url"]
@@ -137,6 +138,8 @@ def fill_settings(sqlite_filename, epsg_code, grid_space):
     This functions takes an empty 3Di spatialite and updates the numerical and global settings
     """
     # Path to spatialite
+    print(f"grid_space: {grid_space}")
+    print(f"epsg_code: {epsg_code}")
     conn = sqlite3.connect(sqlite_filename)
     c = conn.cursor()
     sql = f"""UPDATE v2_global_settings SET epsg_code = {epsg_code}, grid_space = {grid_space};"""
@@ -199,6 +202,7 @@ def create_threedimodel(
         threedi_api_key: str,
         dem_raster_uuid: str = "eae92c48-cd68-4820-9d82-f86f763b4186"
 ):
+    print(f"Version: {VERSION}")
     config = {
         "THREEDI_API_HOST": THREEDI_API_HOST,
         "THREEDI_API_PERSONAL_API_TOKEN": threedi_api_key
@@ -227,6 +231,7 @@ def create_threedimodel(
     print("Uploading...")
     threedimodel_id, schematisation_id = upload_and_process(
         threedi_api=threedi_api,
+        organisation_uuid=ORGANISATION_UUID,
         schematisation_name=schematisation_name,
         sqlite_path=Path(local_dir) / schematisation_name / f"{schematisation_name}.sqlite",
         raster_names={"dem_file": "dem"}
