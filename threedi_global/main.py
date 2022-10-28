@@ -141,6 +141,7 @@ def fill_settings(sqlite_filename, epsg_code, grid_space):
     c = conn.cursor()
     sql = f"""UPDATE v2_global_settings SET epsg_code = {epsg_code}, grid_space = {grid_space};"""
     c.execute(sql)
+    conn.commit()
     return
 
 
