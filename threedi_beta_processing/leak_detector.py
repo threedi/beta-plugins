@@ -554,6 +554,17 @@ class Cell:
             RIGHT: ((xmax, ymin), (xmax, ymax)),
         }
 
+    def side_indices(self, side: str) -> np.array:
+        """
+        Return an array of two rows
+         - row 0: row indices
+         - row 1: col indices
+        """
+        indices = np.indices(self.pixels.shape)
+        x = indices[0][SIDE_INDEX[side]]
+        y = indices[1][SIDE_INDEX[side]]
+        return np.vstack([x, y])
+
     def edge_pixels(self, side: str) -> np.array:
         """
         Return the pixels on the inside of given `edge`
@@ -825,33 +836,32 @@ class CellPair:
         else:
             return None
 
-    def transform(self, pos: Tuple[int, int], from_array, to_array) -> Tuple[int, int]:
+    def transform(
+            self,
+            pos: Union[Tuple[int, int], np.ndarray],
+            from_array,
+            to_array
+    ) -> Union[Tuple[int, int], np.ndarray]:
         """
         Transforms pixel position from one array to another
 
+        :param pos: pixel position (numpy array index) that should be transformed. must be a tuple of 2 ints or a numpy array with row 0 = row index and row 1 = col index
         :param from_array: 'reference', 'neigh', or 'merged'
         :param to_array: 'reference', 'neigh' or 'merged'
         """
         if from_array == REFERENCE and to_array == MERGED:
-            return (
-                pos[0] + self.reference_cell_shift[0],
-                pos[1] + self.reference_cell_shift[1]
-            )
+            shift = [self.reference_cell_shift[0], self.reference_cell_shift[1]]
         if from_array == MERGED and to_array == REFERENCE:
-            return (
-                pos[0] - self.reference_cell_shift[0],
-                pos[1] - self.reference_cell_shift[1]
-            )
+            shift = [self.reference_cell_shift[0], self.reference_cell_shift[1]]
         if from_array == NEIGH and to_array == MERGED:
-            return (
-                pos[0] + self.neigh_cell_shift[0],
-                pos[1] + self.neigh_cell_shift[1]
-            )
+            shift = [self.neigh_cell_shift[0], self.neigh_cell_shift[1]]
         if from_array == MERGED and to_array == NEIGH:
-            return (
-                pos[0] - self.neigh_cell_shift[0],
-                pos[1] - self.neigh_cell_shift[1]
-            )
+            shift = [self.neigh_cell_shift[0], self.neigh_cell_shift[1]]
+        if isinstance(pos, tuple):
+            pos = np.array(pos)
+            return tuple(pos + shift)
+        elif isinstance(pos, np.ndarray):
+            return (pos.T + shift).T
 
     def maxima(self) -> Dict[str, List[Tuple[int, int]]]:
         """
@@ -1009,6 +1019,59 @@ class CellPair:
 
         return obstacle_crest_level
 
+    @staticmethod
+    def squash_indices(array_a: np.ndarray, array_b: np.ndarray, side: str, secondary_location: Union[str, None]):
+        """
+        Return the indices of the active pixels at `side` in a CellPair
+        If side is TOP or BOTTOM, secondary location must be LEFT or RIGHT
+        If side is LEFT or RIGHT, secondary location must be TOP or BOTTOM
+        """
+        if secondary_location:
+            if array_a.shape[1] > array_b.shape[1]:
+                smallest = array_b.astype(float)
+                largest = array_a.astype(float)
+            elif array_a.shape[1] < array_b.shape[1]:
+                smallest = array_a.astype(float)
+                largest = array_b.astype(float)
+            else:
+                raise ValueError("secondary_location is not None, but arrays have different shapes")
+            if secondary_location in (LEFT, TOP):
+                pad_width = ((0, 0), (0, smallest.shape[1]))  # (rows before, rows after), (cols before, cols after)
+            elif secondary_location in (RIGHT, BOTTOM):
+                pad_width = ((0, 0), (smallest.shape[1], 0))  # (rows before, rows after), (cols before, cols after)
+            smallest_padded = np.pad(smallest, pad_width=pad_width, mode='constant', constant_values=np.nan)
+            arrays_to_aggregate = [smallest_padded, largest]
+        else:
+            arrays_to_aggregate = [array_a.astype(float), array_b.astype(float)]
+
+        if side in [RIGHT, BOTTOM]:
+            aggregate = np.nanmax
+        elif side in [LEFT, TOP]:
+            aggregate = np.nanmin
+
+        return aggregate(arrays_to_aggregate, axis=0).astype(int)
+
+    def side_indices(self, side):
+        """
+        Return numpy array of indices for pixels at `side`
+        """
+        reference_indices = self.transform(
+            self.reference_cell.side_indices(side),
+            from_array=REFERENCE,
+            to_array=MERGED
+        )
+
+        neigh_indices = self.transform(
+            self.neigh_cell.side_indices(side),
+            from_array=NEIGH,
+            to_array=MERGED
+        )
+        if self.reference_secondary_location:
+            secondary_location = self.reference_secondary_location
+        else:
+            secondary_location = self.neigh_secondary_location
+        return self.squash_indices(reference_indices, neigh_indices, side=side, secondary_location=secondary_location)
+
     def find_obstacles(self):
         """
         Obstacles are identified and assigned to the appropriate Edge
@@ -1022,17 +1085,32 @@ class CellPair:
                 to_pos_transformed = self.transform(pos=to_pos, from_array=MERGED, to_array=to_pos_cell)
                 if from_pos_cell == to_pos_cell:
                     # find obstacle in that cell
-                    crest_level = self.crest_level_from_pixels(
-                        pixels=self.cells[from_pos_cell].pixels,
-                        from_pos=from_pos_transformed,
-                        to_pos=to_pos_transformed
-                    )
+                    cell_or_cell_pair = self.cells[from_pos_cell]
+                    from_pos_arg = from_pos_transformed
+                    to_pos_arg = to_pos_transformed
                 else:
                     # find obstacle in the cell pair
-                    crest_level = self.crest_level_from_pixels(pixels=self.pixels, from_pos=from_pos, to_pos=to_pos)
+                    cell_or_cell_pair = self
+                    from_pos_arg = from_pos
+                    to_pos_arg = to_pos
+                pixels = cell_or_cell_pair.pixels
+                crest_level = self.crest_level_from_pixels(
+                    pixels=pixels,
+                    from_pos=from_pos_arg,
+                    to_pos=to_pos_arg
+                )
                 if crest_level is None:
-                    break
-
+                    continue
+                # check if obstacle is relevant
+                # for "one cell" obstacles, base this check on the pixels in that cell only
+                if not is_obstacle_relevant(
+                        cell_or_cellpair=cell_or_cell_pair,
+                        pixels=pixels,
+                        crest_level=crest_level,
+                        from_pos=from_pos_arg,
+                        compare_to_sides=[self.reference_primary_location, self.neigh_primary_location]
+                ):
+                    continue
                 # determine other obstacle properties
                 # # from_edges, to_edges, from_cell, to_cell, from_pos, to_pos
                 if self.neigh_primary_location == TOP:
@@ -1072,21 +1150,8 @@ class CellPair:
                     if crest_level > edge.exchange_level + \
                             self.ld.min_obstacle_height - \
                             self.ld.search_precision:
-                        valid = True
-                        # extra check for "one cell" obstacles: crest level should also be higher than exchange levels
-                        # of opposite edges
-                        if from_pos_cell == to_pos_cell:
-                            obstacle_cell = self.cells[from_pos_cell]
-                            edge_location = obstacle_cell.locate_edge(edge)
-                            opposite_edges = obstacle_cell.edges(OPPOSITE[edge_location])
-                            if opposite_edges:
-                                if crest_level <= lowest(opposite_edges).exchange_level + \
-                                        self.ld.min_obstacle_height - \
-                                        self.ld.search_precision:
-                                    valid = False
-                        if valid:
-                            edge.obstacles.append(obstacle)
-                            obstacle.edges.append(edge)
+                        edge.obstacles.append(obstacle)
+                        obstacle.edges.append(edge)
 
     def find_connecting_obstacles(self):
         """
@@ -1165,6 +1230,72 @@ class CellPair:
                                 obstacle.from_edge = middle_edge
                                 obstacle.to_edge = middle_edge
                                 middle_edge.obstacles.append(obstacle)
+
+
+def is_obstacle_relevant(
+        cell_or_cellpair: Union[Cell, CellPair],
+        pixels: np.ndarray,
+        crest_level: float,
+        from_pos: Tuple[int, int],
+        compare_to_sides: List
+):
+    """
+    Example:
+        - obstacle runs from left to right
+        - crest level = 10
+        - all pixels at bottom edge of bottom cell >= 10
+        - case A: the obstacle pixels ARE connected to the bottom edge pixels at (10 - min_obstacle_height)
+        - outcome: obstacle IS NOT relevant
+        - case B: the obstacle pixels ARE NOT connected to the bottom edge pixels at (10 - min_obstacle_height)
+        - outcome: obstacle IS relevant
+
+    >>>
+    case_a = np.array(
+        [
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 10, 10, 10, 10, 10],
+            [0, 0, 0, 0, 0, 10, 10, 0, 0, 0, 0],
+            [0, 0, 0, 0, 10, 0, 10, 0, 0, 0, 0],
+            [0, 0, 0, 10, 10, 10, 0, 0, 0, 0, 0],
+            [0, 10, 10, 0, 0, 0, 0, 0, 0, 0, 0],
+            [10, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+        ]
+    )
+
+    >>>
+    case_b = np.array(
+        [
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 10, 10, 10, 10, 10],
+            [0, 0, 0, 0, 0, 10, 10, 0, 0, 0, 0],
+            [0, 10, 10, 10, 10, 0, 10, 0, 0, 0, 0],
+            [10, 10, 10, 10, 10, 10, 0, 0, 0, 0, 0],
+            [0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+        ]
+    )
+
+    """
+    labelled_pixels = label(
+        pixels >= crest_level - cell_or_cellpair.ld.min_obstacle_height,
+        search_structure=SEARCH_STRUCTURE
+    )[0]
+    from_pos_label = labelled_pixels(from_pos)
+    relevant = True
+    for side in compare_to_sides:
+        side_labels = labelled_pixels(cell_or_cellpair.side_indices(side))
+        if np.all(side_labels == from_pos_label):
+            relevant = False
+            break
+    return relevant
 
 
 def highest(elements: List[Union[Obstacle, Edge]]):
