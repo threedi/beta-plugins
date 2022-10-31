@@ -1025,7 +1025,9 @@ class CellPair:
         Return the indices of the active pixels at `side` in a CellPair
         If side is TOP or BOTTOM, secondary location must be LEFT or RIGHT
         If side is LEFT or RIGHT, secondary location must be TOP or BOTTOM
+        Value 'N/A' for secondary_location will be treated as None
         """
+        secondary_location = None if secondary_location == NA else secondary_location
         if secondary_location:
             if array_a.shape[1] > array_b.shape[1]:
                 smallest = array_b.astype(float)
@@ -1034,7 +1036,9 @@ class CellPair:
                 smallest = array_a.astype(float)
                 largest = array_b.astype(float)
             else:
-                raise ValueError("secondary_location is not None, but arrays have different shapes")
+                raise ValueError(
+                    f"secondary_location is not None but {secondary_location}, but arrays have different shapes"
+                )
             if secondary_location in (LEFT, TOP):
                 pad_width = ((0, 0), (0, smallest.shape[1]))  # (rows before, rows after), (cols before, cols after)
             elif secondary_location in (RIGHT, BOTTOM):
@@ -1286,12 +1290,12 @@ def is_obstacle_relevant(
     """
     labelled_pixels = label(
         pixels >= crest_level - cell_or_cellpair.ld.min_obstacle_height,
-        search_structure=SEARCH_STRUCTURE
+        structure=SEARCH_STRUCTURE
     )[0]
-    from_pos_label = labelled_pixels(from_pos)
+    from_pos_label = labelled_pixels[from_pos]
     relevant = True
     for side in compare_to_sides:
-        side_labels = labelled_pixels(cell_or_cellpair.side_indices(side))
+        side_labels = labelled_pixels[cell_or_cellpair.side_indices(side)]
         if np.all(side_labels == from_pos_label):
             relevant = False
             break
