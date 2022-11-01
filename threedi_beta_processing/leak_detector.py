@@ -1083,7 +1083,7 @@ class CellPair:
             from_array=NEIGH,
             to_array=MERGED
         )
-        if self.reference_secondary_location:
+        if self.reference_secondary_location != NA:
             secondary_location = self.reference_secondary_location
         else:
             secondary_location = self.neigh_secondary_location
