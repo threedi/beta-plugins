@@ -217,41 +217,44 @@ class LeakDetector:
             )
             self.edges.append(edge)
             self._edge_dict[tuple(cell_ids)] = edge
-            feedback.setProgress(100*i/len(flowlines_list))
+            if feedback:
+                feedback.setProgress(100*i/len(flowlines_list))
 
         # Update edge exchange level from obstacles
-        feedback.pushInfo(f"{datetime.now()}")
-        feedback.setProgressText("Update edge exchange level from obstacles...")
-        feedback.setProgress(0)
-        flowline_geometries_pygeos = [edge.flowline_geometry_pygeos for edge in self.edges]
-        flowline_geometry_tree = STRtree(flowline_geometries_pygeos)
-        if feedback:
-            if feedback.isCanceled():
-                return
-        obstacle_flowline_intersection = flowline_geometry_tree.query_bulk(
-            [from_shapely(obstacle[0]) for obstacle in obstacles],
-            predicate='intersects'
-        )
-        if feedback:
-            if feedback.isCanceled():
-                return
-        obstacle_indices = np.unique(obstacle_flowline_intersection[0, :])
-        edge_indices = np.split(
-            obstacle_flowline_intersection[1, :],
-            np.unique(obstacle_flowline_intersection[0, :], return_index=True)[1][1:]
-        )  # "group by", see https://stackoverflow.com/a/43094244/5780984
-        edge_finder = dict(zip(obstacle_indices, edge_indices))
-        for obstacle_index in obstacle_indices:
+        if obstacles:
+            if feedback:
+                feedback.pushInfo(f"{datetime.now()}")
+                feedback.setProgressText("Update edge exchange level from obstacles...")
+                feedback.setProgress(0)
+            flowline_geometries_pygeos = [edge.flowline_geometry_pygeos for edge in self.edges]
+            flowline_geometry_tree = STRtree(flowline_geometries_pygeos)
             if feedback:
                 if feedback.isCanceled():
                     return
-            crest_level = obstacles[obstacle_index][1]
-            intersected_edge_indices = edge_finder[obstacle_index]
-            for i in intersected_edge_indices:
-                edge = self.edges[i]
-                if edge.exchange_level < crest_level:
-                    edge.exchange_level = crest_level
-            feedback.setProgress(100*i/len(obstacle_indices))
+            obstacle_flowline_intersection = flowline_geometry_tree.query_bulk(
+                [from_shapely(obstacle[0]) for obstacle in obstacles],
+                predicate='intersects'
+            )
+            if feedback:
+                if feedback.isCanceled():
+                    return
+            obstacle_indices = np.unique(obstacle_flowline_intersection[0, :])
+            edge_indices = np.split(
+                obstacle_flowline_intersection[1, :],
+                np.unique(obstacle_flowline_intersection[0, :], return_index=True)[1][1:]
+            )  # "group by", see https://stackoverflow.com/a/43094244/5780984
+            edge_finder = dict(zip(obstacle_indices, edge_indices))
+            for obstacle_index in obstacle_indices:
+                if feedback:
+                    if feedback.isCanceled():
+                        return
+                crest_level = obstacles[obstacle_index][1]
+                intersected_edge_indices = edge_finder[obstacle_index]
+                for i in intersected_edge_indices:
+                    edge = self.edges[i]
+                    if edge.exchange_level < crest_level:
+                        edge.exchange_level = crest_level
+                feedback.setProgress(100*i/len(obstacle_indices))
 
     @property
     def cells(self) -> List:
@@ -858,11 +861,11 @@ class CellPair:
         if from_array == REFERENCE and to_array == MERGED:
             shift = [self.reference_cell_shift[0], self.reference_cell_shift[1]]
         if from_array == MERGED and to_array == REFERENCE:
-            shift = [self.reference_cell_shift[0], self.reference_cell_shift[1]]
+            shift = np.array([self.reference_cell_shift[0], self.reference_cell_shift[1]]) * -1
         if from_array == NEIGH and to_array == MERGED:
             shift = [self.neigh_cell_shift[0], self.neigh_cell_shift[1]]
         if from_array == MERGED and to_array == NEIGH:
-            shift = [self.neigh_cell_shift[0], self.neigh_cell_shift[1]]
+            shift = np.array([self.neigh_cell_shift[0], self.neigh_cell_shift[1]]) * -1
         if isinstance(pos, tuple):
             pos = np.array(pos)
             return tuple(pos + shift)
@@ -1043,7 +1046,7 @@ class CellPair:
                 largest = array_b.astype(float)
             else:
                 raise ValueError(
-                    f"secondary_location is not None but {secondary_location}, but arrays have different shapes"
+                    f"secondary_location is '{secondary_location}' (i.e., not None), but arrays have the same shape"
                 )
             if secondary_location in (LEFT, TOP):
                 pad_width = ((0, 0), (0, smallest.shape[1]))  # (rows before, rows after), (cols before, cols after)
@@ -1052,6 +1055,10 @@ class CellPair:
             smallest_padded = np.pad(smallest, pad_width=pad_width, mode='constant', constant_values=np.nan)
             arrays_to_aggregate = [smallest_padded, largest]
         else:
+            if array_a.shape != array_b.shape:
+                raise ValueError(
+                    f"secondary_location is 'NA' or None, but arrays do not have the same shape"
+                )
             arrays_to_aggregate = [array_a.astype(float), array_b.astype(float)]
 
         if side in [RIGHT, BOTTOM]:

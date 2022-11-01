@@ -1,11 +1,25 @@
 from typing import List, Tuple
 from pathlib import Path
+from time import sleep
 
 import numpy as np
 from osgeo import gdal
 from threedigrid.admin.gridadmin import GridH5Admin
 
-from leak_detector import CellPair, LeakDetector, REFERENCE, NEIGH, MERGED, RIGHT, TOP, LEFTHANDSIDE, RIGHTHANDSIDE
+from leak_detector import (
+    CellPair,
+    LeakDetector,
+    REFERENCE,
+    NEIGH,
+    MERGED,
+    LEFT,
+    RIGHT,
+    TOP,
+    BOTTOM,
+    NA,
+    LEFTHANDSIDE,
+    RIGHTHANDSIDE
+)
 
 DATA_DIR = Path(__file__).parent / 'data'
 DEM_FILENAME = DATA_DIR / 'dem_0_01.tif'
@@ -287,18 +301,115 @@ def transform():
     # shape of cell 158: 40 x 40
     # shape of cell 204: 20 x 20
     # location of cell 204 is (RIGHT, TOP)
-    pos = (13, 17)
-    transformed = cell_pair.transform(
-            pos=pos,
-            from_array=REFERENCE,
-            to_array=MERGED
-    )
-    assert transformed == (13, 17)
+    in_list = [
+        {"pos": (13, 17), "from_array": REFERENCE, "to_array": MERGED},
+        {"pos": (13, 17), "from_array": MERGED, "to_array": REFERENCE},
+        {"pos": (13, 17), "from_array": NEIGH, "to_array": MERGED},
+        {"pos": (13, 57), "from_array": MERGED, "to_array": NEIGH},
+        {"pos": np.array([[13, 13], [17, 18]]), "from_array": REFERENCE, "to_array": MERGED},
+        {"pos": np.array([[13, 13], [17, 18]]), "from_array": NEIGH, "to_array": MERGED},
+    ]
+    out_list = [
+        (13, 17),
+        (13, 17),
+        (13, 57),
+        (13, 17),
+        np.array([[13, 13], [17, 18]]),
+        np.array([[13, 13], [57, 58]]),
+    ]
+    for i, in_args in enumerate(in_list):
+        transformed = cell_pair.transform(**in_args)
+        try:
+            assert np.all(np.array(transformed) == np.array(out_list[i]))
+        except AssertionError as e:
+            print(f"In: {in_list[i]}\nOut: {transformed}\nExpected: {out_list[i]}")
+            sleep(0.3)
+            raise e
 
 
 def squash_indices():
-    # TODO: add tests here
-    pass
+    cell_ids = [158, 204, 171, 172, 193]
+    leak_detector = LeakDetector(
+        gridadmin=GR,
+        dem=DEM_DATASOURCE,
+        cell_ids=cell_ids,
+        min_obstacle_height=MIN_OBSTACLE_HEIGHT,
+        search_precision=SEARCH_PRECISION,
+        min_peak_prominence=MIN_PEAK_PROMINENCE
+    )
+
+    # shape of cell 158: 40 x 40
+    # shape of cell 204: 20 x 20
+    # location of cell 204 is (RIGHT, TOP)
+    ref = leak_detector.cell(158)
+    neigh = leak_detector.cell(204)
+    cell_pair = CellPair(leak_detector, ref, neigh)
+    expected_results = [
+        np.array([np.arange(40), np.zeros(40)]),
+        np.array([np.arange(40), np.hstack([np.ones(20) * 59, np.ones(20) * 39])]),
+    ]
+    for i, side in enumerate([LEFT, RIGHT]):
+        result = CellPair.squash_indices(
+            array_a=cell_pair.transform(pos=ref.side_indices(side), from_array=REFERENCE, to_array=MERGED),
+            array_b=cell_pair.transform(pos=neigh.side_indices(side), from_array=NEIGH, to_array=MERGED),
+            side=side,
+            secondary_location=TOP
+        )
+        expected = expected_results[i]
+        try:
+            assert np.all(result == expected)
+        except AssertionError as e:
+            print(f"In: side: {side}\nOut: {result}\n Expected: {expected}")
+            sleep(0.3)
+            raise e
+
+    # Same size cells, BOTTOM -> TOP
+    ref = leak_detector.cell(171)
+    neigh = leak_detector.cell(172)
+    cell_pair = CellPair(leak_detector, ref, neigh)
+    expected_results = [
+        np.array([np.zeros(40), np.arange(40)]),
+        np.array([np.ones(40)*79, np.arange(40)]),
+    ]
+    for i, side in enumerate([TOP, BOTTOM]):
+        result = CellPair.squash_indices(
+            array_a=cell_pair.transform(pos=ref.side_indices(side), from_array=REFERENCE, to_array=MERGED),
+            array_b=cell_pair.transform(pos=neigh.side_indices(side), from_array=NEIGH, to_array=MERGED),
+            side=side,
+            secondary_location=NA
+        )
+        expected = expected_results[i]
+        try:
+            assert np.all(result == expected)
+        except AssertionError as e:
+            print(f"In: side: {side}\nOut: {result}\n Expected: {expected}")
+            sleep(0.3)
+            raise e
+
+    # shape of cell 172: 40 x 40
+    # shape of cell 193: 20 x 20
+    # location of cell 193 is (TOP, LEFT)
+    ref = leak_detector.cell(172)
+    neigh = leak_detector.cell(193)
+    cell_pair = CellPair(leak_detector, ref, neigh)
+    expected_results = [
+        np.array([np.hstack([np.zeros(20), np.ones(20) * 20]), np.arange(40)]),
+        np.array([np.ones(40)*59, np.arange(40)]),
+    ]
+    for i, side in enumerate([TOP, BOTTOM]):
+        result = CellPair.squash_indices(
+            array_a=cell_pair.transform(pos=ref.side_indices(side), from_array=REFERENCE, to_array=MERGED),
+            array_b=cell_pair.transform(pos=neigh.side_indices(side), from_array=NEIGH, to_array=MERGED),
+            side=side,
+            secondary_location=LEFT
+        )
+        expected = expected_results[i]
+        try:
+            assert np.all(result == expected)
+        except AssertionError as e:
+            print(f"In: side: {side}\nOut: {result}\n Expected: {expected}")
+            sleep(0.3)
+            raise e
 
 
 def side_indices():
@@ -311,10 +422,11 @@ def is_obstacle_relevant():
     pass
 
 
-# width_and_height()
-# locate_cell()
-# locate_pos()
-# maxima()
-# find_obstacles()
-# find_connecting_obstacles()
+width_and_height()
+locate_cell()
+locate_pos()
+maxima()
+find_obstacles()
+find_connecting_obstacles()
 transform()
+squash_indices()
