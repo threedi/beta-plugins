@@ -161,12 +161,14 @@ class LeakDetector:
         flowlines_list = flowlines.to_list()
 
         # Create cells
-        feedback.pushInfo(f"{datetime.now()}")
-        feedback.setProgressText("Read cells...")
+        if feedback:
+            feedback.pushInfo(f"{datetime.now()}")
+            feedback.setProgressText("Read cells...")
         threedigrid_cells = gridadmin.cells.filter(id__in=self.line_nodes.flatten())
         cell_properties = threedigrid_cells.only('id', 'cell_coords').data
         cell_properties_dict = dict(
-            zip(cell_properties['id'], np.round(cell_properties['cell_coords'].T, COORD_DECIMALS)))
+            zip(cell_properties['id'], np.round(cell_properties['cell_coords'].T, COORD_DECIMALS))
+        )
 
         self._cell_dict = dict()
         for i, (cell_id, cell_coords) in enumerate(cell_properties_dict.items()):
@@ -174,11 +176,13 @@ class LeakDetector:
                 if feedback.isCanceled():
                     return
             self._cell_dict[cell_id] = Cell(ld=self, id=cell_id, coords=cell_coords)
-            feedback.setProgress(100*i/len(cell_properties_dict))
+            if feedback:
+                feedback.setProgress(100*i/len(cell_properties_dict))
 
         # Find cell neighbours
-        feedback.pushInfo(f"{datetime.now()}")
-        feedback.setProgressText("Find cell neighbours...")
+        if feedback:
+            feedback.pushInfo(f"{datetime.now()}")
+            feedback.setProgressText("Find cell neighbours...")
         for i, flowline in enumerate(flowlines_list):
             if feedback:
                 if feedback.isCanceled():
@@ -189,11 +193,13 @@ class LeakDetector:
             location = reference_cell.locate_cell(neigh_cell, neigh_is_next=True)
             reference_cell.add_neigh(neigh_cell=neigh_cell, location=location)
             neigh_cell.add_neigh(neigh_cell=reference_cell, location=OPPOSITE[location])
-            feedback.setProgress(100*i/len(flowlines_list))
+            if feedback:
+                feedback.setProgress(100*i/len(flowlines_list))
 
         # Create edges
-        feedback.pushInfo(f"{datetime.now()}")
-        feedback.setProgressText("Create edges...")
+        if feedback:
+            feedback.pushInfo(f"{datetime.now()}")
+            feedback.setProgressText("Create edges...")
         self.edges = list()
         self._edge_dict = dict()  # {line_nodes: Edge}
 

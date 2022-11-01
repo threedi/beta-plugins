@@ -1,10 +1,9 @@
 from pathlib import Path
 
-import numpy as np
 from osgeo import gdal
 from threedigrid.admin.gridadmin import GridH5Admin
 
-from v2_leak_detector import CellPair, LeakDetector, NEIGH, RIGHT, TOP
+from leak_detector import LeakDetector
 
 DATA_DIR = Path(__file__).parent / 'data'
 DEM_FILENAME = DATA_DIR / 'dem_0_01.tif'
@@ -31,4 +30,5 @@ def run():
         print(result)
 
 
-run()
+if __name__ == "__main__":
+    run()

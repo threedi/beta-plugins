@@ -5,7 +5,7 @@ import numpy as np
 from osgeo import gdal
 from threedigrid.admin.gridadmin import GridH5Admin
 
-from v2_leak_detector import CellPair, LeakDetector, REFERENCE, NEIGH, RIGHT, TOP, LEFTHANDSIDE, RIGHTHANDSIDE
+from leak_detector import CellPair, LeakDetector, REFERENCE, NEIGH, MERGED, RIGHT, TOP, LEFTHANDSIDE, RIGHTHANDSIDE
 
 DATA_DIR = Path(__file__).parent / 'data'
 DEM_FILENAME = DATA_DIR / 'dem_0_01.tif'
@@ -270,9 +270,51 @@ def find_connecting_obstacles():
     assert len(leak_detector.edge(29, 30).obstacles) == 1
 
 
-width_and_height()
-locate_cell()
-locate_pos()
-maxima()
-find_obstacles()
-find_connecting_obstacles()
+def transform():
+    cell_ids = [158, 204]
+    leak_detector = LeakDetector(
+        gridadmin=GR,
+        dem=DEM_DATASOURCE,
+        cell_ids=cell_ids,
+        min_obstacle_height=MIN_OBSTACLE_HEIGHT,
+        search_precision=SEARCH_PRECISION,
+        min_peak_prominence=MIN_PEAK_PROMINENCE
+    )
+    ref = leak_detector.cell(158)
+    neigh = leak_detector.cell(204)
+    cell_pair = CellPair(leak_detector, ref, neigh)
+
+    # shape of cell 158: 40 x 40
+    # shape of cell 204: 20 x 20
+    # location of cell 204 is (RIGHT, TOP)
+    pos = (13, 17)
+    transformed = cell_pair.transform(
+            pos=pos,
+            from_array=REFERENCE,
+            to_array=MERGED
+    )
+    assert transformed == (13, 17)
+
+
+def squash_indices():
+    # TODO: add tests here
+    pass
+
+
+def side_indices():
+    # TODO: add tests here
+    pass
+
+
+def is_obstacle_relevant():
+    # TODO: add tests here
+    pass
+
+
+# width_and_height()
+# locate_cell()
+# locate_pos()
+# maxima()
+# find_obstacles()
+# find_connecting_obstacles()
+transform()
