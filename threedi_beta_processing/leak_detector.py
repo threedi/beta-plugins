@@ -1308,7 +1308,8 @@ def is_obstacle_relevant(
     from_pos_label = labelled_pixels[from_pos]
     relevant = True
     for side in compare_to_sides:
-        side_labels = labelled_pixels[cell_or_cellpair.side_indices(side)]
+        indices = cell_or_cellpair.side_indices(side)
+        side_labels = labelled_pixels[indices[0], indices[1]]
         if np.all(side_labels == from_pos_label):
             relevant = False
             break
