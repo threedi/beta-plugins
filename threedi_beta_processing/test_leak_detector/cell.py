@@ -32,7 +32,6 @@ def neigh_cells():
     assert cell.neigh_cells[TOP][0].id == 205
 
 
-
 def edge_pixels():
     cell_ids = [156, 157, 158, 159]
     leak_detector = LeakDetector(
@@ -81,6 +80,11 @@ def edge_pixels():
             ]
         )
     )
+
+
+def side_indices():
+    # TODO add tests here
+    pass
 
 
 def maxima():
