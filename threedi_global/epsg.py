@@ -2,7 +2,7 @@
 import math
 from osgeo import ogr
 from osgeo import osr
-
+from typing import Tuple
 
 # Special zones for Svalbard and Norway
 def get_zone(latitude, longitude):
@@ -27,19 +27,17 @@ def find_utm_zone_epsg(latitude, longitude):
     return epsg_code
 
 
-def centroid_lat_lon(geom: ogr.Geometry, srs: osr.SpatialReference):
+def xy_to_wgs84_lat_lon(x: float, y: float, srs: osr.SpatialReference) -> Tuple[float, float]:
     wgs84_srs = osr.SpatialReference()
     wgs84_srs.ImportFromEPSG(4326)
     ct = osr.CoordinateTransformation(srs, wgs84_srs)
-    centroid = geom.Centroid()
-    x = centroid.GetX()
-    y = centroid.GetY()
     lat, lon, z = ct.TransformPoint(x, y)
     return lat, lon
 
 
-def utm_zone_epsg_for_polygon(geom: ogr.Geometry, srs: osr.SpatialReference):
-    lat, lon = centroid_lat_lon(geom, srs)
-    utm_zone_epsg = find_utm_zone_epsg(lat, lon)
-    return utm_zone_epsg
-
+def centroid_lat_lon(geom: ogr.Geometry, srs: osr.SpatialReference):
+    centroid = geom.Centroid()
+    x = centroid.GetX()
+    y = centroid.GetY()
+    lat, lon = xy_to_wgs84_lat_lon(x, y, srs)
+    return lat, lon
