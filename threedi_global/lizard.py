@@ -6,6 +6,7 @@ import requests
 
 from osgeo import gdal
 
+
 def get_headers(api_key: str):
     return {
         "username": "__key__",
@@ -15,14 +16,14 @@ def get_headers(api_key: str):
 
 
 def download_raster(
-        api_key: str,
-        raster_uuid: str,
-        bounding_box: List[float],
-        epsg_code: int,
-        pixel_size: float,
-        output_path: Union[Path, str],
-        max_attempts=720,
-        wait_time=5
+    api_key: str,
+    raster_uuid: str,
+    bounding_box: List[float],
+    epsg_code: int,
+    pixel_size: float,
+    output_path: Union[Path, str],
+    max_attempts=720,
+    wait_time=5,
 ):
     """
 
@@ -49,11 +50,11 @@ def download_raster(
     bbox = ",".join([str(i) for i in bounding_box])
     params = {
         "bbox": bbox,
-        "format": 'geotiff',
+        "format": "geotiff",
         "projection": f"EPSG:{epsg_code}",
         "width": width,
         "height": height,
-        "async": use_async
+        "async": use_async,
     }
     r = requests.get(url=get_url, headers=headers, params=params)
     if r.status_code != 200:
@@ -70,13 +71,13 @@ def download_raster(
                 task_result = task["result"]
                 break
             elif attempts == max_attempts:
-                raise Exception('Connection timed out')
+                raise Exception("Connection timed out")
             attempts += 1
             time.sleep(wait_time)
         r = requests.get(url=task_result, headers=headers)
 
     with output_path.open("wb") as file:
-        if r.headers.get('content-length'):
+        if r.headers.get("content-length"):
             for chunk in r.iter_content(chunk_size=4096):
                 file.write(chunk)
         else:  # no content length header
@@ -89,4 +90,3 @@ def download_raster(
     gt[1] = pixel_size
     gt[5] = -pixel_size
     dataset.SetGeoTransform(tuple(gt))
-

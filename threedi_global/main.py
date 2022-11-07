@@ -50,9 +50,11 @@ def optimal_grid_space(model_area: float, pixel_size: float, nr_cells: int = 500
     # pixel_size = 0.25
     # nr_cells = 50.000
     # should return 4.5
-    raw_answer = sqrt(model_area/nr_cells)
-    double_pixel_size = 2*pixel_size
-    multiple_of_double_pixel_size = max(double_pixel_size, double_pixel_size * round(raw_answer/double_pixel_size))
+    raw_answer = sqrt(model_area / nr_cells)
+    double_pixel_size = 2 * pixel_size
+    multiple_of_double_pixel_size = max(
+        double_pixel_size, double_pixel_size * round(raw_answer / double_pixel_size)
+    )
     return multiple_of_double_pixel_size
 
 
@@ -79,17 +81,21 @@ def create_temp_dir(local_dir: [Path, str], schematisation_name: str):
 
 
 def download_dem(
-        local_dir: [Path, str],
-        schematisation_name: str,
-        uuid: str,
-        extent_filename: [Path, str],
-        pixel_size: float,
-        api_key: str,
-        extent_layer_name: str = None
+    local_dir: [Path, str],
+    schematisation_name: str,
+    uuid: str,
+    extent_filename: [Path, str],
+    pixel_size: float,
+    api_key: str,
+    extent_layer_name: str = None,
 ):
     extent_filename = str(extent_filename)
     extent_datasource = ogr.Open(extent_filename)
-    extent_layer = extent_datasource.GetLayerByName(extent_layer_name) if extent_layer_name else extent_datasource.GetLayer(0)
+    extent_layer = (
+        extent_datasource.GetLayerByName(extent_layer_name)
+        if extent_layer_name
+        else extent_datasource.GetLayer(0)
+    )
     minx, maxx, miny, maxy = extent_layer.GetExtent()
     bounding_box = [minx, miny, maxx, maxy]
     srs = extent_layer.GetSpatialRef()
@@ -101,7 +107,7 @@ def download_dem(
         bounding_box=bounding_box,
         epsg_code=epsg_code,
         pixel_size=pixel_size,
-        output_path=dem_path
+        output_path=dem_path,
     )
     raster = gdal.Open(str(dem_path), gdal.GA_Update)
     vector = gdal.OpenEx(str(extent_filename))
@@ -109,20 +115,28 @@ def download_dem(
 
 
 def prepare_spatialite(
-        local_dir: [Path, str],
-        schematisation_name: str,
-        extent_filename: [Path, str],
-        pixel_size: float,
-        nr_cells: int,
-        extent_layer_name: str = None
+    local_dir: [Path, str],
+    schematisation_name: str,
+    extent_filename: [Path, str],
+    pixel_size: float,
+    nr_cells: int,
+    extent_layer_name: str = None,
 ):
-    spatialite_dst_path = Path(local_dir) / schematisation_name / f"{schematisation_name}.sqlite"
+    spatialite_dst_path = (
+        Path(local_dir) / schematisation_name / f"{schematisation_name}.sqlite"
+    )
     shutil.copyfile(SPATIALITE_TEMPLATE_PATH, spatialite_dst_path)
 
     extent_datasource = ogr.Open(extent_filename)
-    extent_layer = extent_datasource.GetLayerByName(extent_layer_name) if extent_layer_name else extent_datasource.GetLayer(0)
+    extent_layer = (
+        extent_datasource.GetLayerByName(extent_layer_name)
+        if extent_layer_name
+        else extent_datasource.GetLayer(0)
+    )
     area = estimate_area(layer=extent_layer)
-    grid_space = optimal_grid_space(model_area=area, pixel_size=pixel_size, nr_cells=nr_cells)
+    grid_space = optimal_grid_space(
+        model_area=area, pixel_size=pixel_size, nr_cells=nr_cells
+    )
 
     minx, maxx, miny, maxy = extent_layer.GetExtent()
     srs = extent_layer.GetSpatialRef()
@@ -133,22 +147,22 @@ def prepare_spatialite(
 
 
 def create_threedimodel(
-        local_dir: Union[Path, str],
-        schematisation_name: str,
-        extent_filename: Union[Path, str],
-        pixel_size,
-        nr_cells,
-        lizard_api_key: str,
-        threedi_api_key: str,
-        extent_layer_name: str = None,
-        dem_raster_uuid: str = "eae92c48-cd68-4820-9d82-f86f763b4186"
+    local_dir: Union[Path, str],
+    schematisation_name: str,
+    extent_filename: Union[Path, str],
+    pixel_size,
+    nr_cells,
+    lizard_api_key: str,
+    threedi_api_key: str,
+    extent_layer_name: str = None,
+    dem_raster_uuid: str = "eae92c48-cd68-4820-9d82-f86f763b4186",
 ):
     print(f"Version: {VERSION}")
     config = {
         "THREEDI_API_HOST": THREEDI_API_HOST,
-        "THREEDI_API_PERSONAL_API_TOKEN": threedi_api_key
+        "THREEDI_API_PERSONAL_API_TOKEN": threedi_api_key,
     }
-    threedi_api = ThreediApi(config=config, version='v3-beta')
+    threedi_api = ThreediApi(config=config, version="v3-beta")
 
     print("Creating local (temp) folder structure...")
     create_temp_dir(local_dir=local_dir, schematisation_name=schematisation_name)
@@ -160,7 +174,7 @@ def create_threedimodel(
         extent_layer_name=extent_layer_name,
         pixel_size=pixel_size,
         uuid=dem_raster_uuid,
-        api_key=lizard_api_key
+        api_key=lizard_api_key,
     )
     print("Preparing sqlite...")
     prepare_spatialite(
@@ -169,15 +183,17 @@ def create_threedimodel(
         extent_filename=extent_filename,
         extent_layer_name=extent_layer_name,
         pixel_size=pixel_size,
-        nr_cells=nr_cells
+        nr_cells=nr_cells,
     )
     print("Uploading...")
     threedimodel_id, schematisation_id = upload_and_process(
         threedi_api=threedi_api,
         organisation_uuid=ORGANISATION_UUID,
         schematisation_name=schematisation_name,
-        sqlite_path=Path(local_dir) / schematisation_name / f"{schematisation_name}.sqlite",
-        raster_names={"dem_file": "dem"}
+        sqlite_path=Path(local_dir)
+        / schematisation_name
+        / f"{schematisation_name}.sqlite",
+        raster_names={"dem_file": "dem"},
     )
     print(
         f"Created 3Di Model with ID {threedimodel_id}: https://management.3di.live/schematisations/{schematisation_id}"

@@ -2,7 +2,7 @@ import configparser
 from pathlib import Path
 
 
-def get_login_details(section: str = '3Di', option: str = None):
+def get_login_details(section: str = "3Di", option: str = None):
     """
     Read data from login_details.ini
     """

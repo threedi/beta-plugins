@@ -27,7 +27,9 @@ def find_utm_zone_epsg(latitude, longitude):
     return epsg_code
 
 
-def xy_to_wgs84_lat_lon(x: float, y: float, srs: osr.SpatialReference) -> Tuple[float, float]:
+def xy_to_wgs84_lat_lon(
+    x: float, y: float, srs: osr.SpatialReference
+) -> Tuple[float, float]:
     wgs84_srs = osr.SpatialReference()
     wgs84_srs.ImportFromEPSG(4326)
     ct = osr.CoordinateTransformation(srs, wgs84_srs)
