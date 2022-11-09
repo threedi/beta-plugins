@@ -34,6 +34,9 @@ def get_or_create_schematisation(
         organisation_uuid: str,
         tags: List = None
 ) -> Schematisation:
+    contracts = threedi_api.contracts_list(organisation__unique_id=organisation_uuid)
+    if contracts.count < 1:
+        raise ValueError(f"Organisation with UUID {organisation_uuid} does not exist or you have insufficient rights")
     tags = tags or []
     resp = threedi_api.schematisations_list(
         name=schematisation_name, owner__unique_id=organisation_uuid

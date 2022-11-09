@@ -91,6 +91,10 @@ def download_dem(
 ):
     extent_filename = str(extent_filename)
     extent_datasource = ogr.Open(extent_filename)
+    if not extent_datasource:
+        raise FileNotFoundError(
+            f"Could not open {extent_filename}. The file does not exists or is not an OGR-compatible vector file"
+    )
     extent_layer = (
         extent_datasource.GetLayerByName(extent_layer_name)
         if extent_layer_name
