@@ -21,6 +21,7 @@ def download_raster(
     bounding_box: List[float],
     epsg_code: int,
     pixel_size: float,
+    nodata: float,
     output_path: Union[Path, str],
     max_attempts=720,
     wait_time=5,
@@ -54,6 +55,7 @@ def download_raster(
         "projection": f"EPSG:{epsg_code}",
         "width": width,
         "height": height,
+        "nodata": float(nodata),
         "async": use_async,
     }
     r = requests.get(url=get_url, headers=headers, params=params)

@@ -19,11 +19,16 @@ def clip(raster: gdal.Dataset, vector: gdal.Dataset, layer_name: str = None):
                 "Vector dataset has more than 1 layer, but layer_name is not provided"
             )
         options = gdal.RasterizeOptions(
-            layers=layer_name, bands=[1], burnValues=[nodatavalue], inverse=True
+            layers=layer_name,
+            bands=[1],
+            burnValues=[nodatavalue],
+            inverse=True,
         )
     else:
         options = gdal.RasterizeOptions(
-            bands=[1], burnValues=[nodatavalue], inverse=True
+            bands=[1],
+            burnValues=[nodatavalue],
+            inverse=True
         )
     gdal.Rasterize(raster, srcDS=vector, options=options)
 
@@ -38,10 +43,4 @@ if __name__ == "__main__":
     raster = gdal.Open(str(raster_fn), gdal.GA_Update)
     vector = gdal.OpenEx(str(vector_fn), gdalconst.OF_VECTOR)
     layer = vector.GetLayer(0)
-    print(vector)
-    print(layer)
-    # print(layer.GetFeatureCount())
-    # print([feature.GetGeometryRef().Area() for feature in layer])
-    # clip_in_place(raster, layer)
     clip(raster, vector)
-    # clip(raster, layer, output_path=r"C:\Temp\clipped.tif")

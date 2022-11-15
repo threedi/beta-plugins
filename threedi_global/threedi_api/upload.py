@@ -215,7 +215,9 @@ def upload_and_process(
     )
 
     # 3Di model en simulation template genereren
-    print("Waiting for the revision to be ready...")
+    print("Waiting for the revision to be ready...  Follow its progress on "
+                  f"https://management.3di.live/schematisations/{schematisation.id}"
+          )
     threedimodel = create_threedimodel(threedi_api=threedi_api, schematisation=schematisation, revision=revision)
     return threedimodel, schematisation.id
 

@@ -8,18 +8,22 @@ Creates a 3Di model for an area defined by a polygon.
 """
 from math import sqrt
 import shutil
-from typing import Union, Tuple
+from typing import Union, List
 from pathlib import Path
 
 import sqlite3
 from osgeo import gdal, ogr
 from threedi_api_client.api import ThreediApi
 
-from epsg import find_utm_zone_epsg, xy_to_wgs84_lat_lon
+from epsg import find_utm_zone_epsg, xy_to_wgs84_lat_lon, transform_bounding_box, transform_layer
 from lizard import download_raster
 from raster import clip
 from threedi_api.constants import THREEDI_API_HOST, ORGANISATION_UUID
 from threedi_api.upload import upload_and_process
+
+
+gdal.UseExceptions()
+ogr.UseExceptions()
 
 
 VERSION = "0.2"
@@ -28,9 +32,16 @@ SQL_DIR = Path(__file__).parent / "sql"
 DATA_DIR = Path(__file__).parent / "data"
 SPATIALITE_TEMPLATE_PATH = DATA_DIR / "template.sqlite"
 NR_CELLS = 50000
+MEMORY_DRIVER = ogr.GetDriverByName("Memory")
+GEOPACKAGE_DRIVER = ogr.GetDriverByName("GPKG")
 
-gdal.UseExceptions()
-ogr.UseExceptions()
+
+def utm_zone_from_layer(layer: ogr.Layer) -> int:
+    minx, maxx, miny, maxy = layer.GetExtent()
+    srs = layer.GetSpatialRef()
+    lat, lon = xy_to_wgs84_lat_lon(x=minx + maxx / 2, y=miny + maxy / 2, srs=srs)
+    utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+    return utm_zone_epsg
 
 
 def estimate_area(layer: ogr.Layer) -> float:
@@ -100,22 +111,35 @@ def download_dem(
         if extent_layer_name
         else extent_datasource.GetLayer(0)
     )
-    minx, maxx, miny, maxy = extent_layer.GetExtent()
-    bounding_box = [minx, miny, maxx, maxy]
-    srs = extent_layer.GetSpatialRef()
-    epsg_code = srs.GetAuthorityCode(None)
+    src_epsg_code = extent_layer.GetSpatialRef().GetAuthorityCode(None)
+    utm_zone_epsg = utm_zone_from_layer(layer=extent_layer)
+    vsi_filename = "/vsimem/extent_datasource_transformed.gpkg"
+    extent_datasource_transformed = GEOPACKAGE_DRIVER.CreateDataSource(vsi_filename)
+    transform_layer(
+        layer=extent_layer,
+        dest_datasource=extent_datasource_transformed,
+        dest_layer_name=extent_layer_name or "",
+        source_epsg=src_epsg_code,
+        dest_epsg=utm_zone_epsg
+    )
+    extent_datasource_transformed.FlushCache()
+    extent_layer_transformed = extent_datasource_transformed.GetLayer(0)
+    minx, maxx, miny, maxy = extent_layer_transformed.GetExtent()
+    bounding_box = [minx, miny, maxx, maxy]  # Lizard API bounding box sequence differs from ogr GetExtent() sequence
     dem_path = Path(local_dir) / schematisation_name / "rasters" / "dem.tif"
     download_raster(
         api_key=api_key,
         raster_uuid=uuid,
         bounding_box=bounding_box,
-        epsg_code=epsg_code,
+        epsg_code=utm_zone_epsg,
         pixel_size=pixel_size,
+        nodata=-9999,
         output_path=dem_path,
     )
     raster = gdal.Open(str(dem_path), gdal.GA_Update)
-    vector = gdal.OpenEx(str(extent_filename))
-    clip(raster=raster, vector=vector, layer_name=extent_layer_name)
+    extent_dataset_transformed = gdal.OpenEx(vsi_filename)
+    clip(raster=raster, vector=extent_dataset_transformed, layer_name=extent_layer_name)
+    gdal.Unlink(vsi_filename)
 
 
 def prepare_spatialite(
@@ -142,10 +166,7 @@ def prepare_spatialite(
         model_area=area, pixel_size=pixel_size, nr_cells=nr_cells
     )
 
-    minx, maxx, miny, maxy = extent_layer.GetExtent()
-    srs = extent_layer.GetSpatialRef()
-    lat, lon = xy_to_wgs84_lat_lon(x=minx + maxx / 2, y=miny + maxy / 2, srs=srs)
-    utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+    utm_zone_epsg = utm_zone_from_layer(layer=extent_layer)
 
     fill_settings(spatialite_dst_path, epsg_code=utm_zone_epsg, grid_space=grid_space)
 
@@ -158,6 +179,7 @@ def create_threedimodel(
     nr_cells,
     lizard_api_key: str,
     threedi_api_key: str,
+    organisation_uuid: str,
     extent_layer_name: str = None,
     dem_raster_uuid: str = "eae92c48-cd68-4820-9d82-f86f763b4186",
 ):
@@ -192,7 +214,7 @@ def create_threedimodel(
     print("Uploading...")
     threedimodel_id, schematisation_id = upload_and_process(
         threedi_api=threedi_api,
-        organisation_uuid=ORGANISATION_UUID,
+        organisation_uuid=organisation_uuid,
         schematisation_name=schematisation_name,
         sqlite_path=Path(local_dir)
         / schematisation_name
