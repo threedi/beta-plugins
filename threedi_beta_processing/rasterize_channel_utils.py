@@ -203,6 +203,8 @@ def merge_rasters(
     _, _, xskew, _, yskew, _ = resampled_rasters[0].GetGeoTransform()
     geotransform = (minx, output_pixel_size, xskew, maxy, yskew, -1*output_pixel_size)
     srs = resampled_rasters[0].GetProjection()
+    if feedback:
+        feedback.setProgressText("Writing output raster to disk...")
     write_raster(
         output_filename=output_filename,
         geotransform=geotransform,
