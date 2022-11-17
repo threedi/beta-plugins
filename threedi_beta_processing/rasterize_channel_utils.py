@@ -44,18 +44,18 @@ def read_as_array(
         ymax, raster.RasterYSize
     )
     arr = band.ReadAsArray(
-        int(intersection_xmin),
-        int(intersection_ymin),
-        int(intersection_xmax - intersection_xmin),
-        int(intersection_ymax - intersection_ymin),
+        int(round(intersection_xmin)),
+        int(round(intersection_ymin)),
+        int(round(intersection_xmax - intersection_xmin)),
+        int(round(intersection_ymax - intersection_ymin)),
     )
     if pad:
         ndv = band.GetNoDataValue()
         arr_pad = np.pad(
             arr,
             (
-                (int(intersection_ymin - ymin), int(ymax - intersection_ymax)),
-                (int(intersection_xmin - xmin), int(xmax - intersection_xmax)),
+                (int(round(intersection_ymin - ymin)), int(round(ymax - intersection_ymax))),
+                (int(round(intersection_xmin - xmin)), int(round(xmax - intersection_xmax))),
             ),
             "constant",
             constant_values=((ndv, ndv), (ndv, ndv)),
@@ -127,6 +127,7 @@ def merge_rasters(
     tile_size: int,
     aggregation_method: str,
     output_filename: Path,
+    output_pixel_size: float,
     output_nodatavalue: float,
     feedback=None,
 ):
@@ -135,16 +136,27 @@ def merge_rasters(
 
     tile_size in pixels
     """
-    # GeoTransform: (ulx, xres, xskew, uly, yskew, yres)
-    ulx, xres, xskew, uly, yskew, yres = rasters[0].GetGeoTransform()
-    bboxes = [bounding_box(raster) for raster in rasters]
+    # resample rasters if their pixel size is different from output_pixel_size (tiny difference is allowed)
+    resampled_rasters = []
+    for i, raster in enumerate(rasters):
+        # GeoTransform: (ulx, xres, xskew, uly, yskew, yres)
+        _, xres, _, _, _, yres = raster.GetGeoTransform()
+        if abs(abs(xres) - abs(output_pixel_size)) > 1/(1000*tile_size) or \
+                abs(abs(yres) - abs(output_pixel_size)) > 1/(1000*tile_size):
+            print("Resampling...")
+            resampled_raster_file_name = f"/vsimem/resampled_raster_{i}.tif"
+            options = gdal.WarpOptions(xRes=output_pixel_size, yRes=output_pixel_size, resampleAlg="near")
+            resampled_raster = gdal.Warp(resampled_raster_file_name, raster, options=options)
+            resampled_rasters.append(resampled_raster)
+        else:
+            resampled_rasters.append(raster)
+    bboxes = [bounding_box(raster) for raster in resampled_rasters]
     minx, miny, maxx, maxy = MultiPolygon(bboxes).bounds
-    ncols = int(np.ceil(((maxx - minx) / abs(xres)) / tile_size))
-    nrows = int(np.ceil(((maxy - miny) / abs(yres)) / tile_size))
+    ncols = int(np.ceil(((maxx - minx) / abs(output_pixel_size)) / tile_size))
+    nrows = int(np.ceil(((maxy - miny) / abs(output_pixel_size)) / tile_size))
     ntiles = ncols * nrows
-    print(nrows, ncols)
-    geo_tile_size_x = tile_size * abs(xres)
-    geo_tile_size_y = tile_size * abs(yres)
+    geo_tile_size_x = tile_size * abs(output_pixel_size)
+    geo_tile_size_y = tile_size * abs(output_pixel_size)
     rows = []
     for tile_row in range(nrows):
         # print(f"tile_row: {tile_row}")
@@ -162,7 +174,7 @@ def merge_rasters(
             # print(f"    tile_polygon.bounds: {tile_polygon.bounds}")
             intersecting_rasters = [
                 raster
-                for i, raster in enumerate(rasters)
+                for i, raster in enumerate(resampled_rasters)
                 if tile_polygon.intersects(bboxes[i])
             ]
             if len(intersecting_rasters) == 0:
@@ -182,11 +194,19 @@ def merge_rasters(
         rows.append(row)
     result_array = np.vstack(rows)
 
-    geotransform = (minx, xres, xskew, maxy, yskew, yres)
-    srs = rasters[0].GetProjection()
+    # GeoTransform: (ulx, xres, xskew, uly, yskew, yres)
+    _, _, xskew, _, yskew, _ = resampled_rasters[0].GetGeoTransform()
+    geotransform = (minx, output_pixel_size, xskew, maxy, yskew, -1*output_pixel_size)
+    srs = resampled_rasters[0].GetProjection()
     write_raster(
         output_filename=output_filename,
         geotransform=geotransform,
         srs=srs,
         data=result_array,
     )
+    for i, raster in enumerate(rasters):
+        try:
+            gdal.Unlink(f"/vsimem/resampled_raster_{i}.tif")
+        except RuntimeError:
+            # VSI file does not exist
+            continue

@@ -344,6 +344,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 aggregation_method="min",
                 output_filename=output_raster,
                 output_nodatavalue=-9999,
+                output_pixel_size=pixel_size,
                 feedback=multi_step_feedback,
             )
 
@@ -354,12 +355,11 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 )
 
             if warnings:
-                pass
-            feedback.pushWarning(
-                f"Warning: The following channels may have missing pixels: {', '.join([str(i) for i in warnings])}. "
-                f"In total, up to {total_missing_pixels} pixels may be missing. See previous log messages for more "
-                f"information."
-            )
+                feedback.pushWarning(
+                    f"Warning: The following channels may have missing pixels: {', '.join([str(i) for i in warnings])}. "
+                    f"In total, up to {total_missing_pixels} pixels may be missing. See previous log messages for more "
+                    f"information."
+                )
 
             return {self.OUTPUT: output_raster}
 
