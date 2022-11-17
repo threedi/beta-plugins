@@ -73,11 +73,16 @@ def write_raster(
     output_format="GTiff",
     datatype=gdal.GDT_Float32,
     nodatavalue=-9999,
-    dataset_creation_options=["COMPRESS=DEFLATE"],
+    dataset_creation_options=None,
 ):
     """
     write a numpy array to a gdal raster
+
+    if dataset_creation_options is not specified, the following will be used:
+    ["COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"]
     """
+    if dataset_creation_options is None:
+        dataset_creation_options = ["COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"]
     (y, x) = data.shape
     driver = gdal.GetDriverByName(output_format)
     dst_ds = driver.Create(
