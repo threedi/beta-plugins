@@ -129,7 +129,10 @@ def download_dem(
     extent_datasource_transformed.FlushCache()
     extent_layer_transformed = extent_datasource_transformed.GetLayer(0)
     minx, maxx, miny, maxy = extent_layer_transformed.GetExtent()
-    bounding_box = [minx, miny, maxx, maxy]  # Lizard API bounding box sequence differs from ogr GetExtent() sequence
+    if src_epsg_code != '4326':
+        bounding_box = [minx, miny, maxx, maxy]  # Lizard API bounding box sequence differs from ogr GetExtent() sequence
+    else:
+        bounding_box = [miny, minx, maxy, maxx]  # Lizard API bounding box sequence differs from ogr GetExtent() sequence
     dem_path = Path(local_dir) / schematisation_name / "rasters" / "dem.tif"
     download_raster(
         api_key=api_key,
