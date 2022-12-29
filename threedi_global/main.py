@@ -115,24 +115,21 @@ def download_dem(
         if extent_layer_name
         else extent_datasource.GetLayer(0)
     )
-    src_epsg_code = extent_layer.GetSpatialRef().GetAuthorityCode(None)
-    utm_zone_epsg = utm_zone_from_layer(layer=extent_layer)
     vsi_filename = "/vsimem/extent_datasource_transformed.gpkg"
-    extent_datasource_transformed = GEOPACKAGE_DRIVER.CreateDataSource(vsi_filename)
-    transform_layer(
-        layer=extent_layer,
-        dest_datasource=extent_datasource_transformed,
-        dest_layer_name=extent_layer_name or "",
-        source_epsg=src_epsg_code,
-        dest_epsg=utm_zone_epsg
-    )
-    extent_datasource_transformed.FlushCache()
-    extent_layer_transformed = extent_datasource_transformed.GetLayer(0)
-    minx, maxx, miny, maxy = extent_layer_transformed.GetExtent()
+    
+    minx, maxx, miny, maxy = extent_layer.GetExtent()    
+    srs = extent_layer.GetSpatialRef()
+    src_epsg_code = extent_layer.GetSpatialRef().GetAuthorityCode(None)
     if src_epsg_code != '4326':
-        bounding_box = [minx, miny, maxx, maxy]  # Lizard API bounding box sequence differs from ogr GetExtent() sequence
+        lat, lon = xy_to_wgs84_lat_lon(x=minx + maxx / 2, y=miny + maxy / 2, srs=srs)
+        utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+        input_bounding_box = [minx, maxx, miny, maxy]
     else:
-        bounding_box = [miny, minx, maxy, maxx]  # Lizard API bounding box sequence differs from ogr GetExtent() sequence
+        lon = np.mean([minx, maxx]); lat = np.mean([miny, maxy])
+        utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+        input_bounding_box = [miny, maxy, minx, maxx]
+    bounding_box = transform_bounding_box(input_bounding_box, int(src_epsg_code), utm_zone_epsg)    
+    
     dem_path = Path(local_dir) / schematisation_name / "rasters" / "dem.tif"
     download_raster(
         api_key=api_key,

@@ -5,25 +5,54 @@ from main import create_threedimodel
 from epsg import find_utm_zone_epsg, xy_to_wgs84_lat_lon, transform_bounding_box, transform_layer
 import numpy as np
 from threedi_api.constants import ORGANISATION_UUID
+GEOPACKAGE_DRIVER = ogr.GetDriverByName("GPKG")
+
 
 def test_transform_layer():
     fn = r"C:\Users\stijn.overmeen\Documents\Projecten_lokaal\Extern\3di_global\Nile\hybas_lake_af_lev5_Albert Nile.gpkg"
     ds = ogr.Open(fn)    
     layer = ds.GetLayer(0)
-    
-    
+        
     minx, maxx, miny, maxy = layer.GetExtent()    
     srs = layer.GetSpatialRef()
-    srs_name = layer.GetSpatialRef().GetAuthorityCode(None) 
-    if srs_name != '4326':
+    src_epsg_code = layer.GetSpatialRef().GetAuthorityCode(None) 
+    if src_epsg_code != '4326':
         lat, lon = xy_to_wgs84_lat_lon(x=minx + maxx / 2, y=miny + maxy / 2, srs=srs)
         utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
     else:
         lon = np.mean([minx, maxx]); lat = np.mean([miny, maxy])
         utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
-            
-    return lat, lon, utm_zone_epsg
 
+    input_bounding_box = [miny, maxy, minx, maxx]
+    output_bounding_box = transform_bounding_box(input_bounding_box, int(src_epsg_code), utm_zone_epsg)
+
+    print(input_bounding_box)
+    print(output_bounding_box)
+
+    '''
+    vsi_filename = "/vsimem/extent_datasource_transformed.gpkg"
+    extent_datasource_transformed = GEOPACKAGE_DRIVER.CreateDataSource(vsi_filename)
+
+    transform_layer(
+        layer=layer,
+        dest_datasource=extent_datasource_transformed,
+        dest_layer_name="",
+        source_epsg=src_epsg_code,
+        dest_epsg=utm_zone_epsg
+    )
+    extent_datasource_transformed.FlushCache()
+    extent_layer_transformed = extent_datasource_transformed.GetLayer(0)
+    minx, maxx, miny, maxy = extent_layer_transformed.GetExtent()
+    if src_epsg_code != '4326':
+        bounding_box = [minx, miny, maxx, maxy]  # Lizard API bounding box sequence differs from ogr GetExtent() sequence
+    else:
+        bounding_box = [miny, minx, maxy, maxx]  # Lizard API bounding box sequence differs from ogr GetExtent() sequence
+
+    print([minx, miny, maxx, maxy])
+    print([miny, minx, maxy, maxx])
+    print(utm_zone_epsg)
+
+    '''
             
 '''            
     driver = ogr.GetDriverByName("GPKG")
@@ -40,7 +69,7 @@ def test_transform_layer():
     )
 '''
 
-lat, lon, utm_zone_epsg = test_transform_layer()
+test_transform_layer()
 
 '''
 create_threedimodel(
