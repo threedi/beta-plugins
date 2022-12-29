@@ -71,6 +71,7 @@ def transform_layer(layer: ogr.Layer, dest_datasource: ogr.DataSource, dest_laye
     # input SpatialReference
     source_srs = osr.SpatialReference()
     source_srs.ImportFromEPSG(int(source_epsg))
+    source_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 
     # output SpatialReference
     dst_srs = osr.SpatialReference()

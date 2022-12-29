@@ -19,15 +19,14 @@ def test_transform_layer():
     if src_epsg_code != '4326':
         lat, lon = xy_to_wgs84_lat_lon(x=minx + maxx / 2, y=miny + maxy / 2, srs=srs)
         utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+        input_bounding_box = [minx, maxx, miny, maxy]
     else:
         lon = np.mean([minx, maxx]); lat = np.mean([miny, maxy])
         utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
-
-    input_bounding_box = [miny, maxy, minx, maxx]
+        input_bounding_box = [miny, maxy, minx, maxx]
     output_bounding_box = transform_bounding_box(input_bounding_box, int(src_epsg_code), utm_zone_epsg)
 
-    print(input_bounding_box)
-    print(output_bounding_box)
+
 
     '''
     vsi_filename = "/vsimem/extent_datasource_transformed.gpkg"
