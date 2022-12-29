@@ -1,13 +1,31 @@
 from osgeo import ogr
-
+import sys
+sys.path.append('C:/Users/stijn.overmeen/Documents/GitHub/beta-plugins/threedi_global')
 from main import create_threedimodel
-from epsg import transform_layer
+from epsg import find_utm_zone_epsg, xy_to_wgs84_lat_lon, transform_bounding_box, transform_layer
+import numpy as np
 from threedi_api.constants import ORGANISATION_UUID
 
 def test_transform_layer():
-    fn = r"C:\Temp\3Di Global\test_shapefile_dnipro.shp"
-    ds = ogr.Open(fn)
+    fn = r"C:\Users\stijn.overmeen\Documents\Projecten_lokaal\Extern\3di_global\Nile\hybas_lake_af_lev5_Albert Nile.gpkg"
+    ds = ogr.Open(fn)    
     layer = ds.GetLayer(0)
+    
+    
+    minx, maxx, miny, maxy = layer.GetExtent()    
+    srs = layer.GetSpatialRef()
+    srs_name = layer.GetSpatialRef().GetAuthorityCode(None) 
+    if srs_name != '4326':
+        lat, lon = xy_to_wgs84_lat_lon(x=minx + maxx / 2, y=miny + maxy / 2, srs=srs)
+        utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+    else:
+        lon = np.mean([minx, maxx]); lat = np.mean([miny, maxy])
+        utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+            
+    return lat, lon, utm_zone_epsg
+
+            
+'''            
     driver = ogr.GetDriverByName("GPKG")
     source_epsg = layer.GetSpatialRef().GetAuthorityCode(None)
     dest_epsg = 32638
@@ -20,9 +38,11 @@ def test_transform_layer():
         source_epsg=source_epsg,
         dest_epsg=dest_epsg
     )
+'''
 
+lat, lon, utm_zone_epsg = test_transform_layer()
 
-# test_transform_layer()
+'''
 create_threedimodel(
     threedi_api_key="7AVjXEza.d82pBLvjcuUaLVly9q3X02bMu6wNe1lG",
     lizard_api_key="HUA82re5.UD47nZQYGyGJtoZpkVIKjCgM0OZYScxY",
@@ -34,3 +54,4 @@ create_threedimodel(
     nr_cells=50000,
     dem_raster_uuid="eae92c48-cd68-4820-9d82-f86f763b4186",
 )
+'''

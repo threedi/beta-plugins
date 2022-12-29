@@ -10,7 +10,7 @@ from math import sqrt
 import shutil
 from typing import Union, List
 from pathlib import Path
-
+import numpy as np
 import sqlite3
 from osgeo import gdal, ogr
 from threedi_api_client.api import ThreediApi
@@ -39,8 +39,12 @@ GEOPACKAGE_DRIVER = ogr.GetDriverByName("GPKG")
 def utm_zone_from_layer(layer: ogr.Layer) -> int:
     minx, maxx, miny, maxy = layer.GetExtent()
     srs = layer.GetSpatialRef()
-    lat, lon = xy_to_wgs84_lat_lon(x=minx + maxx / 2, y=miny + maxy / 2, srs=srs)
-    utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+    if layer.GetSpatialRef().GetAuthorityCode(None) != '4326':
+        lat, lon = xy_to_wgs84_lat_lon(x=minx + maxx / 2, y=miny + maxy / 2, srs=srs)
+        utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
+    else:
+        lon = np.mean([minx, maxx]); lat = np.mean([miny, maxy])
+        utm_zone_epsg = find_utm_zone_epsg(latitude=lat, longitude=lon)
     return utm_zone_epsg
 
 
