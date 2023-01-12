@@ -126,7 +126,7 @@ def prepare_timeseries(
     raw_values = np.ndarray((0, 0))
 
     # Line variables
-    if aggregation.variable.short_name in ['q', 'u1', 'au']:
+    if aggregation.variable.short_name in ['q', 'u1', 'au', 'qp', 'up1']:
         raw_values = getattr(ts, aggregation.variable.short_name)
     elif aggregation.variable.short_name == 'ts_max':
         if hasattr(nodes_or_lines, 'line_geometries'):
@@ -147,7 +147,6 @@ def prepare_timeseries(
         max_possible_ts = np.divide((lengths * cfl_strictness), velocities)
         raw_values = max_possible_ts
         kcu_types = nodes_or_lines.kcu
-        raw_values[:, np.in1d(kcu_types, np.array(NON_TS_REDUCING_KCU))] = 9999
 
     # Node variables
     elif aggregation.variable.short_name in ['s1', 'vol', 'rain', 'su', 'ucx', 'ucy', 'infiltration_rate_simple',
@@ -191,6 +190,11 @@ def prepare_timeseries(
     if isinstance(nodes_or_lines, Lines):
         kcu_types_1d2d = np.array([51, 52, 53, 54, 54, 55, 56, 57, 58])
         raw_values[:, np.in1d(nodes_or_lines.kcu, kcu_types_1d2d)] *= -1
+
+    # if aggregation variable is ts_max, set maximum possible time step (ts_max) to a very high value for line types
+    # to which time step reduction is not applied
+    if aggregation.variable.short_name == 'ts_max':
+        raw_values[:, np.in1d(kcu_types, np.array(NON_TS_REDUCING_KCU))] = 9999
 
     if aggregation.sign.short_name == 'pos':
         raw_values_signed = raw_values * (raw_values >= 0).astype(int)
@@ -894,14 +898,3 @@ def get_parser():
 
     return parser
 
-
-def main():
-    """ Call command with args from parser. """
-    # kwargs = vars(get_parser().parse_args())
-    # NotNoneKwargs = {k: v for k, v in kwargs.items() if v is not None}
-    # MiniArrowsIO(**NotNoneKwargs)
-    pass
-
-
-if __name__ == '__main__':
-    exit(main())
