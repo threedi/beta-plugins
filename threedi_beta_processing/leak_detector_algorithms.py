@@ -63,6 +63,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
 
     INPUT_GRIDADMIN = "INPUT_GRIDADMIN"
     INPUT_DEM = "INPUT_DEM"
+    INPUT_FLOWLINES = "INPUT_FLOWLINES"
     INPUT_OBSTACLES = "INPUT_OBSTACLES"
     INPUT_MIN_OBSTACLE_HEIGHT = "INPUT_MIN_OBSTACLE_HEIGHT"
     INPUT_SEARCH_PRECISION = "INPUT_SEARCH_PRECISION"
@@ -88,6 +89,15 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_OBSTACLES,
                 self.tr('Linear obstacles'),
+                [QgsProcessing.TypeVectorLine],
+                optional=True
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSource(
+                self.INPUT_FLOWLINES,
+                self.tr('Flowlines'),
                 [QgsProcessing.TypeVectorLine],
                 optional=True
             )
@@ -130,14 +140,19 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         success, msg = super().checkParameterValues(parameters, context)
         if success:
             msg_list = list()
-            source = self.parameterAsSource(parameters, self.INPUT_OBSTACLES, context)
-            if source:
-                if 'crest_level' not in source.fields().names():
+
+            # check if min_obstacle_height > 0
+            min_obstacle_height = self.parameterAsDouble(parameters, self.INPUT_MIN_OBSTACLE_HEIGHT, context)
+            if min_obstacle_height <= 0:
+                msg_list.append('Minimum obstacle height must be greater than 0')
+
+            # check input obstacles has a field called crest_level
+            input_obstacles_source = self.parameterAsSource(parameters, self.INPUT_OBSTACLES, context)
+            if input_obstacles_source:
+                if 'crest_level' not in input_obstacles_source.fields().names():
                     msg_list.append('Obstacle lines layer does not contain crest_level field')
-                success = len(msg_list) == 0
-                msg = '; '.join(msg_list)
-            else:
-                success = True
+            success = len(msg_list) == 0
+            msg = '; '.join(msg_list)
         return success, msg
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -146,6 +161,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
         dem_fn = dem.dataProvider().dataSourceUri()
         dem_ds = gdal.Open(dem_fn)
+        flowlines_source = self.parameterAsSource(parameters, self.INPUT_FLOWLINES, context)
         obstacles_source = self.parameterAsSource(parameters, self.INPUT_OBSTACLES, context)
         min_obstacle_height = self.parameterAsDouble(parameters, self.INPUT_MIN_OBSTACLE_HEIGHT, context)
         search_precision = self.parameterAsDouble(parameters, self.INPUT_SEARCH_PRECISION, context)
@@ -178,6 +194,13 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
             crs=crs
         )
 
+        # get list of flowline ids
+        if flowlines_source:
+            field_index = flowlines_source.fields().indexFromName('id')
+            flowline_ids = [feature.attributes()[field_index] for feature in flowlines_source.getFeatures()]
+        else:
+            flowline_ids = list(gr.lines.id)
+
         if obstacles_source:
             feedback.setProgressText("Read linear obstacles input...")
             if obstacles_source.sourceCrs() != crs:
@@ -198,7 +221,7 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
         leak_detector = LeakDetector(
             gridadmin=gr,
             dem=dem_ds,
-            cell_ids=list(gr.cells.id),
+            flowline_ids=flowline_ids,
             min_obstacle_height=min_obstacle_height,
             search_precision=search_precision,
             min_peak_prominence=min_obstacle_height,
@@ -302,6 +325,8 @@ class DetectLeakingObstaclesAlgorithm(QgsProcessingAlgorithm):
                 <p>Raster of the schematisation's digital elevation model (DEM).</p>
                 <h4>Linear obstacles</h4>
                 <p>Obstacles in this layer will be used to update cell edge exchange levels, <i>in addition to</i> any obstacles already present in the gridadmin file (i.e. in files that were downloaded from the server). This input must be a vector layer with line geometry and a <i>crest_level</i> field</p>
+                <h4>Flowlines</h4>
+                <p>Can be used to limit the analysis to a specific part of the computational grid. For example, select flowlines that have a total discharge of > 10 m<sup>3</sup></p>
                 <h4>Minimum obstacle height (m)</h4>
                 <p>Only obstacles with a crest level that is significantly higher than the exchange level will be identified. 'Significantly higher' is defined as <em>crest level &gt; exchange level + minimum obstacle height</em>.</p>
                 <h4>Vertical search precision (m)</h4>

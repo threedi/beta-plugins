@@ -126,7 +126,7 @@ class LeakDetector:
             self,
             gridadmin: GridH5Admin,
             dem: gdal.Dataset,
-            cell_ids: List[int],
+            flowline_ids: List[int],
             min_obstacle_height: float,
             search_precision: float,
             min_peak_prominence: float,
@@ -136,8 +136,7 @@ class LeakDetector:
         """
         :param gridadmin:
         :param dem:
-        :param cell_ids: list of cell ids to limit the obstacle detection to. Neighbours of cells indicated by cell_ids
-        will also be included in the analysis
+        :param flowline_ids: list of flowline ids to limit the obstacle detection to. Only 2D_OPEN_WATER flowlines used.
         :param min_obstacle_height:
         :param search_precision:
         :param min_peak_prominence:
@@ -148,8 +147,7 @@ class LeakDetector:
         self.search_precision = search_precision
         self.min_peak_prominence = min_peak_prominence
 
-        # Get all flowlines that are connected to any of the cell_ids
-        flowlines = filter_lines_by_node_ids(gridadmin.lines.subset('2D_OPEN_WATER'), node_ids=cell_ids)
+        flowlines = gridadmin.lines.subset('2D_OPEN_WATER').filter(id__in=flowline_ids)
         if np.all(np.isnan(flowlines.dpumax)):
             if not obstacles:
                 if feedback:
@@ -289,9 +287,9 @@ class LeakDetector:
 
     def run(self, feedback):
         """
-        Find all obstacles for given cell_ids
+        Find all obstacles
 
-        :param feedback: Object that has .setProgress() method, like QgsProcessingFeedback
+        :param feedback: Object that has .setProgress() and .isCanceled() methods, like QgsProcessingFeedback
         :return: None
         """
 
