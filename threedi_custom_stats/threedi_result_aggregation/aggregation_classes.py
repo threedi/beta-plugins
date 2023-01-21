@@ -65,8 +65,17 @@ class AggregationVariableList(list):
 
 
 class AggregationVariable:
-    def __init__(self, short_name, long_name, signed: bool, applicable_methods: list, var_type: int, units: dict,
-                 can_resample: bool, pre_resample_method: int = PRM_NONE):
+    def __init__(
+            self,
+            short_name: str,
+            long_name: str,
+            signed: bool,
+            applicable_methods: List,
+            var_type: int,
+            units: dict,
+            can_resample: bool,
+            pre_resample_method: int = PRM_NONE
+    ):
         self.short_name = short_name
         self.long_name = long_name
         self.signed = signed

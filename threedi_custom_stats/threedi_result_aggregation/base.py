@@ -94,6 +94,21 @@ def find_finite_1d(x: np.array, index: int):
         return np.nan
 
 
+def get_lengths(lines: Lines):
+    if hasattr(lines, 'line_geometries'):
+        if lines.line_geometries.ndim == 0:
+            a = lines.line_coords[[0, 2, 1, 3], :]
+            b = np.split(a, np.shape(a)[1], 1)
+            lengths = np.array(list(map(line_geometry_length, b)))
+        else:
+            lengths = line_geometries_to_lengths(lines.line_geometries)
+    else:
+        a = lines.line_coords[[0, 2, 1, 3], :]
+        b = np.split(a, np.shape(a)[1], 1)
+        lengths = np.array(list(map(line_geometry_length, b)))
+    return lengths
+
+
 def prepare_timeseries(
         nodes_or_lines: Union[Nodes, Lines],
         start_time: float,
@@ -129,17 +144,7 @@ def prepare_timeseries(
     if aggregation.variable.short_name in ['q', 'u1', 'au', 'qp', 'up1']:
         raw_values = getattr(ts, aggregation.variable.short_name)
     elif aggregation.variable.short_name == 'ts_max':
-        if hasattr(nodes_or_lines, 'line_geometries'):
-            if nodes_or_lines.line_geometries.ndim == 0:
-                a = nodes_or_lines.line_coords[[0, 2, 1, 3], :]
-                b = np.split(a, np.shape(a)[1], 1)
-                lengths = np.array(list(map(line_geometry_length, b)))
-            else:
-                lengths = line_geometries_to_lengths(nodes_or_lines.line_geometries)
-        else:
-            a = nodes_or_lines.line_coords[[0, 2, 1, 3], :]
-            b = np.split(a, np.shape(a)[1], 1)
-            lengths = np.array(list(map(line_geometry_length, b)))
+        lengths = get_lengths(nodes_or_lines)
 
         ts_u1 = ts.u1
         ts_u1[ts_u1 == -9999] = np.nan
@@ -196,14 +201,19 @@ def prepare_timeseries(
     if aggregation.variable.short_name == 'ts_max':
         raw_values[:, np.in1d(kcu_types, np.array(NON_TS_REDUCING_KCU))] = 9999
 
-    if aggregation.sign.short_name == 'pos':
-        raw_values_signed = raw_values * (raw_values >= 0).astype(int)
-    elif aggregation.sign.short_name == 'neg':
-        raw_values_signed = raw_values * (raw_values < 0).astype(int)
-    elif aggregation.sign.short_name == 'abs':
-        raw_values_signed = np.absolute(raw_values)
-    elif aggregation.sign.short_name == 'net':
-        raw_values_signed = raw_values
+    if aggregation.sign:
+        if aggregation.sign.short_name == 'pos':
+            raw_values_signed = raw_values * (raw_values >= 0).astype(int)
+        elif aggregation.sign.short_name == 'neg':
+            raw_values_signed = raw_values * (raw_values < 0).astype(int)
+        elif aggregation.sign.short_name == 'abs':
+            raw_values_signed = np.absolute(raw_values)
+        elif aggregation.sign.short_name == 'net':
+            raw_values_signed = raw_values
+        elif aggregation.sign.short_name == '':
+            raw_values_signed = raw_values
+        else:
+            raise ValueError(f"Aggregation has invalid sign type '{aggregation.sign}'")
     else:
         raw_values_signed = raw_values
 
@@ -264,7 +274,8 @@ def time_aggregate(
         start_time,
         end_time,
         aggregation: Aggregation,
-        cfl_strictness=1
+        cfl_strictness=1,
+        **kwargs  # to make signature interchangeable with hybrid_time_aggregate
 ):
     """
     Aggregate the variable with method using threshold within time frame
@@ -295,17 +306,26 @@ def time_aggregate(
     return result
 
 
-def hybrid_time_aggregate(gr,
-                          ids,
-                          start_time,
-                          end_time,
-                          aggregation):
+def hybrid_time_aggregate(
+        nodes_or_lines: Union[Nodes, Lines],
+        start_time: float,
+        end_time: float,
+        aggregation: Aggregation,
+        gr: GridH5ResultAdmin,
+        **kwargs  # to make signature interchangeable with time_aggregate
+):
+    """
+    Aggregations for which both the node/flowline and the flowlines/nodes it is connected to are required
+    """
     if 'q_' in aggregation.variable.short_name:
-        flows = flow_per_node(gr=gr, node_ids=ids,
-                              start_time=start_time,
-                              end_time=end_time,
-                              out='_out' in aggregation.variable.short_name,
-                              aggregation_method=aggregation.method)
+        flows = flow_per_node(
+            gr=gr,
+            node_ids=nodes_or_lines.id,
+            start_time=start_time,
+            end_time=end_time,
+            out='_out' in aggregation.variable.short_name,
+            aggregation_method=aggregation.method
+        )
         if '_x' in aggregation.variable.short_name:
             result = flows[:, 1]
         elif '_y' in aggregation.variable.short_name:
@@ -313,8 +333,22 @@ def hybrid_time_aggregate(gr,
         else:
             raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
         if '_mm' in aggregation.variable.short_name:
-            surface_area = gr.nodes.filter(id__in=ids).sumax
+            surface_area = gr.nodes.filter(id__in=nodes_or_lines.id).sumax
             result = result / surface_area
+    elif aggregation.variable.short_name == 'grad':
+        gradients_per_timestep, tintervals = gradients(
+            gr=gr,
+            flowline_ids=nodes_or_lines.id,
+            start_time=start_time,
+            end_time=end_time,
+            aggregation_sign=aggregation.sign
+        )
+        result = aggregate_prepared_timeseries(
+            timeseries=gradients_per_timestep,
+            tintervals=tintervals,
+            start_time=start_time,
+            aggregation=aggregation
+        )
     else:
         raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
 
@@ -323,7 +357,14 @@ def hybrid_time_aggregate(gr,
     return result
 
 
-def flow_per_node(gr: GridH5ResultAdmin, node_ids: list, start_time: int, end_time: int, out: bool, aggregation_method):
+def flow_per_node(
+        gr: GridH5ResultAdmin,
+        node_ids: List,
+        start_time: float,
+        end_time: float,
+        out: bool,
+        aggregation_method
+):
     """
     Calculate the aggregate of all flows per node, split in x and y directions
 
@@ -392,6 +433,61 @@ def flow_per_node(gr: GridH5ResultAdmin, node_ids: list, start_time: int, end_ti
     # select only the requested nodes
     result = select_from_2d_array_where_col_x_in(array_2d=in_or_out_flow, col_nr=0, values=node_ids)
     return result
+
+
+def flowline_node_indices(nodes: Nodes, lines: Lines):
+    """
+    Get indices of the start and end nodes of flowlines, that can be used to retrieve e.g. the water levels at
+    either side of the flowline
+    """
+    node_ids = nodes.id
+    sorter = np.argsort(node_ids)
+    line_nodes = lines.line_nodes
+    flowline_start_nodes = line_nodes[:, 0]
+    flowline_end_nodes = line_nodes[:, 1]
+    start_node_indices = sorter[np.searchsorted(node_ids, flowline_start_nodes, sorter=sorter)]
+    end_node_indices = sorter[np.searchsorted(node_ids, flowline_end_nodes, sorter=sorter)]
+    return start_node_indices, end_node_indices
+
+
+def gradients(
+        gr: GridH5ResultAdmin,
+        flowline_ids: np.array,
+        start_time: float = None,
+        end_time: float = None,
+        aggregation_sign = AggregationSign
+    ) -> Tuple[np.array, np.array]:
+    """
+    Calculate the water level gradient for a set of flowlines
+
+    :returns: - 2D numpy array; one column is one time step; one row is one flowline;
+    - 1D numpy array of time intervals
+    """
+    # flowline_ids = flowline_ids[np.where(flowline_ids != 0)]  # ignore dummy flowline
+    lines = gr.lines.filter(id__in=flowline_ids)
+    nodes = filter_nodes_by_lines(gr.nodes, lines)
+    start_node_indices, end_node_indices = flowline_node_indices(nodes=nodes, lines=lines)
+    dummy_aggregation_method = AggregationMethod(short_name='dummy', long_name='dummy')
+    water_level_aggregation = Aggregation(
+        variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+        method=dummy_aggregation_method,  # value is not used in prepare_timeseries()
+        sign=aggregation_sign
+    )
+    water_levels, time_intervals = prepare_timeseries(
+        nodes_or_lines=nodes,
+        start_time=start_time,
+        end_time=end_time,
+        aggregation=water_level_aggregation
+    )
+    water_levels_start = water_levels.T[start_node_indices]
+    print(f"water_levels_start.shape: {water_levels_start.shape}")
+    water_levels_end = water_levels.T[end_node_indices]
+    print(f"water_levels_end.shape: {water_levels_end.shape}")
+    distances = get_lengths(lines)
+    print(f"distances.shape: {distances.shape}")
+    print(f"distances: {distances}")
+    gradients = ((water_levels_end - water_levels_start).T / distances)
+    return gradients, time_intervals
 
 
 def empty_raster_from_vector_layer(layer, pixel_size_x, pixel_size_y, bands=1, nodatavalue=-9999):
@@ -669,17 +765,36 @@ def filter_lines_by_node_ids(lines, node_ids):
     return result
 
 
+def filter_nodes_by_lines(nodes, lines):
+    """
+    Return all `nodes` that are connected to given `lines`
+    """
+    node_ids = np.unique(lines.line_nodes)
+    result = nodes.filter(id__in=node_ids)
+    return result
+
+
 def select_from_2d_array_where_col_x_in(array_2d, col_nr, values):
     return array_2d[np.in1d(array_2d[:, col_nr], values), :]
 
 
-def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggregations: List[Aggregation],
-                              bbox=None, start_time: int = None, end_time: int = None, subsets=None, epsg: int = 28992,
-                              interpolation_method: str = None, resample_point_layer: bool = False,
-                              resolution: float = None, output_flowlines: bool = True, output_nodes: bool = True,
-                              output_cells: bool = True, output_rasters: bool = True):
+def aggregate_threedi_results(
+        gridadmin: str,
+        results_3di: str,
+        demanded_aggregations: List[Aggregation],
+        bbox=None,
+        start_time: int = None,
+        end_time: int = None,
+        subsets=None,
+        interpolation_method: str = None,
+        resample_point_layer: bool = False,
+        resolution: float = None,
+        output_flowlines: bool = True,
+        output_nodes: bool = True,
+        output_cells: bool = True,
+        output_rasters: bool = True
+):
     """
-    # TODO: use new version of threedi_ogr that inludes adding default attributes to nodes, cells and flowline layers
     :param resolution:
     :param interpolation_method:
     :param gridadmin: path to gridadmin.h5
@@ -736,45 +851,42 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
 
         new_column_name = da.as_column_name()
 
-        if da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_FLOW]):
+        if da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_FLOW, VT_FLOW_HYBRID]):
             if output_flowlines:
                 if first_pass_flowlines:
                     first_pass_flowlines = False
                 try:
-                    line_results[new_column_name] = time_aggregate(nodes_or_lines=lines,
-                                                                   start_time=start_time,
-                                                                   end_time=end_time,
-                                                                   aggregation=da
-                                                                   )
+                    if da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_FLOW]):
+                        agg_func = time_aggregate
+                    else:
+                        agg_func = hybrid_time_aggregate
+                    line_results[new_column_name] = agg_func(
+                        nodes_or_lines=lines,
+                        start_time=start_time,
+                        end_time=end_time,
+                        aggregation=da,
+                        gr=gr
+                    )
                 except AttributeError:
                     warnings.warn('Demanded aggregation of variable that is not included in these 3Di results')
                     line_results[new_column_name] = np.full(len(line_results['id']), fill_value=None, dtype=np.float)
 
-        elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE]):
+        elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE, VT_NODE_HYBRID]):
             if output_nodes or output_cells or output_rasters:
                 if first_pass_nodes:
                     first_pass_nodes = False
                 try:
-                    node_results[new_column_name] = time_aggregate(nodes_or_lines=nodes,
-                                                                   start_time=start_time,
-                                                                   end_time=end_time,
-                                                                   aggregation=da
-                                                                   )
-                except AttributeError:
-                    warnings.warn('Demanded aggregation of variable that is not included in these 3Di results')
-                    node_results[new_column_name] = np.full(len(node_results['id']), fill_value=None, dtype=np.float)
-
-        elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE_HYBRID]):
-            if output_nodes or output_cells or output_rasters:
-                if first_pass_nodes:
-                    first_pass_nodes = False
-                try:
-                    node_results[new_column_name] = hybrid_time_aggregate(gr=gr,
-                                                                          ids=nodes.id,
-                                                                          start_time=start_time,
-                                                                          end_time=end_time,
-                                                                          aggregation=da
-                                                                          )
+                    if da.variable.short_name in AGGREGATION_VARIABLES.short_names(var_types=[VT_NODE]):
+                        agg_func = time_aggregate
+                    else:
+                        agg_func = hybrid_time_aggregate
+                    node_results[new_column_name] = agg_func(
+                        nodes_or_lines=nodes,
+                        start_time=start_time,
+                        end_time=end_time,
+                        aggregation=da,
+                        gr=gr
+                    )
                 except AttributeError:
                     warnings.warn('Demanded aggregation of variable that is not included in these 3Di results')
                     node_results[new_column_name] = np.full(len(node_results['id']), fill_value=None, dtype=np.float)
@@ -790,17 +902,19 @@ def aggregate_threedi_results(gridadmin: str, results_3di: str, demanded_aggrega
             except KeyError:
                 attr_data_types[attr] = ogr.OFTString
         if output_nodes:
-            threedigrid_to_ogr(threedigrid_src=nodes,
-                               tgt_ds=tgt_ds,
-                               attributes=attributes,
-                               attr_data_types=attr_data_types
-                               )
+            threedigrid_to_ogr(
+                threedigrid_src=nodes,
+                tgt_ds=tgt_ds,
+                attributes=attributes,
+                attr_data_types=attr_data_types
+            )
         if output_cells or output_rasters or resample_point_layer:
-            threedigrid_to_ogr(threedigrid_src=cells,
-                               tgt_ds=tgt_ds,
-                               attributes=attributes,
-                               attr_data_types=attr_data_types
-                               )
+            threedigrid_to_ogr(
+                threedigrid_src=cells,
+                tgt_ds=tgt_ds,
+                attributes=attributes,
+                attr_data_types=attr_data_types
+            )
 
         # rasters
         if output_rasters or resample_point_layer:
