@@ -41,8 +41,6 @@ from .style import *
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'threedi_custom_stats_dialog_base.ui'))
 
-dialog_ui_fn = os.path.join(os.path.dirname(__file__), 'test_dialog.ui')
-
 DEFAULT_AGGREGATION = Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
                                   sign=AggregationSign(short_name='net', long_name='Net'),
                                   method=AGGREGATION_METHODS.get_by_short_name('sum')
@@ -146,11 +144,12 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         # units column
         units_combobox = QtWidgets.QComboBox()
         self.tableWidgetAggregations.setCellWidget(current_row, 4, units_combobox)
-        self.set_units_widget(row=current_row,
-                              variable=variable_combobox.itemData(variable_combobox.currentIndex()),
-                              method=method
-                              )
-        # TODO: dit nu nu lastig te setten obv aggregation, omdat die wel een attribuut multiplier heeft,
+        self.set_units_widget(
+            row=current_row,
+            variable=variable_combobox.itemData(variable_combobox.currentIndex()),
+            method=method
+        )
+        # TODO: dit is nu lastig te setten obv aggregation, omdat die wel een attribuut multiplier heeft,
         #  maar niet een attribuut units. laat ik nu even voor wat het is
         units_combobox.currentTextChanged.connect(self.units_combobox_text_changed)
         self.update_demanded_aggregations()
@@ -181,10 +180,9 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         variable = variable_widget.itemData(variable_widget.currentIndex())
         method_widget = self.tableWidgetAggregations.cellWidget(row, 2)
         method = method_widget.itemData(method_widget.currentIndex())
-        if method is not None:  # this happens when the method widget is cleared before refilling it
-            self.set_threshold_widget(row=row, method=method)
-            self.set_units_widget(row=row, variable=variable, method=method)
-            self.update_demanded_aggregations()
+        self.set_threshold_widget(row=row, method=method)
+        self.set_units_widget(row=row, variable=variable, method=method)
+        self.update_demanded_aggregations()
 
     def direction_combobox_text_changed(self):
         self.update_demanded_aggregations()
@@ -210,7 +208,9 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def set_method_widget(self, row, variable):
         self.tableWidgetAggregations.cellWidget(row, 2).clear()
+        self.tableWidgetAggregations.cellWidget(row, 2).setEnabled(False)  # Disable if aggregation has no methods
         for i, method_short_name in enumerate(variable.applicable_methods):
+            self.tableWidgetAggregations.cellWidget(row, 2).setEnabled(True)  # Enable if aggregation has methods
             method = AGGREGATION_METHODS.get_by_short_name(method_short_name)
             self.tableWidgetAggregations.cellWidget(row, 2).addItem(method.long_name)
             self.tableWidgetAggregations.cellWidget(row, 2).setItemData(i, method)
@@ -219,25 +219,28 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.set_threshold_widget(row=row, method=method)
 
     def set_threshold_widget(self, row, method):
-        self.tableWidgetAggregations.cellWidget(row, 3).setEnabled(method.has_threshold)
+        enabled = False if method is None else method.has_threshold
+        self.tableWidgetAggregations.cellWidget(row, 3).setEnabled(enabled)
 
     def set_units_widget(self, row, variable, method):
         """Called when variable or method changes"""
         units_widget = self.tableWidgetAggregations.cellWidget(row, 4)
         units_widget.clear()
         units_dict = variable.units
-        for i, units in enumerate(units_dict.keys()):
-            multiplier_tuple = units_dict[units]
+        for i, (units, multiplier_tuple) in enumerate(units_dict.items()):
             multiplier = multiplier_tuple[0]
-            if method.integrates_over_time:
-                units_str = units[0]
+            if method:
+                if method.integrates_over_time:
+                    units_str = units[0]
+                else:
+                    units_str = '/'.join(units)
+                    if len(multiplier_tuple) == 2:
+                        multiplier *= multiplier_tuple[1]
+                if method.is_percentage:
+                    units_str = '%'
+                    multiplier = 1
             else:
-                units_str = '/'.join(units)
-                if len(multiplier_tuple) == 2:
-                    multiplier *= multiplier_tuple[1]
-            if method.is_percentage:
-                units_str = '%'
-                multiplier = 1
+                units_str = units[0]
             # add item to the widget if no similar item exists:
             if not any(units_str in units_widget.itemText(i) for i in range(units_widget.count())):
                 units_widget.addItem(units_str)
@@ -477,7 +480,8 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def update_demanded_aggregations(self):
         self.demanded_aggregations = []
-        for row in range(self.tableWidgetAggregations.rowCount()):
+        row_count = self.tableWidgetAggregations.rowCount()
+        for row in range(row_count):
             # Variable
             variable_widget = self.tableWidgetAggregations.cellWidget(row, 0)
             variable = variable_widget.itemData(variable_widget.currentIndex())
@@ -502,10 +506,28 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                              method=method,
                              threshold=threshold,
                              multiplier=multiplier)
+            if da.is_valid():
+                self.demanded_aggregations.append(da)
 
-            self.demanded_aggregations.append(da)
+            else:
+                # This method is often called due to a signal being fired, but this can also happen when the contents of
+                # the row's widgets are not yet complete, i.e. the information in the row cannot be tranlated to a
+                # valid Aggregation instance. We just continue, but self.demanded_aggregations_are_valid() will now
+                # return False until update_demanded_aggregations() will be called again with valid contents in the
+                # aggregations table
+                return
 
         self.set_styling_tab()
+
+    def demanded_aggregations_are_valid(self) -> bool:
+        """
+        Checks if the contents of the table of demanded aggregations can be interpreted in a valid way
+        """
+        if self.tableWidgetAggregations.rowCount() != len(self.demanded_aggregations):
+            return False
+        if not all([da.is_valid() for da in self.demanded_aggregations]):
+            return False
+        return True
 
     def validate(self):
         valid = True
@@ -515,11 +537,6 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             valid = False
         if self.groupBoxRasters.isChecked() and self.mQgsFileWidgetRasterFolder.filePath() == '':
             valid = False
+        if not self.demanded_aggregations_are_valid():
+            valid = False
         self.dialogButtonBoxOKCancel.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(valid)
-
-
-class StylingConfigDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None):
-        super(StylingConfigDialog, self).__init__(parent)
-        uic.loadUi(dialog_ui_fn, self)
-        self.show()

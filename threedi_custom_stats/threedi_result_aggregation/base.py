@@ -138,8 +138,6 @@ def prepare_timeseries(
     )
     ts = nodes_or_lines.timeseries(ts_start_time, ts_end_time)
 
-    raw_values = np.ndarray((0, 0))
-
     # Line variables
     if aggregation.variable.short_name in ['q', 'u1', 'au', 'qp', 'up1']:
         raw_values = getattr(ts, aggregation.variable.short_name)
@@ -185,7 +183,7 @@ def prepare_timeseries(
         raw_values = np.divide(ts_q_sss, nodes_or_lines.sumax)
 
     else:
-        raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
+        raise ValueError(f"Unknown aggregation variable '{aggregation.variable.long_name}'")
 
     # replace -9999 in raw values by NaN
     raw_values[raw_values == -9999] = np.nan
@@ -339,6 +337,7 @@ def hybrid_time_aggregate(
         gradients_per_timestep, tintervals = gradients(
             gr=gr,
             flowline_ids=nodes_or_lines.id,
+            gradient_type="water_level",
             start_time=start_time,
             end_time=end_time,
             aggregation_sign=aggregation.sign
@@ -348,6 +347,12 @@ def hybrid_time_aggregate(
             tintervals=tintervals,
             start_time=start_time,
             aggregation=aggregation
+        )
+    elif aggregation.variable.short_name == 'bed_grad':
+        result, _ = gradients(
+            gr=gr,
+            flowline_ids=nodes_or_lines.id,
+            gradient_type="bed_level"
         )
     else:
         raise ValueError('Unknown aggregation variable "{}".'.format(aggregation.variable.long_name))
@@ -453,40 +458,43 @@ def flowline_node_indices(nodes: Nodes, lines: Lines):
 def gradients(
         gr: GridH5ResultAdmin,
         flowline_ids: np.array,
+        gradient_type: str,
+        aggregation_sign: AggregationSign = None,
         start_time: float = None,
-        end_time: float = None,
-        aggregation_sign = AggregationSign
+        end_time: float = None
     ) -> Tuple[np.array, np.array]:
     """
-    Calculate the water level gradient for a set of flowlines
+    Calculate the water level (`gradient_type='water_level'`) or bed level (`gradient_type='bed_level'`) gradient
+    for a set of flowlines
 
     :returns: - 2D numpy array; one column is one time step; one row is one flowline;
     - 1D numpy array of time intervals
     """
-    # flowline_ids = flowline_ids[np.where(flowline_ids != 0)]  # ignore dummy flowline
     lines = gr.lines.filter(id__in=flowline_ids)
     nodes = filter_nodes_by_lines(gr.nodes, lines)
     start_node_indices, end_node_indices = flowline_node_indices(nodes=nodes, lines=lines)
-    dummy_aggregation_method = AggregationMethod(short_name='dummy', long_name='dummy')
-    water_level_aggregation = Aggregation(
-        variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
-        method=dummy_aggregation_method,  # value is not used in prepare_timeseries()
-        sign=aggregation_sign
-    )
-    water_levels, time_intervals = prepare_timeseries(
-        nodes_or_lines=nodes,
-        start_time=start_time,
-        end_time=end_time,
-        aggregation=water_level_aggregation
-    )
-    water_levels_start = water_levels.T[start_node_indices]
-    print(f"water_levels_start.shape: {water_levels_start.shape}")
-    water_levels_end = water_levels.T[end_node_indices]
-    print(f"water_levels_end.shape: {water_levels_end.shape}")
+    if gradient_type == "water_level":
+        dummy_aggregation_method = AggregationMethod(short_name='dummy', long_name='dummy')
+        water_level_aggregation = Aggregation(
+            variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+            method=dummy_aggregation_method,  # value is not used in prepare_timeseries()
+            sign=aggregation_sign
+        )
+        levels, time_intervals = prepare_timeseries(
+            nodes_or_lines=nodes,
+            start_time=start_time,
+            end_time=end_time,
+            aggregation=water_level_aggregation
+        )
+    elif gradient_type == "bed_level":
+        levels = nodes.dmax
+        time_intervals = None
+    else:
+        raise ValueError(f"Value for 'gradient_type' must be 'water_level' or 'bed_level', not '{gradient_type}'")
+    levels_start = levels.T[start_node_indices]
+    levels_end = levels.T[end_node_indices]
     distances = get_lengths(lines)
-    print(f"distances.shape: {distances.shape}")
-    print(f"distances: {distances}")
-    gradients = ((water_levels_end - water_levels_start).T / distances)
+    gradients = ((levels_end - levels_start).T / distances)
     return gradients, time_intervals
 
 

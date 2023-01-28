@@ -108,10 +108,14 @@ AGGREGATION_SIGN_NA = AggregationSign(short_name='', long_name=NA_TEXT)
 
 
 class Aggregation:
-    def __init__(self, variable: AggregationVariable, method: AggregationMethod,
-                 sign: Optional[AggregationSign] = AGGREGATION_SIGN_NA,
-                 threshold: Optional[float] = None, multiplier: float = 1):
-        assert isinstance(method, AggregationMethod)
+    def __init__(
+            self,
+            variable: AggregationVariable,
+            method: Optional[AggregationMethod] = None,
+            sign: Optional[AggregationSign] = AGGREGATION_SIGN_NA,
+            threshold: Optional[float] = None,
+            multiplier: float = 1
+    ):
         self.variable = variable
         self.sign = sign
         self.method = method
@@ -119,18 +123,24 @@ class Aggregation:
         self.multiplier = multiplier
 
     def as_column_name(self):
-        column_name_list = []
+        column_name_list = [self.variable.short_name]
+        if self.variable.signed:
+            column_name_list.append(self.sign.short_name)
         try:
-            column_name_list.append(self.variable.short_name)
-            if self.variable.signed:
-                column_name_list.append(self.sign.short_name)
             column_name_list.append(self.method.short_name)
             if self.method.short_name in ['above_thres', 'below_thres']:
                 thres_parsed = str(self.threshold).replace('.', '_')
                 column_name_list.append(thres_parsed)
-            return '_'.join(column_name_list).lower()
+        except AttributeError:  # allow aggregation to have no method
+            pass
+        return '_'.join(column_name_list).lower()
+
+    def is_valid(self) -> bool:
+        try:
+            self.as_column_name()
+            return True
         except AttributeError:
-            return None
+            return False
 
 
 def filter_demanded_aggregations(das: List[Aggregation], variable_types):
