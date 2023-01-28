@@ -4,8 +4,7 @@ from typing import Dict, Union, List, Tuple, Optional
 import numpy as np
 from osgeo import gdal
 from shapely.geometry import LineString, Point
-from pygeos import STRtree
-from pygeos.io import from_shapely
+from shapely.strtree import STRtree
 from scipy.ndimage import label, generate_binary_structure, maximum_position
 from scipy.signal import find_peaks
 from threedigrid.admin.gridadmin import GridH5Admin
@@ -224,13 +223,13 @@ class LeakDetector:
                 feedback.pushInfo(f"{datetime.now()}")
                 feedback.setProgressText("Update edge exchange level from obstacles...")
                 feedback.setProgress(0)
-            flowline_geometries_pygeos = [edge.flowline_geometry_pygeos for edge in self.edges]
-            flowline_geometry_tree = STRtree(flowline_geometries_pygeos)
+            flowline_geometries = [edge.flowline_geometry for edge in self.edges]
+            flowline_geometry_tree = STRtree(flowline_geometries)
             if feedback:
                 if feedback.isCanceled():
                     return
             obstacle_flowline_intersection = flowline_geometry_tree.query_bulk(
-                [from_shapely(obstacle[0]) for obstacle in obstacles],
+                [obstacle[0] for obstacle in obstacles],
                 predicate='intersects'
             )
             if feedback:
@@ -454,7 +453,6 @@ class Edge:
                 if intersection_coords:
                     self.start_coord, self.end_coord = intersection_coords
         self.geometry = LineString([Point(*self.start_coord), Point(*self.end_coord)])
-        self.flowline_geometry_pygeos = from_shapely(self.flowline_geometry)
 
         # set exchange_level
         if exchange_level:
