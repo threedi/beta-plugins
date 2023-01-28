@@ -228,7 +228,7 @@ class LeakDetector:
             if feedback:
                 if feedback.isCanceled():
                     return
-            obstacle_flowline_intersection = flowline_geometry_tree.query_bulk(
+            obstacle_flowline_intersection = flowline_geometry_tree.query(
                 [obstacle[0] for obstacle in obstacles],
                 predicate='intersects'
             )
