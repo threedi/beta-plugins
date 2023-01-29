@@ -22,7 +22,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-
+import os
 import sys
 from types import MethodType
 
@@ -32,19 +32,34 @@ from qgis.PyQt.QtCore import QPersistentModelIndex
 from qgis.PyQt.QtCore import Qt
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem
 from qgis.gui import QgsFileWidget
+from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 
-from .threedi_result_aggregation import *
-from .presets import *
-from .style import *
+from .presets import PRESETS, Preset
+from .threedi_result_aggregation.aggregation_classes import (
+    Aggregation,
+    AggregationSign,
+    filter_demanded_aggregations, VT_NAMES, VT_FLOW, VT_FLOW_HYBRID, VT_NODE, VT_NODE_HYBRID
+)
+from .threedi_result_aggregation.constants import (
+    AGGREGATION_VARIABLES,
+    AGGREGATION_METHODS,
+    AGGREGATION_SIGNS,
+    NA_TEXT
+)
+from .style import (
+    DEFAULT_STYLES, STYLES, Style, STYLE_FLOW_DIRECTION, STYLE_SINGLE_COLUMN_GRADUATED_NODE,
+    STYLE_SINGLE_COLUMN_GRADUATED_CELL
+)
 
-# This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
+# This loads the .ui file so that PyQt can populate the plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'threedi_custom_stats_dialog_base.ui'))
 
-DEFAULT_AGGREGATION = Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
-                                  sign=AggregationSign(short_name='net', long_name='Net'),
-                                  method=AGGREGATION_METHODS.get_by_short_name('sum')
-                                  )
+DEFAULT_AGGREGATION = Aggregation(
+    variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
+    sign=AggregationSign(short_name='net', long_name='Net'),
+    method=AGGREGATION_METHODS.get_by_short_name('sum')
+)
 
 
 def update_column_widget(self, demanded_aggregations, aggregation_variable_types: list):
@@ -61,11 +76,6 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
     def __init__(self, iface, parent=None):
         """Constructor."""
         super(ThreeDiCustomStatsDialog, self).__init__(parent)
-        # Set up the user interface from Designer through FORM_CLASS.
-        # After self.setupUi() you can access any designer object by doing
-        # self.<objectname>, and you can use autoconnect slots - see
-        # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
-        # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
         self.iface = iface
 
@@ -242,7 +252,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             else:
                 units_str = units[0]
             # add item to the widget if no similar item exists:
-            if not any(units_str in units_widget.itemText(i) for i in range(units_widget.count())):
+            if not any(units_str in units_widget.itemText(x) for x in range(units_widget.count())):
                 units_widget.addItem(units_str)
                 units_widget.setItemData(i, multiplier)
 
@@ -284,23 +294,27 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def set_styling_tab(
             self,
-            flowline_style: Style = STYLE_FLOW_DIRECTION,
-            nodes_style: Style = STYLE_SINGLE_COLUMN_GRADUATED_NODE,
-            cells_style: Style = STYLE_SINGLE_COLUMN_GRADUATED_CELL,
+            flowline_style: Style = None,
+            nodes_style: Style = None,
+            cells_style: Style = None,
             flowlines_style_param_values: dict = None,
             cells_style_param_values: dict = None,
             nodes_style_param_values: dict = None
     ):
+        """
+        Styles can be set (e.g. when a preset is used) or be None so the default for the first variable is used
+        """
         # Flowlines
         filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_FLOW, VT_FLOW_HYBRID])
         if len(filtered_das) > 0:
             if flowline_style is None:
-                self.groupBoxFlowlines.setChecked(False)
+                flowlines_style_name = DEFAULT_STYLES[filtered_das[0].variable.short_name]["flowline"].name
             else:
-                idx = self.comboBoxFlowlinesStyleType.findText(flowline_style.name)
-                if idx > -1:
-                    self.comboBoxFlowlinesStyleType.setCurrentIndex(idx)
-                self.groupBoxFlowlines.setChecked(True)
+                flowlines_style_name = flowline_style.name
+            idx = self.comboBoxFlowlinesStyleType.findText(flowlines_style_name)
+            if idx > -1:
+                self.comboBoxFlowlinesStyleType.setCurrentIndex(idx)
+            self.groupBoxFlowlines.setChecked(True)
             self.groupBoxFlowlines.setEnabled(True)
             self.flowline_styling_type_changed(param_values=flowlines_style_param_values)
         else:
@@ -311,26 +325,25 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_NODE, VT_NODE_HYBRID])
         if len(filtered_das) > 0:
             if nodes_style is None:
-                self.groupBoxNodes.setChecked(False)
+                nodes_style_name = DEFAULT_STYLES[filtered_das[0].variable.short_name]["node"].name
             else:
-                idx = self.comboBoxNodesStyleType.findText(nodes_style.name)
-                if idx > -1:
-                    self.comboBoxNodesStyleType.setCurrentIndex(idx)
-                self.groupBoxNodes.setChecked(True)
+                nodes_style_name = nodes_style.name
+            idx = self.comboBoxNodesStyleType.findText(nodes_style_name)
+            if idx > -1:
+                self.comboBoxNodesStyleType.setCurrentIndex(idx)
+            self.groupBoxNodes.setChecked(True)
 
             if cells_style is None:
-                self.groupBoxCells.setChecked(False)
+                cells_style_name = DEFAULT_STYLES[filtered_das[0].variable.short_name]["cell"].name
             else:
-                idx = self.comboBoxCellsStyleType.findText(cells_style.name)
-                if idx > -1:
-                    self.comboBoxCellsStyleType.setCurrentIndex(idx)
-                self.groupBoxCells.setChecked(True)
+                cells_style_name = cells_style.name
+
+            idx = self.comboBoxCellsStyleType.findText(cells_style_name)
+            if idx > -1:
+                self.comboBoxCellsStyleType.setCurrentIndex(idx)
+            self.groupBoxCells.setChecked(True)
 
             # Do not automatically set groupBoxRasters to Checked because this requires follow-up input from the user
-            self.groupBoxNodes.setEnabled(True)
-            self.groupBoxCells.setEnabled(True)
-            self.groupBoxRasters.setEnabled(True)
-
             self.node_styling_type_changed(param_values=nodes_style_param_values)
             self.cell_styling_type_changed(param_values=cells_style_param_values)
 
@@ -414,13 +427,6 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             if self.mQgsFileWidgetRasterFolder.filePath() == '':
                 results_3di_dir = os.path.dirname(results_3di)
                 self.mQgsFileWidgetRasterFolder.setFilePath(results_3di_dir)
-            # Onderstaande is tijdelijk nodig vanwege een bug in threedigrid of qgis of de combinatie
-            if hasattr(self.gr.lines, 'line_geometries'):
-                self.lineGeometryWarningLabel.setText('')
-            else:
-                self.lineGeometryWarningLabel.setText("Warning: no line geometries found. Flowline length instead "
-                                                      "of geometry length will be used to calculate max timestep \n"
-                                                      "for culverts and channels.")
         else:
             self.gr = None
 
@@ -471,12 +477,14 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.checkBoxResample.setChecked(preset.resample_point_layer)
 
         # set styling from preset
-        self.set_styling_tab(flowline_style=preset.flowlines_style,
-                             nodes_style=preset.nodes_style,
-                             cells_style=preset.cells_style,
-                             flowlines_style_param_values=preset.flowlines_style_param_values,
-                             nodes_style_param_values=preset.nodes_style_param_values,
-                             cells_style_param_values=preset.cells_style_param_values)
+        self.set_styling_tab(
+            flowline_style=preset.flowlines_style,
+            nodes_style=preset.nodes_style,
+            cells_style=preset.cells_style,
+            flowlines_style_param_values=preset.flowlines_style_param_values,
+            nodes_style_param_values=preset.nodes_style_param_values,
+            cells_style_param_values=preset.cells_style_param_values
+        )
 
     def update_demanded_aggregations(self):
         self.demanded_aggregations = []

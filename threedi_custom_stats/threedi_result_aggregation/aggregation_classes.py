@@ -38,7 +38,7 @@ class AggregationVariableList(list):
     def short_names(self, var_types=None):
         result = list()
         for var in self:
-            if var.var_type is None:
+            if var.var_type is None or var_types is None:
                 result.append(var.short_name)
             elif var.var_type in var_types:
                 result.append(var.short_name)
@@ -47,7 +47,7 @@ class AggregationVariableList(list):
     def long_names(self, var_types=None):
         result = list()
         for var in self:
-            if var.var_type is None:
+            if var.var_type is None or var_types is None:
                 result.append(var.long_name)
             elif var.var_type in var_types:
                 result.append(var.long_name)
