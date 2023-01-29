@@ -29,9 +29,11 @@ class Style:
 def style_on_single_column(layer, qml: str, column: str):
     layer.loadNamedStyle(qml)
     layer.renderer().setClassAttribute(column)
-    layer.renderer().updateClasses(vlayer=layer,
-                                   mode=layer.renderer().mode(),
-                                   nclasses=len(layer.renderer().ranges()))
+    layer.renderer().updateClasses(
+        vlayer=layer,
+        mode=layer.renderer().mode(),
+        nclasses=len(layer.renderer().ranges())
+    )
     layer.triggerRepaint()
     utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
@@ -123,23 +125,27 @@ def style_as_vector(layer, qml: str, x: str, y: str):
     utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
-def style_flow_direction(layer, qml: str, column: str):
+def style_flow_direction(layer, qml: str, column: str, invert=False):
     layer.loadNamedStyle(qml)
 
     # set data defined rotation
-    rotation_expression = ' CASE WHEN "{}" < 0 \
-                            THEN degrees(azimuth(start_point($geometry ), end_point($geometry))) + 90 \
-                            ELSE degrees(azimuth(start_point(  $geometry ), end_point(  $geometry  ))) - 90 \
-                            END'.format(column)
+    rotation_expression = f"""
+        CASE WHEN "{column}" {">" if invert else "<"} 0
+        THEN degrees(azimuth(start_point($geometry), end_point($geometry))) + 90
+        ELSE degrees(azimuth(start_point($geometry), end_point($geometry))) - 90
+        END
+    """
     data_defined_angle = QgsMarkerSymbol().dataDefinedAngle().fromExpression(rotation_expression)
     layer.renderer().sourceSymbol()[1].subSymbol().setDataDefinedAngle(data_defined_angle)
 
     # update coloring
-    class_attribute_string = 'abs("{}")'.format(column)
+    class_attribute_string = f'abs("{column}")'
     layer.renderer().setClassAttribute(class_attribute_string)
-    layer.renderer().updateClasses(vlayer=layer,
-                                   mode=layer.renderer().mode(),
-                                   nclasses=len(layer.renderer().ranges()))
+    layer.renderer().updateClasses(
+        vlayer=layer,
+        mode=layer.renderer().mode(),
+        nclasses=len(layer.renderer().ranges())
+    )
 
     # set marker size & line width
     p10 = layer.renderer().ranges()[
@@ -172,6 +178,10 @@ def style_flow_direction(layer, qml: str, column: str):
     utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
+def style_gradient(layer, qml: str, column: str):
+    style_flow_direction(layer=layer, qml=qml, column=column, invert=True)
+
+
 def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str):
     layer.loadNamedStyle(qml)
     filter_expression = '{col1} >10 or {col2} > 50 or {col3} > 80'.format(col1=col1, col2=col2, col3=col3)
@@ -180,37 +190,53 @@ def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str
     utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
-STYLE_FLOW_DIRECTION = Style(name='Flow direction',
-                             output_type='flowline',
-                             params={'column': 'column'},
-                             qml='flow_direction.qml',
-                             styling_method=style_flow_direction
-                             )
+STYLE_FLOW_DIRECTION = Style(
+    name='Flow direction',
+    output_type='flowline',
+    params={'column': 'column'},
+    qml='flow_direction.qml',
+    styling_method=style_flow_direction
+)
 
-STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE = Style(name='Single column graduated',
-                                               output_type='flowline',
-                                               params={'column': 'column'},
-                                               qml='flowline.qml',
-                                               styling_method=style_on_single_column)
+STYLE_GRADIENT = Style(
+    name='Gradient',
+    output_type='flowline',
+    params={'column': 'column'},
+    qml='flow_direction.qml',
+    styling_method=style_gradient
+)
 
-STYLE_TIMESTEP_REDUCTION_ANALYSIS = Style(name='Timestep reduction analysis',
-                                          output_type='flowline',
-                                          params={'col1': 'column', 'col2': 'column', 'col3': 'column'},
-                                          qml='ts_reduction_analysis.qml',
-                                          styling_method=style_ts_reduction_analysis)
+STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE = Style(
+    name='Single column graduated',
+    output_type='flowline',
+    params={'column': 'column'},
+    qml='flowline.qml',
+    styling_method=style_on_single_column
+)
 
-STYLE_SINGLE_COLUMN_GRADUATED_NODE = Style(name='Single column graduated',
-                                           output_type='node',
-                                           params={'column': 'column'},
-                                           qml='node.qml',
-                                           styling_method=style_on_single_column)
+STYLE_TIMESTEP_REDUCTION_ANALYSIS = Style(
+    name='Timestep reduction analysis',
+    output_type='flowline',
+    params={'col1': 'column', 'col2': 'column', 'col3': 'column'},
+    qml='ts_reduction_analysis.qml',
+    styling_method=style_ts_reduction_analysis
+)
 
-STYLE_CHANGE_WL = Style(name='Change in water level',
-                        output_type='cell',
-                        params={'first': 'column',
-                                'last': 'column'},
-                        qml='change_water_level.qml',
-                        styling_method=style_change_water_level)
+STYLE_SINGLE_COLUMN_GRADUATED_NODE = Style(
+    name='Single column graduated',
+    output_type='node',
+    params={'column': 'column'},
+    qml='node.qml',
+    styling_method=style_on_single_column
+)
+
+STYLE_CHANGE_WL = Style(
+    name='Change in water level',
+    output_type='cell',
+    params={'first': 'column', 'last': 'column'},
+    qml='change_water_level.qml',
+    styling_method=style_change_water_level
+)
 
 STYLE_VECTOR = Style(name='Vector',
                      output_type='node',
@@ -238,6 +264,7 @@ STYLE_BALANCE = Style(name='Balance',
 
 STYLES = [
     STYLE_FLOW_DIRECTION,
+    STYLE_GRADIENT,
     STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE,
     STYLE_TIMESTEP_REDUCTION_ANALYSIS,
     STYLE_SINGLE_COLUMN_GRADUATED_NODE,

@@ -282,14 +282,15 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.mQgsFileWidgetRasterFolder.setStorageMode(QgsFileWidget.GetDirectory)
         self.mQgsFileWidgetRasterFolder.fileChanged.connect(self.validate)
 
-    def set_styling_tab(self,
-                        flowline_style: Style = STYLE_FLOW_DIRECTION,
-                        nodes_style: Style = STYLE_SINGLE_COLUMN_GRADUATED_NODE,
-                        cells_style: Style = STYLE_SINGLE_COLUMN_GRADUATED_CELL,
-                        flowlines_style_param_values: dict = None,
-                        cells_style_param_values: dict = None,
-                        nodes_style_param_values: dict = None
-                        ):
+    def set_styling_tab(
+            self,
+            flowline_style: Style = STYLE_FLOW_DIRECTION,
+            nodes_style: Style = STYLE_SINGLE_COLUMN_GRADUATED_NODE,
+            cells_style: Style = STYLE_SINGLE_COLUMN_GRADUATED_CELL,
+            flowlines_style_param_values: dict = None,
+            cells_style_param_values: dict = None,
+            nodes_style_param_values: dict = None
+    ):
         # Flowlines
         filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_FLOW, VT_FLOW_HYBRID])
         if len(filtered_das) > 0:
@@ -326,7 +327,6 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 self.groupBoxCells.setChecked(True)
 
             # Do not automatically set groupBoxRasters to Checked because this requires follow-up input from the user
-
             self.groupBoxNodes.setEnabled(True)
             self.groupBoxCells.setEnabled(True)
             self.groupBoxRasters.setEnabled(True)
@@ -368,10 +368,11 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 param_name_item = QtWidgets.QTableWidgetItem(param_name)
                 params_widget.setItem(row, 0, param_name_item)
                 param_input_widget = QtWidgets.QComboBox()
-                param_input_widget.update = MethodType(update_column_widget,
-                                                       param_input_widget)
-                param_input_widget.update(demanded_aggregations=self.demanded_aggregations,
-                                          aggregation_variable_types=aggregation_variable_types)
+                param_input_widget.update = MethodType(update_column_widget, param_input_widget)
+                param_input_widget.update(
+                    demanded_aggregations=self.demanded_aggregations,
+                    aggregation_variable_types=aggregation_variable_types
+                )
                 params_widget.setCellWidget(row, 1, param_input_widget)
         if param_values is not None:
             for param, value in param_values.items():
@@ -442,7 +443,6 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         project = QgsProject.instance()
         crs = project.crs()
         self.mExtentGroupBox.setOutputExtentFromUser(canvas_extent, crs)
-        # self.mExtentGroupBox.setCurrentExtent()
 
     def enable_raster_folder_widget(self):
         if self.groupBoxRasters.isChecked():
