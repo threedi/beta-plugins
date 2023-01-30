@@ -51,7 +51,7 @@
     </sizepolicy>
    </property>
    <property name="currentIndex">
-    <number>0</number>
+    <number>2</number>
    </property>
    <widget class="QWidget" name="tab">
     <property name="sizePolicy">
@@ -576,83 +576,6 @@
       <bool>false</bool>
      </property>
     </widget>
-    <widget class="QLabel" name="lineGeometryWarningLabel">
-     <property name="geometry">
-      <rect>
-       <x>20</x>
-       <y>660</y>
-       <width>851</width>
-       <height>101</height>
-      </rect>
-     </property>
-     <property name="palette">
-      <palette>
-       <active>
-        <colorrole role="WindowText">
-         <brush brushstyle="SolidPattern">
-          <color alpha="255">
-           <red>208</red>
-           <green>66</green>
-           <blue>0</blue>
-          </color>
-         </brush>
-        </colorrole>
-        <colorrole role="Text">
-         <brush brushstyle="SolidPattern">
-          <color alpha="255">
-           <red>208</red>
-           <green>66</green>
-           <blue>0</blue>
-          </color>
-         </brush>
-        </colorrole>
-       </active>
-       <inactive>
-        <colorrole role="WindowText">
-         <brush brushstyle="SolidPattern">
-          <color alpha="255">
-           <red>208</red>
-           <green>66</green>
-           <blue>0</blue>
-          </color>
-         </brush>
-        </colorrole>
-        <colorrole role="Text">
-         <brush brushstyle="SolidPattern">
-          <color alpha="255">
-           <red>208</red>
-           <green>66</green>
-           <blue>0</blue>
-          </color>
-         </brush>
-        </colorrole>
-       </inactive>
-       <disabled>
-        <colorrole role="WindowText">
-         <brush brushstyle="SolidPattern">
-          <color alpha="255">
-           <red>120</red>
-           <green>120</green>
-           <blue>120</blue>
-          </color>
-         </brush>
-        </colorrole>
-        <colorrole role="Text">
-         <brush brushstyle="SolidPattern">
-          <color alpha="255">
-           <red>120</red>
-           <green>120</green>
-           <blue>120</blue>
-          </color>
-         </brush>
-        </colorrole>
-       </disabled>
-      </palette>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
    </widget>
    <widget class="QWidget" name="tab_5">
     <attribute name="title">
@@ -759,7 +682,7 @@
      </widget>
      <widget class="QComboBox" name="comboBoxNodesStyleType">
       <property name="enabled">
-       <bool>true</bool>
+       <bool>false</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -836,7 +759,7 @@
        <bool>false</bool>
       </attribute>
       <attribute name="verticalHeaderDefaultSectionSize">
-       <number>24</number>
+       <number>26</number>
       </attribute>
       <row>
        <property name="text">
@@ -944,7 +867,7 @@
        <bool>false</bool>
       </attribute>
       <attribute name="verticalHeaderDefaultSectionSize">
-       <number>24</number>
+       <number>26</number>
       </attribute>
       <row>
        <property name="text">
@@ -982,7 +905,7 @@
      </widget>
      <widget class="QComboBox" name="comboBoxCellsStyleType">
       <property name="enabled">
-       <bool>true</bool>
+       <bool>false</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -1065,7 +988,7 @@
        <bool>false</bool>
       </attribute>
       <attribute name="verticalHeaderDefaultSectionSize">
-       <number>24</number>
+       <number>26</number>
       </attribute>
       <row>
        <property name="text">
@@ -1103,7 +1026,7 @@
      </widget>
      <widget class="QComboBox" name="comboBoxFlowlinesStyleType">
       <property name="enabled">
-       <bool>true</bool>
+       <bool>false</bool>
       </property>
       <property name="geometry">
        <rect>

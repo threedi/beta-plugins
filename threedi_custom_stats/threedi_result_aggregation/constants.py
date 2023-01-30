@@ -83,9 +83,9 @@ agg_var_list = [
     {'short_name': 'bed_grad', 'long_name': 'Bed level gradient', 'signed': False,
      'applicable_methods': [], 'var_type': VT_FLOW_HYBRID, 'units': {('m',): (1,)},
      'can_resample': False, 'pre_resample_method': PRM_NONE},
-    {'short_name': 'cross_section_water_level', 'long_name': 'Water level at cross section', 'signed': False,
-     'applicable_methods': ALL_AGG_METHODS_NO_SUM, 'var_type': VT_FLOW_HYBRID, 'units': {('m',): (1,)},
-     'can_resample': False, 'pre_resample_method': PRM_NONE},
+    # {'short_name': 'cross_section_water_level', 'long_name': 'Water level at cross section', 'signed': False,
+    #  'applicable_methods': ALL_AGG_METHODS_NO_SUM, 'var_type': VT_FLOW_HYBRID, 'units': {('m',): (1,)},
+    #  'can_resample': False, 'pre_resample_method': PRM_NONE},
 
     # Pump variables
     # NOT YET IMPLEMENTED (MY CODE) {'short_name': 'q_pump', 'long_name': 'Pump discharge', 'signed': False,

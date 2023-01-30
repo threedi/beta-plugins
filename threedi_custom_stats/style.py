@@ -182,6 +182,10 @@ def style_gradient(layer, qml: str, column: str):
     style_flow_direction(layer=layer, qml=qml, column=column, invert=True)
 
 
+def style_relative_gradient(layer, qml: str, bed_level_gradient: str, water_level_gradient: str):
+    layer.loadNamedStyle(qml)
+
+
 def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str):
     layer.loadNamedStyle(qml)
     filter_expression = '{col1} >10 or {col2} > 50 or {col3} > 80'.format(col1=col1, col2=col2, col3=col3)
@@ -204,6 +208,17 @@ STYLE_GRADIENT = Style(
     params={'column': 'column'},
     qml='flow_direction.qml',
     styling_method=style_gradient
+)
+
+STYLE_RELATIVE_GRADIENT = Style(
+    name='Relative gradient',
+    output_type='flowline',
+    params={
+        'bed_level_gradient': 'column',
+        'water_level_gradient': 'column'
+    },
+    qml='relative_gradient.qml',
+    styling_method=style_relative_gradient
 )
 
 STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE = Style(
@@ -265,6 +280,7 @@ STYLE_BALANCE = Style(name='Balance',
 STYLES = [
     STYLE_FLOW_DIRECTION,
     STYLE_GRADIENT,
+    STYLE_RELATIVE_GRADIENT,
     STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE,
     STYLE_TIMESTEP_REDUCTION_ANALYSIS,
     STYLE_SINGLE_COLUMN_GRADUATED_NODE,
