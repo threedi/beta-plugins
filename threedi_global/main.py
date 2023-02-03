@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Apr  8 12:01:52 2022
-
-@author: Kizje.marif; Leendert van Wolfswinkel
+Created on Fri Apr 8 12:01:52 2022
+Altered on Tue Jan 24 2023
+@author: Kizje.marif; Leendert van Wolfswinkel; Joost van Dijk
 
 Creates a 3Di model for an area defined by a polygon.
 """
@@ -17,7 +17,7 @@ from threedi_api_client.api import ThreediApi
 
 from epsg import find_utm_zone_epsg, xy_to_wgs84_lat_lon, transform_bounding_box, transform_layer
 from lizard import download_raster
-from raster import clip
+from raster import clip, resample
 from threedi_api.constants import THREEDI_API_HOST, ORGANISATION_UUID
 from threedi_api.upload import upload_and_process
 
@@ -26,7 +26,7 @@ gdal.UseExceptions()
 ogr.UseExceptions()
 
 
-VERSION = "0.2"
+VERSION = "0.3"
 
 SQL_DIR = Path(__file__).parent / "sql"
 DATA_DIR = Path(__file__).parent / "data"
@@ -158,7 +158,14 @@ def download_dem(
     )
     raster = gdal.Open(str(dem_path), gdal.GA_Update)
     extent_dataset_transformed = gdal.OpenEx(vsi_filename)
-    clip(raster=raster, vector=extent_dataset_transformed, layer_name=extent_layer_name)
+    clip(raster=raster, vector=extent_dataset_transformed, layer_name=extent_layer_name)  
+    raster = None
+    resample(
+        input_file = str(dem_path),
+        output_file = str(dem_path).replace('.tif', '_resampled.tif'),
+        resampling_method = 'lanczos',
+        pixelsize = '5'
+        )
     gdal.Unlink(vsi_filename)
 
 

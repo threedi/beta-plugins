@@ -143,6 +143,7 @@ def create_threedimodel(
     for i in range(max_retries_creation):
         try:
             threedimodel = threedi_api.schematisations_revisions_create_threedimodel(revision.id, schematisation.id)
+            print(threedimodel)
             print(f"Creating threedimodel with id {threedimodel.id}...")
             break
         except:
