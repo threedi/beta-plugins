@@ -1,4 +1,4 @@
-from .threedi_result_aggregation import Aggregation, AGGREGATION_VARIABLES, AGGREGATION_METHODS
+from .threedi_result_aggregation import Aggregation, AggregationSign, AGGREGATION_VARIABLES, AGGREGATION_METHODS
 from .style import (
     Style,
     STYLE_SINGLE_COLUMN_GRADUATED_NODE,
@@ -67,19 +67,24 @@ MAX_WL_PRESETS = Preset(name='Maximum water level',
                         )
 
 # Change in water level
-change_wl_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
-                                      method=AGGREGATION_METHODS.get_by_short_name('first'),
-                                      ),
-                          Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
-                                      method=AGGREGATION_METHODS.get_by_short_name('last'),
-                                      ),
-                          Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
-                                      method=AGGREGATION_METHODS.get_by_short_name('min'),
-                                      ),
-                          Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
-                                      method=AGGREGATION_METHODS.get_by_short_name('max'),
-                                      )
-                          ]
+change_wl_aggregations = [
+    Aggregation(
+        variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+        method=AGGREGATION_METHODS.get_by_short_name('first'),
+    ),
+    Aggregation(
+        variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+        method=AGGREGATION_METHODS.get_by_short_name('last'),
+    ),
+    Aggregation(
+        variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+        method=AGGREGATION_METHODS.get_by_short_name('min'),
+    ),
+    Aggregation(
+        variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
+        method=AGGREGATION_METHODS.get_by_short_name('max'),
+    )
+]
 
 CHANGE_WL_PRESETS = Preset(name='Change in water level',
                            description='Calculates the difference in water level (last - first). In the styling '
@@ -171,14 +176,15 @@ TS_REDUCTION_ANALYSIS_PRESETS = Preset(name='Timestep reduction analysis',
                                                                      }
                                        )
 
-# Timestep reduction analysis
+# Relative gradient
 relative_gradient_aggregations = [
     Aggregation(
         variable=AGGREGATION_VARIABLES.get_by_short_name('bed_grad')
     ),
     Aggregation(
         variable=AGGREGATION_VARIABLES.get_by_short_name('grad'),
-        method=AGGREGATION_METHODS.get_by_short_name('max')
+        method=AGGREGATION_METHODS.get_by_short_name('mean'),
+        sign=AggregationSign(short_name='net', long_name='Net')
     )
 ]
 
@@ -189,7 +195,7 @@ RELATIVE_GRADIENT_PRESETS = Preset(
     flowlines_style=STYLE_RELATIVE_GRADIENT,
     flowlines_style_param_values={
         'bed_level_gradient': 'bed_grad',
-        'water_level_gradient': 'grad_net_max'
+        'water_level_gradient': 'grad_net_mean'
     }
 )
 

@@ -134,10 +134,12 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
         # method column
         method_combobox = QtWidgets.QComboBox()
-        for i, method in enumerate(AGGREGATION_METHODS):
+        for i, method_str in enumerate(aggregation.variable.applicable_methods):
+            method = AGGREGATION_METHODS.get_by_short_name(method_str)
             method_combobox.addItem(method.long_name)
             method_combobox.setItemData(i, method)
-        method_combobox.setCurrentText(aggregation.method.long_name)
+        if aggregation.method:
+            method_combobox.setCurrentText(aggregation.method.long_name)
         self.tableWidgetAggregations.setCellWidget(current_row, 2, method_combobox)
         method_combobox.currentTextChanged.connect(self.method_combobox_text_changed)
 

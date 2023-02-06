@@ -184,6 +184,10 @@ def style_gradient(layer, qml: str, column: str):
 
 def style_relative_gradient(layer, qml: str, bed_level_gradient: str, water_level_gradient: str):
     layer.loadNamedStyle(qml)
+    class_attribute_string = f'abs("{water_level_gradient}" - "{bed_level_gradient}")'
+    layer.renderer().setClassAttribute(class_attribute_string)
+    layer.triggerRepaint()
+    utils.iface.layerTreeView().refreshLayerSymbology(layer.id())
 
 
 def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str):
