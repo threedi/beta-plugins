@@ -682,7 +682,7 @@
      </widget>
      <widget class="QComboBox" name="comboBoxNodesStyleType">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -905,7 +905,7 @@
      </widget>
      <widget class="QComboBox" name="comboBoxCellsStyleType">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -1026,7 +1026,7 @@
      </widget>
      <widget class="QComboBox" name="comboBoxFlowlinesStyleType">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="geometry">
        <rect>

@@ -451,6 +451,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             idx = self.comboBoxNodesStyleType.findText(nodes_style_name)
             if idx > -1:
                 self.comboBoxNodesStyleType.setCurrentIndex(idx)
+            self.groupBoxNodes.setEnabled(True)
             self.groupBoxNodes.setChecked(True)
 
             if cells_style is None:
@@ -463,6 +464,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             idx = self.comboBoxCellsStyleType.findText(cells_style_name)
             if idx > -1:
                 self.comboBoxCellsStyleType.setCurrentIndex(idx)
+            self.groupBoxCells.setEnabled(True)
             self.groupBoxCells.setChecked(True)
 
             # Do not automatically set groupBoxRasters to Checked because this requires follow-up input from the user
@@ -504,6 +506,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         for i in reversed(range(params_widget.rowCount())):
             params_widget.removeRow(i)
         item_data = type_widget.itemData(type_widget.currentIndex())
+        type_widget.setEnabled(True)
         if item_data is not None:
             params = item_data.params
             for row, (param_name, param_type) in enumerate(params.items()):
@@ -626,8 +629,10 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.apply_preset(preset)
 
     def apply_preset(self, preset: Preset):
-        """Set dialog widgets according to given preset.
-        If no styling is given for a output_type, that output type's styling panel checkbox is set to False"""
+        """
+        Set dialog widgets according to given preset.
+        If no styling is given for an output_type, that output type's styling panel checkbox is set to False
+        """
 
         # remove existing aggregations
         self.tableWidgetAggregations.setRowCount(0)
