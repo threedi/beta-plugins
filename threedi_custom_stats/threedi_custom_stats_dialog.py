@@ -402,12 +402,15 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def set_styling_tab(
         self,
-        flowline_style: Style = None,
+        flowlines_style: Style = None,
         nodes_style: Style = None,
         cells_style: Style = None,
         flowlines_style_param_values: dict = None,
         cells_style_param_values: dict = None,
         nodes_style_param_values: dict = None,
+        uncheck_flowlines_groupbox: bool = False,
+        uncheck_nodes_groupbox: bool = False,
+        uncheck_cells_groupbox: bool = False
     ):
         """
         Styles can be set (e.g. when a preset is used) or be None so the default for the first variable is used
@@ -417,12 +420,12 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             self.demanded_aggregations, [VT_FLOW, VT_FLOW_HYBRID]
         )
         if len(filtered_das) > 0:
-            if flowline_style is None:
+            if flowlines_style is None:
                 flowlines_style_name = DEFAULT_STYLES[
                     filtered_das[0].variable.short_name
                 ]["flowline"].name
             else:
-                flowlines_style_name = flowline_style.name
+                flowlines_style_name = flowlines_style.name
             idx = self.comboBoxFlowlinesStyleType.findText(
                 flowlines_style_name
             )
@@ -435,6 +438,8 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             )
         else:
             self.groupBoxFlowlines.setEnabled(False)
+            self.groupBoxFlowlines.setChecked(False)
+        if uncheck_flowlines_groupbox:
             self.groupBoxFlowlines.setChecked(False)
 
         # Nodes and cells
@@ -453,6 +458,8 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 self.comboBoxNodesStyleType.setCurrentIndex(idx)
             self.groupBoxNodes.setEnabled(True)
             self.groupBoxNodes.setChecked(True)
+            if uncheck_nodes_groupbox:
+                self.groupBoxNodes.setChecked(False)
 
             if cells_style is None:
                 cells_style_name = DEFAULT_STYLES[
@@ -466,6 +473,8 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 self.comboBoxCellsStyleType.setCurrentIndex(idx)
             self.groupBoxCells.setEnabled(True)
             self.groupBoxCells.setChecked(True)
+            if uncheck_cells_groupbox:
+                self.groupBoxCells.setChecked(False)
 
             # Do not automatically set groupBoxRasters to Checked because this requires follow-up input from the user
             self.node_styling_type_changed(
@@ -646,12 +655,16 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
 
         # set styling from preset
         self.set_styling_tab(
-            flowline_style=preset.flowlines_style,
+            flowlines_style=preset.flowlines_style,
             nodes_style=preset.nodes_style,
             cells_style=preset.cells_style,
             flowlines_style_param_values=preset.flowlines_style_param_values,
             nodes_style_param_values=preset.nodes_style_param_values,
             cells_style_param_values=preset.cells_style_param_values,
+            uncheck_flowlines_groupbox=preset.flowlines_style is None,
+            uncheck_nodes_groupbox=preset.nodes_style is None,
+            uncheck_cells_groupbox=preset.cells_style is None
+
         )
 
     def update_demanded_aggregations(self):
