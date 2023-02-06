@@ -8,9 +8,9 @@
 
 """
 
-__author__ = 'leendert.vanwolfswinkel@nelen-schuurmans.nl'
-__date__ = '2019-11-27'
-__copyright__ = 'Copyright 2019, Leendert van Wolfswinkel | Nelen en Schuurmans'
+__author__ = "leendert.vanwolfswinkel@nelen-schuurmans.nl"
+__date__ = "2019-11-27"
+__copyright__ = "Copyright 2019, Leendert van Wolfswinkel | Nelen en Schuurmans"
 
 import unittest
 
@@ -19,6 +19,7 @@ from qgis.PyQt.QtGui import QDialogButtonBox, QDialog
 from threedi_custom_stats_dialog import ThreeDiCustomStatsDialog
 
 from utilities import get_qgis_app
+
 QGIS_APP = get_qgis_app()
 
 
@@ -48,8 +49,8 @@ class ThreeDiCustomStatsDialogTest(unittest.TestCase):
         result = self.dialog.result()
         self.assertEqual(result, QDialog.Rejected)
 
+
 if __name__ == "__main__":
     suite = unittest.makeSuite(ThreeDiCustomStatsDialogTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-

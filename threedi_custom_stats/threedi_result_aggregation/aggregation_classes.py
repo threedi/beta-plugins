@@ -2,7 +2,9 @@ from typing import Optional, List
 
 # Pre resample methods
 PRM_NONE = 0  # no processing before resampling (e.g. for water levels, velocities); divide by 1
-PRM_SPLIT = 1  # split the original value over the new pixels; divide by (res_old/res_new)*2
+PRM_SPLIT = (
+    1  # split the original value over the new pixels; divide by (res_old/res_new)*2
+)
 PRM_1D = 2  # for flows (q) in x or y sign: scale with pixel resolution; divide by (res_old/res_new)
 
 # Variable types
@@ -13,11 +15,11 @@ VT_FLOW_HYBRID = 10
 VT_NODE_HYBRID = 20
 
 VT_NAMES = {
-    VT_FLOW: 'Flowline',
-    VT_NODE: 'Node',
-    VT_PUMP: 'Pump',
-    VT_FLOW_HYBRID: 'Flowline',
-    VT_NODE_HYBRID: 'Node'
+    VT_FLOW: "Flowline",
+    VT_NODE: "Node",
+    VT_PUMP: "Pump",
+    VT_FLOW_HYBRID: "Flowline",
+    VT_NODE_HYBRID: "Node",
 }
 
 
@@ -29,9 +31,9 @@ class AggregationVariableList(list):
         result = dict()
         for var in self:
             if var.var_type == var_type or var_type is None:
-                if key == 'short':
+                if key == "short":
                     result[var.short_name] = var.long_name
-                elif key == 'long':
+                elif key == "long":
                     result[var.long_name] = var.short_name
         return result
 
@@ -66,15 +68,15 @@ class AggregationVariableList(list):
 
 class AggregationVariable:
     def __init__(
-            self,
-            short_name: str,
-            long_name: str,
-            signed: bool,
-            applicable_methods: List,
-            var_type: int,
-            units: dict,
-            can_resample: bool,
-            pre_resample_method: int = PRM_NONE
+        self,
+        short_name: str,
+        long_name: str,
+        signed: bool,
+        applicable_methods: List,
+        var_type: int,
+        units: dict,
+        can_resample: bool,
+        pre_resample_method: int = PRM_NONE,
     ):
         self.short_name = short_name
         self.long_name = long_name
@@ -93,8 +95,14 @@ class AggregationSign:
 
 
 class AggregationMethod:
-    def __init__(self, short_name, long_name, has_threshold: bool = False,
-                 integrates_over_time: bool = False, is_percentage: bool = False):
+    def __init__(
+        self,
+        short_name,
+        long_name,
+        has_threshold: bool = False,
+        integrates_over_time: bool = False,
+        is_percentage: bool = False,
+    ):
         self.short_name = short_name
         self.long_name = long_name
         self.has_threshold = has_threshold
@@ -103,18 +111,18 @@ class AggregationMethod:
         self.var_type = None
 
 
-NA_TEXT = '[Not applicable]'
-AGGREGATION_SIGN_NA = AggregationSign(short_name='', long_name=NA_TEXT)
+NA_TEXT = "[Not applicable]"
+AGGREGATION_SIGN_NA = AggregationSign(short_name="", long_name=NA_TEXT)
 
 
 class Aggregation:
     def __init__(
-            self,
-            variable: AggregationVariable,
-            method: Optional[AggregationMethod] = None,
-            sign: Optional[AggregationSign] = AGGREGATION_SIGN_NA,
-            threshold: Optional[float] = None,
-            multiplier: float = 1
+        self,
+        variable: AggregationVariable,
+        method: Optional[AggregationMethod] = None,
+        sign: Optional[AggregationSign] = AGGREGATION_SIGN_NA,
+        threshold: Optional[float] = None,
+        multiplier: float = 1,
     ):
         self.variable = variable
         self.sign = sign
@@ -128,12 +136,12 @@ class Aggregation:
             column_name_list.append(self.sign.short_name)
         try:
             column_name_list.append(self.method.short_name)
-            if self.method.short_name in ['above_thres', 'below_thres']:
-                thres_parsed = str(self.threshold).replace('.', '_')
+            if self.method.short_name in ["above_thres", "below_thres"]:
+                thres_parsed = str(self.threshold).replace(".", "_")
                 column_name_list.append(thres_parsed)
         except AttributeError:  # allow aggregation to have no method
             pass
-        return '_'.join(column_name_list).lower()
+        return "_".join(column_name_list).lower()
 
     def is_valid(self) -> bool:
         try:
@@ -149,4 +157,3 @@ def filter_demanded_aggregations(das: List[Aggregation], variable_types):
         if da.variable.var_type in variable_types:
             result.append(da)
     return result
-

@@ -8,14 +8,13 @@
 
 """
 
-__author__ = 'leendert.vanwolfswinkel@nelen-schuurmans.nl'
-__date__ = '2019-11-27'
-__copyright__ = 'Copyright 2019, Leendert van Wolfswinkel | Nelen en Schuurmans'
+__author__ = "leendert.vanwolfswinkel@nelen-schuurmans.nl"
+__date__ = "2019-11-27"
+__copyright__ = "Copyright 2019, Leendert van Wolfswinkel | Nelen en Schuurmans"
 
 import unittest
 
 from qgis.PyQt.QtGui import QIcon
-
 
 
 class ThreeDiCustomStatsDialogTest(unittest.TestCase):
@@ -31,14 +30,12 @@ class ThreeDiCustomStatsDialogTest(unittest.TestCase):
 
     def test_icon_png(self):
         """Test we can click OK."""
-        path = ':/plugins/ThreeDiCustomStats/icon.png'
+        path = ":/plugins/ThreeDiCustomStats/icon.png"
         icon = QIcon(path)
         self.assertFalse(icon.isNull())
+
 
 if __name__ == "__main__":
     suite = unittest.makeSuite(ThreeDiCustomStatsResourcesTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-
-
-

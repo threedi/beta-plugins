@@ -38,38 +38,50 @@ from .presets import PRESETS, Preset
 from .threedi_result_aggregation.aggregation_classes import (
     Aggregation,
     AggregationSign,
-    filter_demanded_aggregations, VT_NAMES, VT_FLOW, VT_FLOW_HYBRID, VT_NODE, VT_NODE_HYBRID
+    filter_demanded_aggregations,
+    VT_NAMES,
+    VT_FLOW,
+    VT_FLOW_HYBRID,
+    VT_NODE,
+    VT_NODE_HYBRID,
 )
 from .threedi_result_aggregation.constants import (
     AGGREGATION_VARIABLES,
     AGGREGATION_METHODS,
     AGGREGATION_SIGNS,
-    NA_TEXT
+    NA_TEXT,
 )
 from .style import (
-    DEFAULT_STYLES, STYLES, Style, STYLE_FLOW_DIRECTION, STYLE_SINGLE_COLUMN_GRADUATED_NODE,
-    STYLE_SINGLE_COLUMN_GRADUATED_CELL
+    DEFAULT_STYLES,
+    STYLES,
+    Style,
+    STYLE_FLOW_DIRECTION,
+    STYLE_SINGLE_COLUMN_GRADUATED_NODE,
+    STYLE_SINGLE_COLUMN_GRADUATED_CELL,
 )
 
 # This loads the .ui file so that PyQt can populate the plugin with the elements from Qt Designer
-FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'threedi_custom_stats_dialog_base.ui'))
+FORM_CLASS, _ = uic.loadUiType(
+    os.path.join(os.path.dirname(__file__), "threedi_custom_stats_dialog_base.ui")
+)
 
 DEFAULT_AGGREGATION = Aggregation(
-    variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
-    sign=AggregationSign(short_name='net', long_name='Net'),
-    method=AGGREGATION_METHODS.get_by_short_name('sum')
+    variable=AGGREGATION_VARIABLES.get_by_short_name("q"),
+    sign=AggregationSign(short_name="net", long_name="Net"),
+    method=AGGREGATION_METHODS.get_by_short_name("sum"),
 )
 
 
 def update_column_widget(self, demanded_aggregations, aggregation_variable_types: list):
     self.clear()
-    filtered_das = filter_demanded_aggregations(demanded_aggregations, aggregation_variable_types)
+    filtered_das = filter_demanded_aggregations(
+        demanded_aggregations, aggregation_variable_types
+    )
     for da in filtered_das:
         column_name = da.as_column_name()
         if column_name is not None:
             self.addItem(da.as_column_name())
-    self.addItem('')
+    self.addItem("")
 
 
 class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
@@ -79,7 +91,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.setupUi(self)
         self.iface = iface
 
-        self.gr = ''
+        self.gr = ""
         self.demanded_aggregations = []
 
         for preset in PRESETS:
@@ -90,10 +102,18 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.pushButtonAddAggregation.clicked.connect(self.add_aggregation)
         self.pushButtonRemoveAggregation.clicked.connect(self.remove_aggregation)
         self.add_aggregation()
-        self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
-        self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
-        self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
-        self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(
+            0, QtWidgets.QHeaderView.Stretch
+        )
+        self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(
+            1, QtWidgets.QHeaderView.Stretch
+        )
+        self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(
+            2, QtWidgets.QHeaderView.Stretch
+        )
+        self.tableWidgetAggregations.horizontalHeader().setSectionResizeMode(
+            3, QtWidgets.QHeaderView.Stretch
+        )
 
         self.QgsFileWidget3DiResults.fileChanged.connect(self.results_3di_selected)
         self.QgsFileWidgetGridAdmin.fileChanged.connect(self.gridadmin_selected)
@@ -104,7 +124,9 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.init_styling_tab()
         self.set_styling_tab()
 
-        self.dialogButtonBoxOKCancel.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(False)
+        self.dialogButtonBoxOKCancel.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(
+            False
+        )
 
     def add_aggregation(self, *args, aggregation: Aggregation = DEFAULT_AGGREGATION):
         """Add a new row to tableWidgetAggregations, always last row"""
@@ -114,11 +136,17 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         # variable column
         variable_combobox = QtWidgets.QComboBox()
         for i, variable in enumerate(AGGREGATION_VARIABLES):
-            variable_combobox.addItem(VT_NAMES[variable.var_type] + ': ' + variable.long_name)
+            variable_combobox.addItem(
+                VT_NAMES[variable.var_type] + ": " + variable.long_name
+            )
             variable_combobox.setItemData(i, variable)
-        idx = variable_combobox.findText(aggregation.variable.long_name, Qt.MatchEndsWith)
+        idx = variable_combobox.findText(
+            aggregation.variable.long_name, Qt.MatchEndsWith
+        )
         variable_combobox.setCurrentIndex(idx)
-        variable_combobox.currentTextChanged.connect(self.variable_combobox_text_changed)
+        variable_combobox.currentTextChanged.connect(
+            self.variable_combobox_text_changed
+        )
         self.tableWidgetAggregations.setCellWidget(current_row, 0, variable_combobox)
 
         # sign column
@@ -130,7 +158,9 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             counter += 1
         direction_combobox.setCurrentText(aggregation.sign.long_name)
         self.tableWidgetAggregations.setCellWidget(current_row, 1, direction_combobox)
-        direction_combobox.currentTextChanged.connect(self.direction_combobox_text_changed)
+        direction_combobox.currentTextChanged.connect(
+            self.direction_combobox_text_changed
+        )
 
         # method column
         method_combobox = QtWidgets.QComboBox()
@@ -159,7 +189,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.set_units_widget(
             row=current_row,
             variable=variable_combobox.itemData(variable_combobox.currentIndex()),
-            method=method
+            method=method,
         )
         # TODO: dit is nu lastig te setten obv aggregation, omdat die wel een attribuut multiplier heeft,
         #  maar niet een attribuut units. laat ik nu even voor wat het is
@@ -214,15 +244,21 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         else:
             if na_index == -1:
                 self.tableWidgetAggregations.cellWidget(row, 1).addItem(NA_TEXT)
-                na_index = self.tableWidgetAggregations.cellWidget(row, 1).findText(NA_TEXT)
+                na_index = self.tableWidgetAggregations.cellWidget(row, 1).findText(
+                    NA_TEXT
+                )
             self.tableWidgetAggregations.cellWidget(row, 1).setCurrentIndex(na_index)
         self.tableWidgetAggregations.cellWidget(row, 1).setEnabled(variable.signed)
 
     def set_method_widget(self, row, variable):
         self.tableWidgetAggregations.cellWidget(row, 2).clear()
-        self.tableWidgetAggregations.cellWidget(row, 2).setEnabled(False)  # Disable if aggregation has no methods
+        self.tableWidgetAggregations.cellWidget(row, 2).setEnabled(
+            False
+        )  # Disable if aggregation has no methods
         for i, method_short_name in enumerate(variable.applicable_methods):
-            self.tableWidgetAggregations.cellWidget(row, 2).setEnabled(True)  # Enable if aggregation has methods
+            self.tableWidgetAggregations.cellWidget(row, 2).setEnabled(
+                True
+            )  # Enable if aggregation has methods
             method = AGGREGATION_METHODS.get_by_short_name(method_short_name)
             self.tableWidgetAggregations.cellWidget(row, 2).addItem(method.long_name)
             self.tableWidgetAggregations.cellWidget(row, 2).setItemData(i, method)
@@ -245,72 +281,93 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 if method.integrates_over_time:
                     units_str = units[0]
                 else:
-                    units_str = '/'.join(units)
+                    units_str = "/".join(units)
                     if len(multiplier_tuple) == 2:
                         multiplier *= multiplier_tuple[1]
                 if method.is_percentage:
-                    units_str = '%'
+                    units_str = "%"
                     multiplier = 1
             else:
                 units_str = units[0]
             # add item to the widget if no similar item exists:
-            if not any(units_str in units_widget.itemText(x) for x in range(units_widget.count())):
+            if not any(
+                units_str in units_widget.itemText(x)
+                for x in range(units_widget.count())
+            ):
                 units_widget.addItem(units_str)
                 units_widget.setItemData(i, multiplier)
 
     def get_styling_parameters(self, output_type):
-        if output_type == 'node':
+        if output_type == "node":
             params_widget = self.tableWidgetNodesStyleParams
-        elif output_type == 'flowline':
+        elif output_type == "flowline":
             params_widget = self.tableWidgetFlowlinesStyleParams
-        elif output_type == 'cell':
+        elif output_type == "cell":
             params_widget = self.tableWidgetCellsStyleParams
         else:
-            raise ValueError('Invalid output type. Choose one of [node, flowline, cell].')
+            raise ValueError(
+                "Invalid output type. Choose one of [node, flowline, cell]."
+            )
         result = {}
         for row in range(params_widget.rowCount()):
-            result[params_widget.item(row, 0).text()] = params_widget.cellWidget(row, 1).currentText()
+            result[params_widget.item(row, 0).text()] = params_widget.cellWidget(
+                row, 1
+            ).currentText()
         return result
 
     def init_styling_tab(self):
         for style in STYLES:
-            if style.output_type == 'flowline':
+            if style.output_type == "flowline":
                 type_widget = self.comboBoxFlowlinesStyleType
-            elif style.output_type == 'node':
+            elif style.output_type == "node":
                 type_widget = self.comboBoxNodesStyleType
-            elif style.output_type == 'cell':
+            elif style.output_type == "cell":
                 type_widget = self.comboBoxCellsStyleType
 
             row = type_widget.count()
             type_widget.addItem(style.name)
             type_widget.setItemData(row, style)
 
-        self.comboBoxFlowlinesStyleType.currentIndexChanged.connect(self.flowline_styling_type_changed)
-        self.comboBoxNodesStyleType.currentIndexChanged.connect(self.node_styling_type_changed)
-        self.comboBoxCellsStyleType.currentIndexChanged.connect(self.cell_styling_type_changed)
-        self.doubleSpinBoxResolution.valueChanged.connect(self.raster_resolution_changed)
-        self.doubleSpinBoxNodesLayerResolution.valueChanged.connect(self.nodes_layer_resolution_changed)
+        self.comboBoxFlowlinesStyleType.currentIndexChanged.connect(
+            self.flowline_styling_type_changed
+        )
+        self.comboBoxNodesStyleType.currentIndexChanged.connect(
+            self.node_styling_type_changed
+        )
+        self.comboBoxCellsStyleType.currentIndexChanged.connect(
+            self.cell_styling_type_changed
+        )
+        self.doubleSpinBoxResolution.valueChanged.connect(
+            self.raster_resolution_changed
+        )
+        self.doubleSpinBoxNodesLayerResolution.valueChanged.connect(
+            self.nodes_layer_resolution_changed
+        )
         self.groupBoxRasters.toggled.connect(self.enable_raster_folder_widget)
         self.mQgsFileWidgetRasterFolder.setStorageMode(QgsFileWidget.GetDirectory)
         self.mQgsFileWidgetRasterFolder.fileChanged.connect(self.validate)
 
     def set_styling_tab(
-            self,
-            flowline_style: Style = None,
-            nodes_style: Style = None,
-            cells_style: Style = None,
-            flowlines_style_param_values: dict = None,
-            cells_style_param_values: dict = None,
-            nodes_style_param_values: dict = None
+        self,
+        flowline_style: Style = None,
+        nodes_style: Style = None,
+        cells_style: Style = None,
+        flowlines_style_param_values: dict = None,
+        cells_style_param_values: dict = None,
+        nodes_style_param_values: dict = None,
     ):
         """
         Styles can be set (e.g. when a preset is used) or be None so the default for the first variable is used
         """
         # Flowlines
-        filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_FLOW, VT_FLOW_HYBRID])
+        filtered_das = filter_demanded_aggregations(
+            self.demanded_aggregations, [VT_FLOW, VT_FLOW_HYBRID]
+        )
         if len(filtered_das) > 0:
             if flowline_style is None:
-                flowlines_style_name = DEFAULT_STYLES[filtered_das[0].variable.short_name]["flowline"].name
+                flowlines_style_name = DEFAULT_STYLES[
+                    filtered_das[0].variable.short_name
+                ]["flowline"].name
             else:
                 flowlines_style_name = flowline_style.name
             idx = self.comboBoxFlowlinesStyleType.findText(flowlines_style_name)
@@ -318,16 +375,22 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 self.comboBoxFlowlinesStyleType.setCurrentIndex(idx)
             self.groupBoxFlowlines.setChecked(True)
             self.groupBoxFlowlines.setEnabled(True)
-            self.flowline_styling_type_changed(param_values=flowlines_style_param_values)
+            self.flowline_styling_type_changed(
+                param_values=flowlines_style_param_values
+            )
         else:
             self.groupBoxFlowlines.setEnabled(False)
             self.groupBoxFlowlines.setChecked(False)
 
         # Nodes and cells
-        filtered_das = filter_demanded_aggregations(self.demanded_aggregations, [VT_NODE, VT_NODE_HYBRID])
+        filtered_das = filter_demanded_aggregations(
+            self.demanded_aggregations, [VT_NODE, VT_NODE_HYBRID]
+        )
         if len(filtered_das) > 0:
             if nodes_style is None:
-                nodes_style_name = DEFAULT_STYLES[filtered_das[0].variable.short_name]["node"].name
+                nodes_style_name = DEFAULT_STYLES[filtered_das[0].variable.short_name][
+                    "node"
+                ].name
             else:
                 nodes_style_name = nodes_style.name
             idx = self.comboBoxNodesStyleType.findText(nodes_style_name)
@@ -336,7 +399,9 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             self.groupBoxNodes.setChecked(True)
 
             if cells_style is None:
-                cells_style_name = DEFAULT_STYLES[filtered_das[0].variable.short_name]["cell"].name
+                cells_style_name = DEFAULT_STYLES[filtered_das[0].variable.short_name][
+                    "cell"
+                ].name
             else:
                 cells_style_name = cells_style.name
 
@@ -359,20 +424,22 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             self.groupBoxRasters.setChecked(False)
 
     def styling_type_changed(self, output_type: str, param_values: dict = None):
-        if output_type == 'flowline':
+        if output_type == "flowline":
             params_widget = self.tableWidgetFlowlinesStyleParams
             type_widget = self.comboBoxFlowlinesStyleType
             aggregation_variable_types = [VT_FLOW, VT_FLOW_HYBRID]
-        elif output_type == 'node':
+        elif output_type == "node":
             params_widget = self.tableWidgetNodesStyleParams
             type_widget = self.comboBoxNodesStyleType
             aggregation_variable_types = [VT_NODE, VT_NODE_HYBRID]
-        elif output_type == 'cell':
+        elif output_type == "cell":
             params_widget = self.tableWidgetCellsStyleParams
             type_widget = self.comboBoxCellsStyleType
             aggregation_variable_types = [VT_NODE, VT_NODE_HYBRID]
         else:
-            raise ValueError('Invalid output type. Choose one of [node, flowline, cell].')
+            raise ValueError(
+                "Invalid output type. Choose one of [node, flowline, cell]."
+            )
         for i in reversed(range(params_widget.rowCount())):
             params_widget.removeRow(i)
         item_data = type_widget.itemData(type_widget.currentIndex())
@@ -383,10 +450,12 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 param_name_item = QtWidgets.QTableWidgetItem(param_name)
                 params_widget.setItem(row, 0, param_name_item)
                 param_input_widget = QtWidgets.QComboBox()
-                param_input_widget.update = MethodType(update_column_widget, param_input_widget)
+                param_input_widget.update = MethodType(
+                    update_column_widget, param_input_widget
+                )
                 param_input_widget.update(
                     demanded_aggregations=self.demanded_aggregations,
-                    aggregation_variable_types=aggregation_variable_types
+                    aggregation_variable_types=aggregation_variable_types,
                 )
                 params_widget.setCellWidget(row, 1, param_input_widget)
         if param_values is not None:
@@ -397,19 +466,23 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
                 params_input_widget.setCurrentIndex(idx)
 
     def node_styling_type_changed(self, signal: int = 1, param_values: dict = None):
-        self.styling_type_changed(output_type='node', param_values=param_values)
+        self.styling_type_changed(output_type="node", param_values=param_values)
 
     def cell_styling_type_changed(self, signal: int = 1, param_values: dict = None):
-        self.styling_type_changed(output_type='cell', param_values=param_values)
+        self.styling_type_changed(output_type="cell", param_values=param_values)
 
     def flowline_styling_type_changed(self, signal: int = 1, param_values: dict = None):
-        self.styling_type_changed(output_type='flowline', param_values=param_values)
+        self.styling_type_changed(output_type="flowline", param_values=param_values)
 
     def raster_resolution_changed(self):
-        self.doubleSpinBoxNodesLayerResolution.setValue(self.doubleSpinBoxResolution.value())
+        self.doubleSpinBoxNodesLayerResolution.setValue(
+            self.doubleSpinBoxResolution.value()
+        )
 
     def nodes_layer_resolution_changed(self):
-        self.doubleSpinBoxResolution.setValue(self.doubleSpinBoxNodesLayerResolution.value())
+        self.doubleSpinBoxResolution.setValue(
+            self.doubleSpinBoxNodesLayerResolution.value()
+        )
 
     def update_gr(self):
         results_3di = self.QgsFileWidget3DiResults.filePath()
@@ -418,7 +491,9 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             self.gr = GridH5ResultAdmin(gridadmin, results_3di)
             crs = QgsCoordinateReferenceSystem("EPSG:{}".format(self.gr.epsg_code))
             self.mExtentGroupBox.setOutputCrs(crs)
-            output_timestep_best_guess = int(self.gr.nodes.timestamps[-1] / (len(self.gr.nodes.timestamps) - 1))
+            output_timestep_best_guess = int(
+                self.gr.nodes.timestamps[-1] / (len(self.gr.nodes.timestamps) - 1)
+            )
             self.doubleSpinBoxStartTime.setMaximum(int(self.gr.nodes.timestamps[-1]))
             self.doubleSpinBoxStartTime.setSingleStep(output_timestep_best_guess)
             self.doubleSpinBoxEndTime.setSingleStep(output_timestep_best_guess)
@@ -426,7 +501,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             self.doubleSpinBoxEndTime.setValue(int(self.gr.nodes.timestamps[-1]))
             self.doubleSpinBoxResolution.setValue(self.gr.grid.dx[0])
             self.doubleSpinBoxNodesLayerResolution.setValue(self.gr.grid.dx[0])
-            if self.mQgsFileWidgetRasterFolder.filePath() == '':
+            if self.mQgsFileWidgetRasterFolder.filePath() == "":
                 results_3di_dir = os.path.dirname(results_3di)
                 self.mQgsFileWidgetRasterFolder.setFilePath(results_3di_dir)
         else:
@@ -436,7 +511,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         results_3di = self.QgsFileWidget3DiResults.filePath()
         if os.path.isfile(results_3di):
             results_3di_dir = os.path.dirname(results_3di)
-            gridadmin = os.path.join(results_3di_dir, 'gridadmin.h5')
+            gridadmin = os.path.join(results_3di_dir, "gridadmin.h5")
             if os.path.isfile(gridadmin):
                 self.QgsFileWidgetGridAdmin.setFilePath(gridadmin)
                 self.update_gr()
@@ -465,7 +540,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
         self.apply_preset(preset)
 
     def apply_preset(self, preset: Preset):
-        """ Set dialog widgets according to given preset.
+        """Set dialog widgets according to given preset.
         If no styling is given for a output_type, that output type's styling panel checkbox is set to False"""
 
         # remove existing aggregations
@@ -485,7 +560,7 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             cells_style=preset.cells_style,
             flowlines_style_param_values=preset.flowlines_style_param_values,
             nodes_style_param_values=preset.nodes_style_param_values,
-            cells_style_param_values=preset.cells_style_param_values
+            cells_style_param_values=preset.cells_style_param_values,
         )
 
     def update_demanded_aggregations(self):
@@ -511,11 +586,13 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             units_widget = self.tableWidgetAggregations.cellWidget(row, 4)
             multiplier = units_widget.itemData(units_widget.currentIndex())
 
-            da = Aggregation(variable=variable,
-                             sign=sign,
-                             method=method,
-                             threshold=threshold,
-                             multiplier=multiplier)
+            da = Aggregation(
+                variable=variable,
+                sign=sign,
+                method=method,
+                threshold=threshold,
+                multiplier=multiplier,
+            )
             if da.is_valid():
                 self.demanded_aggregations.append(da)
 
@@ -545,8 +622,13 @@ class ThreeDiCustomStatsDialog(QtWidgets.QDialog, FORM_CLASS):
             valid = False
         if not self.tableWidgetAggregations.rowCount() > 0:
             valid = False
-        if self.groupBoxRasters.isChecked() and self.mQgsFileWidgetRasterFolder.filePath() == '':
+        if (
+            self.groupBoxRasters.isChecked()
+            and self.mQgsFileWidgetRasterFolder.filePath() == ""
+        ):
             valid = False
         if not self.demanded_aggregations_are_valid():
             valid = False
-        self.dialogButtonBoxOKCancel.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(valid)
+        self.dialogButtonBoxOKCancel.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(
+            valid
+        )

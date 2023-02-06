@@ -55,7 +55,7 @@ from qgis.core import QgsSymbolLayer
 from qgis.core import QgsVectorLayer
 from qgis.core import QgsVectorLayerSimpleLabeling
 from qgis.core import QgsWkbTypes
-from qgis.PyQt.QtCore import (QCoreApplication, QVariant)
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from shapely import wkt
 from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 from threedigrid.admin.constants import TYPE_V2_CHANNEL
@@ -94,7 +94,13 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
     SUBSETS = ["2D_OPEN_WATER", "2D_GROUNDWATER", "1D"]
 
     TYPES_1D_NAMES = ["Channel", "Culvert", "Pipe", "Orifice", "Weir"]
-    TYPES_1D = [TYPE_V2_CHANNEL, TYPE_V2_CULVERT, TYPE_V2_PIPE, TYPE_V2_ORIFICE, TYPE_V2_WEIR]
+    TYPES_1D = [
+        TYPE_V2_CHANNEL,
+        TYPE_V2_CULVERT,
+        TYPE_V2_PIPE,
+        TYPE_V2_ORIFICE,
+        TYPE_V2_WEIR,
+    ]
 
     def initAlgorithm(self, config):
         """
@@ -116,66 +122,67 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterVectorLayer(
                 self.CROSS_SECTION_LINES_INPUT,
-                self.tr('Cross-section lines'),
-                [QgsProcessing.TypeVectorLine]
+                self.tr("Cross-section lines"),
+                [QgsProcessing.TypeVectorLine],
             )
         )
 
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.START_TIME, 'Start time (s)',
+                self.START_TIME,
+                "Start time (s)",
                 type=QgsProcessingParameterNumber.Integer,
-                optional=True
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.END_TIME, 'End time (s)',
+                self.END_TIME,
+                "End time (s)",
                 type=QgsProcessingParameterNumber.Integer,
-                optional=True
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterEnum(
-                self.SUBSET, 
-                'Subset', 
-                options=self.SUBSET_NAMES, 
-                optional=True
+                self.SUBSET, "Subset", options=self.SUBSET_NAMES, optional=True
             )
         )
 
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.INCLUDE_TYPES_1D,
-                '1D Flowline types to include',
+                "1D Flowline types to include",
                 options=self.TYPES_1D_NAMES,
                 allowMultiple=True,
                 defaultValue=list(range(len(self.TYPES_1D))),  # all enabled
-                optional=True
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterString(
                 self.FIELD_NAME_INPUT,
-                self.tr('Output field name'),
-                defaultValue="q_net_sum"
+                self.tr("Output field name"),
+                defaultValue="q_net_sum",
             )
         )
 
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_FLOWLINES,
-                self.tr('Output: Intersected flowlines'),
-                type=QgsProcessing.TypeVectorLine
+                self.tr("Output: Intersected flowlines"),
+                type=QgsProcessing.TypeVectorLine,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterFileDestination(
-                self.OUTPUT_TIME_SERIES, self.tr("Output: Timeseries"), fileFilter="*.csv"
+                self.OUTPUT_TIME_SERIES,
+                self.tr("Output: Timeseries"),
+                fileFilter="*.csv",
             )
         )
 
@@ -184,31 +191,54 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         Here is where the processing itself takes place.
         """
         gridadmin_fn = self.parameterAsFile(parameters, self.GRIDADMIN_INPUT, context)
-        results_3di_fn = self.parameterAsFile(parameters, self.RESULTS_3DI_INPUT, context)
+        results_3di_fn = self.parameterAsFile(
+            parameters, self.RESULTS_3DI_INPUT, context
+        )
         gr = GridH5ResultAdmin(gridadmin_fn, results_3di_fn)
-        cross_section_lines = self.parameterAsVectorLayer(parameters, self.CROSS_SECTION_LINES_INPUT, context)
+        cross_section_lines = self.parameterAsVectorLayer(
+            parameters, self.CROSS_SECTION_LINES_INPUT, context
+        )
         self.cross_section_lines_id = cross_section_lines.id()
-        start_time = self.parameterAsInt(parameters, self.START_TIME, context) \
-            if parameters[self.START_TIME] is not None else None  # use `is not None` to handle `== 0` properly
-        end_time = self.parameterAsInt(parameters, self.END_TIME, context) \
-            if parameters[self.END_TIME] is not None else None  # use `is not None` to handle `== 0` properly
-        subset = self.SUBSETS[parameters[self.SUBSET]] \
-            if parameters[self.SUBSET] is not None else None  # use `is not None` to handle `== 0` properly
+        start_time = (
+            self.parameterAsInt(parameters, self.START_TIME, context)
+            if parameters[self.START_TIME] is not None
+            else None
+        )  # use `is not None` to handle `== 0` properly
+        end_time = (
+            self.parameterAsInt(parameters, self.END_TIME, context)
+            if parameters[self.END_TIME] is not None
+            else None
+        )  # use `is not None` to handle `== 0` properly
+        subset = (
+            self.SUBSETS[parameters[self.SUBSET]]
+            if parameters[self.SUBSET] is not None
+            else None
+        )  # use `is not None` to handle `== 0` properly
         feedback.pushInfo(f"Using subset: {subset}")
         content_types = [self.TYPES_1D[i] for i in parameters[self.INCLUDE_TYPES_1D]]
         feedback.pushInfo(f"Using content_types: {content_types}")
-        self.field_name = self.parameterAsString(parameters, self.FIELD_NAME_INPUT, context)
-        self.csv_output_file_path = self.parameterAsFileOutput(parameters, self.OUTPUT_TIME_SERIES, context)
-        self.csv_output_file_path = f"{os.path.splitext(self.csv_output_file_path)[0]}.csv"
+        self.field_name = self.parameterAsString(
+            parameters, self.FIELD_NAME_INPUT, context
+        )
+        self.csv_output_file_path = self.parameterAsFileOutput(
+            parameters, self.OUTPUT_TIME_SERIES, context
+        )
+        self.csv_output_file_path = (
+            f"{os.path.splitext(self.csv_output_file_path)[0]}.csv"
+        )
 
         flowlines_sink_fields = QgsFields()
-        flowlines_sink_fields.append(QgsField(name='id', type=QVariant.Int))
-        flowlines_sink_fields.append(QgsField(name='spatialite_id', type=QVariant.Int))
-        flowlines_sink_fields.append(QgsField(name='content_type', type=QVariant.String))
-        flowlines_sink_fields.append(QgsField(name='kcu', type=QVariant.Int))
-        flowlines_sink_fields.append(QgsField(name='kcu_description', type=QVariant.String))
-        flowlines_sink_fields.append(QgsField(name='gauge_line_id', type=QVariant.Int))
-        flowlines_sink_fields.append(QgsField(name='q_net_sum', type=QVariant.Double))
+        flowlines_sink_fields.append(QgsField(name="id", type=QVariant.Int))
+        flowlines_sink_fields.append(QgsField(name="spatialite_id", type=QVariant.Int))
+        flowlines_sink_fields.append(
+            QgsField(name="content_type", type=QVariant.String)
+        )
+        flowlines_sink_fields.append(QgsField(name="kcu", type=QVariant.Int))
+        flowlines_sink_fields.append(
+            QgsField(name="kcu_description", type=QVariant.String)
+        )
+        flowlines_sink_fields.append(QgsField(name="gauge_line_id", type=QVariant.Int))
+        flowlines_sink_fields.append(QgsField(name="q_net_sum", type=QVariant.Double))
 
         crs = QgsCoordinateReferenceSystem(f"EPSG:{gr.epsg_code}")
         (flowlines_sink, self.flowlines_sink_dest_id) = self.parameterAsSink(
@@ -217,20 +247,21 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             context,
             fields=flowlines_sink_fields,
             geometryType=QgsWkbTypes.LineString,
-            crs=crs
+            crs=crs,
         )
 
-        self.target_field_idx = cross_section_lines.dataProvider().fieldNameIndex(self.field_name)
+        self.target_field_idx = cross_section_lines.dataProvider().fieldNameIndex(
+            self.field_name
+        )
         if self.target_field_idx == -1:
             attribute = QgsField(
-                name=self.field_name,
-                type=QVariant.Double,
-                len=16,
-                prec=3
+                name=self.field_name, type=QVariant.Double, len=16, prec=3
             )
             cross_section_lines.dataProvider().addAttributes([attribute])
             cross_section_lines.updateFields()
-            self.target_field_idx = cross_section_lines.dataProvider().fieldNameIndex(self.field_name)
+            self.target_field_idx = cross_section_lines.dataProvider().fieldNameIndex(
+                self.field_name
+            )
 
         feedback.setProgress(0)
         self.total_discharges = dict()
@@ -243,7 +274,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         for i, gauge_line in enumerate(iterator):
             if feedback.isCanceled():
                 return {}
-            feedback.setProgressText(f"Processing cross-section line {gauge_line.id()}...")
+            feedback.setProgressText(
+                f"Processing cross-section line {gauge_line.id()}..."
+            )
             shapely_linestring = wkt.loads(gauge_line.geometry().asWkt())
             tgt_ds = MEMORY_DRIVER.CreateDataSource("")
             ts_gauge_line, total_discharge = left_to_right_discharge_ogr(
@@ -254,25 +287,31 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                 start_time=start_time,
                 end_time=end_time,
                 subset=subset,
-                content_types=content_types
+                content_types=content_types,
             )
-            feedback.pushInfo(f"Net sum of discharge for cross-section line {gauge_line.id()}: {total_discharge}")
+            feedback.pushInfo(
+                f"Net sum of discharge for cross-section line {gauge_line.id()}: {total_discharge}"
+            )
             if i == 0:
                 ts_all_cross_section_lines = ts_gauge_line
                 column_names = ['"timestep"', f'"{gauge_line.id()}"']
                 formatting = ["%d", "%.6f"]
             else:
-                ts_all_cross_section_lines = np.column_stack([ts_all_cross_section_lines, ts_gauge_line[:, 1]])
+                ts_all_cross_section_lines = np.column_stack(
+                    [ts_all_cross_section_lines, ts_gauge_line[:, 1]]
+                )
                 column_names.append(f'"{gauge_line.id()}"')
                 formatting.append("%.6f")
-            self.total_discharges[gauge_line.id()] = total_discharge  # update attr vals in postprocessing (main thread)
+            self.total_discharges[
+                gauge_line.id()
+            ] = total_discharge  # update attr vals in postprocessing (main thread)
             ogr_layer = tgt_ds.GetLayerByName("flowline")
             for ogr_feature in ogr_layer:
                 qgs_feature = ogr_feature_as_qgis_feature(
                     ogr_feature,
                     flowlines_sink,
                     tgt_wkb_type=QgsWkbTypes.LineString,
-                    tgt_fields=flowlines_sink_fields
+                    tgt_fields=flowlines_sink_fields,
                 )
                 flowlines_sink.addFeature(qgs_feature, QgsFeatureSink.FastInsert)
             feedback.setProgress(100 * i / nr_features)
@@ -283,7 +322,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             delimiter=",",
             header=",".join(column_names),
             fmt=formatting,
-            comments=""
+            comments="",
         )
         layer = QgsVectorLayer(self.csv_output_file_path, "Time series output")
         context.temporaryLayerStore().addMapLayer(layer)
@@ -294,7 +333,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
         return {
             self.OUTPUT_FLOWLINES: self.flowlines_sink_dest_id,
-            self.OUTPUT_TIME_SERIES: self.csv_output_file_path
+            self.OUTPUT_TIME_SERIES: self.csv_output_file_path,
         }
 
     def postProcessAlgorithm(self, context, feedback):
@@ -304,10 +343,14 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         # update attr vals in postprocessing (main thread)
         cross_section_lines.startEditing()
         for fid, total_discharge in self.total_discharges.items():
-            cross_section_lines.changeAttributeValue(fid, self.target_field_idx, float(total_discharge))
+            cross_section_lines.changeAttributeValue(
+                fid, self.target_field_idx, float(total_discharge)
+            )
         cross_section_lines.commitChanges()
 
-        cross_section_lines.loadNamedStyle(str(STYLE_DIR / "cross_sectional_discharge.qml"))
+        cross_section_lines.loadNamedStyle(
+            str(STYLE_DIR / "cross_sectional_discharge.qml")
+        )
 
         # set label
         label_settings = cross_section_lines.labeling().settings()
@@ -317,23 +360,30 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
         # set arrow rotation
         rotation_expression = f'if( "{self.field_name}" < 0, 0, 180)'
-        data_defined_angle = QgsMarkerSymbol().dataDefinedAngle().fromExpression(rotation_expression)
-        cross_section_lines.renderer().symbol()[0].subSymbol().setDataDefinedAngle(data_defined_angle)
+        data_defined_angle = (
+            QgsMarkerSymbol().dataDefinedAngle().fromExpression(rotation_expression)
+        )
+        cross_section_lines.renderer().symbol()[0].subSymbol().setDataDefinedAngle(
+            data_defined_angle
+        )
 
         # make arrow invisible if attribute value for field self.field_name is NULL
-        enable_symbol_layer = QgsProperty.fromExpression(f'"{self.field_name}" is not null')
+        enable_symbol_layer = QgsProperty.fromExpression(
+            f'"{self.field_name}" is not null'
+        )
         cross_section_lines.renderer().symbol()[0].setDataDefinedProperty(
-            QgsSymbolLayer.PropertyLayerEnabled,
-            enable_symbol_layer
+            QgsSymbolLayer.PropertyLayerEnabled, enable_symbol_layer
         )
         context.project().addMapLayer(cross_section_lines)
 
         flowlines_output_layer = context.getMapLayer(self.flowlines_sink_dest_id)
-        flowlines_output_layer.loadNamedStyle(str(STYLE_DIR / "cross_sectional_discharge_flowlines.qml"))
+        flowlines_output_layer.loadNamedStyle(
+            str(STYLE_DIR / "cross_sectional_discharge_flowlines.qml")
+        )
 
         return {
             self.OUTPUT_FLOWLINES: self.flowlines_sink_dest_id,
-            self.OUTPUT_TIME_SERIES: self.csv_output_file_path
+            self.OUTPUT_TIME_SERIES: self.csv_output_file_path,
         }
 
     def name(self):
