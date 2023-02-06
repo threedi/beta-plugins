@@ -1,4 +1,4 @@
-from threedi_result_aggregation import Aggregation, AGGREGATION_VARIABLES, AGGREGATION_METHODS
+from .threedi_result_aggregation import Aggregation, AGGREGATION_VARIABLES, AGGREGATION_METHODS
 from .style import (
     Style,
     STYLE_SINGLE_COLUMN_GRADUATED_NODE,
