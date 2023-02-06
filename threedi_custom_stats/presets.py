@@ -1,4 +1,4 @@
-from .threedi_result_aggregation import Aggregation, AggregationSign, AGGREGATION_VARIABLES, AGGREGATION_METHODS
+from .threedi_result_aggregation import Aggregation, AGGREGATION_VARIABLES, AGGREGATION_METHODS
 from .style import (
     Style,
     STYLE_SINGLE_COLUMN_GRADUATED_NODE,
@@ -6,7 +6,6 @@ from .style import (
     STYLE_CHANGE_WL,
     STYLE_VECTOR,
     STYLE_TIMESTEP_REDUCTION_ANALYSIS,
-    STYLE_RELATIVE_GRADIENT,
     STYLE_BALANCE
 )
 
@@ -176,31 +175,6 @@ TS_REDUCTION_ANALYSIS_PRESETS = Preset(name='Timestep reduction analysis',
                                                                      }
                                        )
 
-# Relative gradient
-relative_gradient_aggregations = [
-    Aggregation(
-        variable=AGGREGATION_VARIABLES.get_by_short_name('bed_grad')
-    ),
-    Aggregation(
-        variable=AGGREGATION_VARIABLES.get_by_short_name('grad'),
-        method=AGGREGATION_METHODS.get_by_short_name('mean'),
-        sign=AggregationSign(short_name='net', long_name='Net')
-    )
-]
-
-RELATIVE_GRADIENT_PRESETS = Preset(
-    name="Relative gradient",
-    description="Maximum water level gradient, relative to the bed level gradient",
-    aggregations=relative_gradient_aggregations,
-    flowlines_style=STYLE_RELATIVE_GRADIENT,
-    flowlines_style_param_values={
-        'bed_level_gradient': 'bed_grad',
-        'water_level_gradient': 'grad_net_mean'
-    }
-)
-
-
-
 # Source or sink (mm)
 source_sink_mm_aggregations = [Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('rain_depth'),
                                            method=AGGREGATION_METHODS.get_by_short_name('sum')
@@ -233,6 +207,5 @@ PRESETS = [
     CHANGE_WL_PRESETS,
     SOURCE_SINK_MM_PRESETS,
     FLOW_PATTERN_PRESETS,
-    TS_REDUCTION_ANALYSIS_PRESETS,
-    RELATIVE_GRADIENT_PRESETS
+    TS_REDUCTION_ANALYSIS_PRESETS
 ]
