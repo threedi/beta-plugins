@@ -4,6 +4,10 @@ from threedigrid.admin.nodes.models import Nodes, Cells
 from threedigrid.admin.lines.models import Lines
 from threedigrid.admin.utils import KCUDescriptor
 
+import numpy as np
+from osgeo import ogr
+from osgeo import osr
+
 KCU_DICT = KCUDescriptor()
 KCU_DICT._descr[
     -9999
@@ -20,10 +24,6 @@ NODE_TYPE_DICT = {
     7: "1D boundary",
 }
 
-import numpy as np
-from osgeo import ogr
-from osgeo import osr
-
 
 def threedigrid_to_ogr(
     threedigrid_src: Union[Nodes, Cells, Lines],
@@ -32,7 +32,7 @@ def threedigrid_to_ogr(
     attr_data_types: dict = None,
 ):
     """
-    Create a ogr target_node_layer from the coordinates of threedigrid Nodes, Cells, or Lines with custom attributes
+    Create an ogr target_node_layer from the coordinates of threedigrid Nodes, Cells, or Lines with custom attributes
 
     :param threedigrid_src: threedigrid Nodes, Cells, or Lines object
     :param tgt_ds: ogr Datasource
@@ -76,7 +76,9 @@ def threedigrid_to_ogr(
         )(threedigrid_src.kcu)
         default_attr_types["kcu_description"] = ogr.OFTString
 
-    if isinstance(threedigrid_src, Cells) or isinstance(threedigrid_src, Nodes):
+    if isinstance(threedigrid_src, Cells) or isinstance(
+        threedigrid_src, Nodes
+    ):
         default_attributes["id"] = threedigrid_src.id.astype(int)
         default_attr_types["id"] = ogr.OFTInteger
         if isinstance(threedigrid_src, Nodes) and threedigrid_src.has_1d:
@@ -101,7 +103,9 @@ def threedigrid_to_ogr(
     # create output layer
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(int(threedigrid_src.epsg_code))
-    out_layer = tgt_ds.CreateLayer(out_layer_name, srs, geom_type=out_geom_type)
+    out_layer = tgt_ds.CreateLayer(
+        out_layer_name, srs, geom_type=out_geom_type
+    )
 
     # create fields
     for attr in all_attributes.keys():

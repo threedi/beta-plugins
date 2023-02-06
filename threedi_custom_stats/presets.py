@@ -1,8 +1,5 @@
-from .threedi_result_aggregation import (
-    Aggregation,
-    AGGREGATION_VARIABLES,
-    AGGREGATION_METHODS,
-)
+from .threedi_result_aggregation.base import Aggregation
+from .threedi_result_aggregation.constants import AGGREGATION_VARIABLES, AGGREGATION_METHODS
 from .style import (
     Style,
     STYLE_SINGLE_COLUMN_GRADUATED_NODE,
@@ -199,11 +196,15 @@ source_sink_mm_aggregations = [
         method=AGGREGATION_METHODS.get_by_short_name("sum"),
     ),
     Aggregation(
-        variable=AGGREGATION_VARIABLES.get_by_short_name("infiltration_rate_simple_mm"),
+        variable=AGGREGATION_VARIABLES.get_by_short_name(
+            "infiltration_rate_simple_mm"
+        ),
         method=AGGREGATION_METHODS.get_by_short_name("sum"),
     ),
     Aggregation(
-        variable=AGGREGATION_VARIABLES.get_by_short_name("intercepted_volume_mm"),
+        variable=AGGREGATION_VARIABLES.get_by_short_name(
+            "intercepted_volume_mm"
+        ),
         method=AGGREGATION_METHODS.get_by_short_name("last"),
     ),
 ]

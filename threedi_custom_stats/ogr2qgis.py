@@ -1,12 +1,10 @@
-from osgeo import ogr, osr
+from osgeo import ogr
 from qgis.core import (
     QgsVectorLayer,
-    QgsVectorLayerUtils,
     QgsFeature,
     QgsWkbTypes,
     QgsGeometry,
 )
-import time
 
 FIELD_TYPES = {
     ogr.OFTInteger: "integer",  # OFTInteger, Simple 32bit integer
@@ -68,7 +66,9 @@ def layer_as_uri(layer, index=True):
     feature_defn = layer.GetLayerDefn()
     field_uris = []
     for i in range(feature_defn.GetFieldCount()):
-        field_uris.append(field_defn_as_uri_param(feature_defn.GetFieldDefn(i)))
+        field_uris.append(
+            field_defn_as_uri_param(feature_defn.GetFieldDefn(i))
+        )
 
     other_params += field_uris
 
@@ -137,7 +137,9 @@ def ogr_feature_as_qgis_feature(
 def append_to_qgs_vector_layer(ogr_layer, qgs_vector_layer):
     qgs_features = []
     for ogr_feature in ogr_layer:
-        qgs_feature = ogr_feature_as_qgis_feature(ogr_feature, qgs_vector_layer)
+        qgs_feature = ogr_feature_as_qgis_feature(
+            ogr_feature, qgs_vector_layer
+        )
         qgs_features.append(qgs_feature)
 
     # qgs_vector_layer.startEditing()
@@ -163,7 +165,9 @@ def as_qgis_memory_layer(ogr_layer, base_name):
         options=QgsVectorLayer.LayerOptions(),
     )
 
-    append_to_qgs_vector_layer(ogr_layer=ogr_layer, qgs_vector_layer=qgs_vector_layer)
+    append_to_qgs_vector_layer(
+        ogr_layer=ogr_layer, qgs_vector_layer=qgs_vector_layer
+    )
 
     return qgs_vector_layer
 

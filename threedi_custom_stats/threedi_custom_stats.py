@@ -21,13 +21,16 @@
  *                                                                         *
  ***************************************************************************/
 """
+from typing import List
+
+from osgeo.gdal import GetDriverByName
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
-from qgis.core import Qgis, QgsApplication, QgsProject, QgsTask, QgsRasterLayer
+from qgis.core import Qgis, QgsApplication, QgsProject, QgsTask
 
-from .threedi_result_aggregation import *
-from .ogr2qgis import *
+from .threedi_result_aggregation.base import aggregate_threedi_results
+from .ogr2qgis import as_qgis_memory_layer
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -135,9 +138,10 @@ class Aggregate3DiResults(QgsTask):
                     raster_output_fn = os.path.join(
                         raster_output_dir, rastname + ".tif"
                     )
-                    drv = gdal.GetDriverByName("GTiff")
-                    gdal_tif = drv.CreateCopy(utf8_path=raster_output_fn, src=rast)
-                    gdal_tif = None
+                    drv = GetDriverByName("GTiff")
+                    drv.CreateCopy(
+                        utf8_path=raster_output_fn, src=rast
+                    )
                     self.parent.iface.addRasterLayer(
                         raster_output_fn,
                         "Aggregation results: raster {}".format(rastname),
@@ -168,7 +172,9 @@ class Aggregate3DiResults(QgsTask):
                     )
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    style = self.parent.comboBoxFlowlinesStyleType.currentData()
+                    style = (
+                        self.parent.comboBoxFlowlinesStyleType.currentData()
+                    )
                     style_kwargs = self.parent.get_styling_parameters(
                         output_type=style.output_type
                     )
@@ -380,7 +386,9 @@ class ThreeDiCustomStats:
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
-            self.iface.removePluginMenu(self.tr("&3Di Custom Statistics"), action)
+            self.iface.removePluginMenu(
+                self.tr("&3Di Custom Statistics"), action
+            )
             self.iface.removeToolBarIcon(action)
         QgsApplication.processingRegistry().removeProvider(self.provider)
 

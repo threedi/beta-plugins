@@ -5,10 +5,10 @@
 
 import argparse
 import warnings
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
-from threedigrid.admin.nodes.models import Nodes, Cells
+from threedigrid.admin.nodes.models import Nodes
 from threedigrid.admin.lines.models import Lines
 
 from osgeo import gdal
@@ -16,12 +16,24 @@ import numpy as np
 from osgeo import ogr
 from osgeo import osr
 
-try:
-    from constants import *
-    from threedigrid_ogr import *
-except ImportError:
-    from .constants import *
-    from .threedigrid_ogr import *
+from .constants import (
+    AGGREGATION_VARIABLES,
+    NON_TS_REDUCING_KCU,
+    NP_OGR_DTYPES
+)
+from .aggregation_classes import (
+    Aggregation,
+    AggregationSign,
+    AggregationMethod,
+    PRM_NONE,
+    PRM_SPLIT,
+    PRM_1D,
+    VT_FLOW,
+    VT_FLOW_HYBRID,
+    VT_NODE,
+    VT_NODE_HYBRID,
+)
+from .threedigrid_ogr import threedigrid_to_ogr
 
 warnings.filterwarnings("ignore")
 ogr.UseExceptions()
@@ -49,8 +61,12 @@ def time_intervals(nodes_or_lines, start_time, end_time):
         np.where(filtered_timestamps <= end_time)
     ]  # filters timestamps for end_time
 
-    ts_start_time_idx = int(np.where(all_timestamps == filtered_timestamps[0])[0])
-    ts_end_time_idx = int(np.where(all_timestamps == filtered_timestamps[-1])[0])
+    ts_start_time_idx = int(
+        np.where(all_timestamps == filtered_timestamps[0])[0]
+    )
+    ts_end_time_idx = int(
+        np.where(all_timestamps == filtered_timestamps[-1])[0]
+    )
 
     # Prepend start_time as timestamp if the start_time falls between two timestamps
     if start_time not in filtered_timestamps:
@@ -78,7 +94,9 @@ def time_intervals(nodes_or_lines, start_time, end_time):
 
 def line_geometry_length(line_geometry: np.ndarray):
     a = line_geometry.reshape(2, int(len(line_geometry) / 2.0))
-    return np.sum(np.sqrt((a[0, 1:] - a[0, :-1]) ** 2 + (a[1, 1:] - a[1, :-1]) ** 2))
+    return np.sum(
+        np.sqrt((a[0, 1:] - a[0, :-1]) ** 2 + (a[1, 1:] - a[1, :-1]) ** 2)
+    )
 
 
 line_geometries_to_lengths = np.vectorize(line_geometry_length)
@@ -178,7 +196,9 @@ def prepare_timeseries(
         raw_values = np.sqrt(np.square(ucx), np.square(ucy))
     elif aggregation.variable.short_name == "infiltration_rate_simple_mm":
         ts_infiltration_rate_simple = ts.infiltration_rate_simple
-        ts_infiltration_rate_simple[ts_infiltration_rate_simple == -9999] = np.nan
+        ts_infiltration_rate_simple[
+            ts_infiltration_rate_simple == -9999
+        ] = np.nan
         raw_values = np.divide(ts_infiltration_rate_simple, ts.sumax)
     elif aggregation.variable.short_name == "q_lat_mm":
         ts_q_lat = ts.q_lat
@@ -224,7 +244,9 @@ def prepare_timeseries(
         elif aggregation.sign.short_name == "":
             raw_values_signed = raw_values
         else:
-            raise ValueError(f"Aggregation has invalid sign type '{aggregation.sign}'")
+            raise ValueError(
+                f"Aggregation has invalid sign type '{aggregation.sign}'"
+            )
     else:
         raw_values_signed = raw_values
 
@@ -253,13 +275,19 @@ def aggregate_prepared_timeseries(
     elif aggregation.method.short_name == "first":
         result = timeseries[0, :]
     elif aggregation.method.short_name == "first_non_empty":
-        result = np.array([find_finite_1d(col, index=0) for col in timeseries.T])
+        result = np.array(
+            [find_finite_1d(col, index=0) for col in timeseries.T]
+        )
     elif aggregation.method.short_name == "last":
         result = timeseries[-1, :]
     elif aggregation.method.short_name == "last_non_empty":
-        result = np.array([find_finite_1d(col, index=-1) for col in timeseries.T])
+        result = np.array(
+            [find_finite_1d(col, index=-1) for col in timeseries.T]
+        )
     elif aggregation.method.short_name == "above_thres":
-        raw_values_above_threshold = np.greater(timeseries, aggregation.threshold)
+        raw_values_above_threshold = np.greater(
+            timeseries, aggregation.threshold
+        )
         time_above_treshold = np.sum(
             np.multiply(raw_values_above_threshold.T, tintervals).T, axis=0
         )
@@ -274,7 +302,9 @@ def aggregate_prepared_timeseries(
         result = np.multiply(np.divide(time_below_treshold, total_time), 100.0)
     else:
         raise ValueError(
-            'Unknown aggregation method "{}".'.format(aggregation.method.long_name)
+            'Unknown aggregation method "{}".'.format(
+                aggregation.method.long_name
+            )
         )
 
     # multiplier (unit conversion)
@@ -374,7 +404,9 @@ def hybrid_time_aggregate(
         )
     else:
         raise ValueError(
-            'Unknown aggregation variable "{}".'.format(aggregation.variable.long_name)
+            'Unknown aggregation variable "{}".'.format(
+                aggregation.variable.long_name
+            )
         )
 
     result *= aggregation.multiplier
@@ -410,7 +442,10 @@ def flow_per_node(
         sign=AggregationSign(short_name="net", long_name="Net"),
     )
     q_agg = time_aggregate(
-        nodes_or_lines=lines, start_time=start_time, end_time=end_time, aggregation=da
+        nodes_or_lines=lines,
+        start_time=start_time,
+        end_time=end_time,
+        aggregation=da,
     )
     if out:
         q_agg_start_nodes = q_agg * (q_agg > 0).astype(
@@ -445,7 +480,12 @@ def flow_per_node(
 
     # bind start_end_node_ids, q_x, and q_y into one 2d array / table
     qtable = np.array(
-        [start_end_node_ids, q_agg_in_or_out_x, q_agg_in_or_out_y, q_agg_in_or_out]
+        [
+            start_end_node_ids,
+            q_agg_in_or_out_x,
+            q_agg_in_or_out_y,
+            q_agg_in_or_out,
+        ]
     ).T
     # sort by node id
     qtable = qtable[qtable[:, 0].argsort()]
@@ -455,7 +495,9 @@ def flow_per_node(
 
     # sum qx and qy, group by start node
     start_node_ids_unique = qtable[i, 0]  # array of unique start nodes
-    sums = np.add.reduceat(qtable[:, [1, 2]], i)  # sum qx and qy, group by start node
+    sums = np.add.reduceat(
+        qtable[:, [1, 2]], i
+    )  # sum qx and qy, group by start node
     q_agg_in_or_out_x_sum = sums[:, 0]
     q_agg_in_or_out_y_sum = sums[:, 1]
 
@@ -701,7 +743,10 @@ def rasterize_cell_layer(
 
 
 def pixels_to_geoms(
-    raster: gdal.Dataset, column_names, output_geom_type, output_layer_name: str
+    raster: gdal.Dataset,
+    column_names,
+    output_geom_type,
+    output_layer_name: str,
 ):
     """
     Convert a single or multiband raster to a point or polygon target_node_layer.
@@ -908,7 +953,9 @@ def aggregate_threedi_results(
     tgt_ds = tgt_drv.CreateDataSource("")
     out_rasters = {}
 
-    if not (output_flowlines or output_nodes or output_cells or output_rasters):
+    if not (
+        output_flowlines or output_nodes or output_cells or output_rasters
+    ):
         return tgt_ds, out_rasters
 
     if resample_point_layer and (not output_nodes):
@@ -953,8 +1000,11 @@ def aggregate_threedi_results(
                 if first_pass_flowlines:
                     first_pass_flowlines = False
                 try:
-                    if da.variable.short_name in AGGREGATION_VARIABLES.short_names(
-                        var_types=[VT_FLOW]
+                    if (
+                        da.variable.short_name
+                        in AGGREGATION_VARIABLES.short_names(
+                            var_types=[VT_FLOW]
+                        )
                     ):
                         agg_func = time_aggregate
                     else:
@@ -971,7 +1021,9 @@ def aggregate_threedi_results(
                         "Demanded aggregation of variable that is not included in these 3Di results"
                     )
                     line_results[new_column_name] = np.full(
-                        len(line_results["id"]), fill_value=None, dtype=np.float
+                        len(line_results["id"]),
+                        fill_value=None,
+                        dtype=np.float,
                     )
 
         elif da.variable.short_name in AGGREGATION_VARIABLES.short_names(
@@ -981,8 +1033,11 @@ def aggregate_threedi_results(
                 if first_pass_nodes:
                     first_pass_nodes = False
                 try:
-                    if da.variable.short_name in AGGREGATION_VARIABLES.short_names(
-                        var_types=[VT_NODE]
+                    if (
+                        da.variable.short_name
+                        in AGGREGATION_VARIABLES.short_names(
+                            var_types=[VT_NODE]
+                        )
                     ):
                         agg_func = time_aggregate
                     else:
@@ -999,7 +1054,9 @@ def aggregate_threedi_results(
                         "Demanded aggregation of variable that is not included in these 3Di results"
                     )
                     node_results[new_column_name] = np.full(
-                        len(node_results["id"]), fill_value=None, dtype=np.float
+                        len(node_results["id"]),
+                        fill_value=None,
+                        dtype=np.float,
                     )
 
     # translate results to GIS layers
@@ -1037,8 +1094,11 @@ def aggregate_threedi_results(
                 column_names = []
                 band_nr = 0
                 for da in demanded_aggregations:
-                    if da.variable.short_name in AGGREGATION_VARIABLES.short_names(
-                        var_types=[VT_NODE, VT_NODE_HYBRID]
+                    if (
+                        da.variable.short_name
+                        in AGGREGATION_VARIABLES.short_names(
+                            var_types=[VT_NODE, VT_NODE_HYBRID]
+                        )
                     ):
                         col = da.as_column_name()
                         band_nr += 1
@@ -1053,14 +1113,18 @@ def aggregate_threedi_results(
                         if first_pass_rasters:
                             first_pass_rasters = False
                             tmp_drv = gdal.GetDriverByName("MEM")
-                            tmp_ds = tmp_drv.CreateCopy("multiband", out_rasters[col])
+                            tmp_ds = tmp_drv.CreateCopy(
+                                "multiband", out_rasters[col]
+                            )
 
                             # create resampled nodes output target_node_layer
                             if resample_point_layer:
                                 srs = osr.SpatialReference()
                                 srs.ImportFromWkt(tmp_ds.GetProjection())
                                 points_resampled_lyr = tgt_ds.CreateLayer(
-                                    "node_resampled", srs=srs, geom_type=ogr.wkbPoint
+                                    "node_resampled",
+                                    srs=srs,
+                                    geom_type=ogr.wkbPoint,
                                 )
                                 field = ogr.FieldDefn(col, ogr.OFTReal)
                                 points_resampled_lyr.CreateField(field)
@@ -1122,7 +1186,9 @@ def get_parser():
         help="results_3di.nc file name",
     )
     parser.add_argument(
-        metavar="OUTPUT_LAYER", dest="tgtLayer", help="Output target_node_layer name"
+        metavar="OUTPUT_LAYER",
+        dest="tgtLayer",
+        help="Output target_node_layer name",
     )
     parser.add_argument(
         "-fn",

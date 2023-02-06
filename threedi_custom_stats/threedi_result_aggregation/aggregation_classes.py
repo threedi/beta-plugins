@@ -2,9 +2,7 @@ from typing import Optional, List
 
 # Pre resample methods
 PRM_NONE = 0  # no processing before resampling (e.g. for water levels, velocities); divide by 1
-PRM_SPLIT = (
-    1  # split the original value over the new pixels; divide by (res_old/res_new)*2
-)
+PRM_SPLIT = 1  # split the original value over the new pixels; divide by (res_old/res_new)*2
 PRM_1D = 2  # for flows (q) in x or y sign: scale with pixel resolution; divide by (res_old/res_new)
 
 # Variable types

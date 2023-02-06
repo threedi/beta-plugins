@@ -96,7 +96,9 @@ ca, rast = aggregate_threedi_results(
 
 ogr_rsamplyr = ca.GetLayerByName("flowline")
 if ogr_rsamplyr is not None:
-    print("flowline layer has {} features".format(ogr_rsamplyr.GetFeatureCount()))
+    print(
+        "flowline layer has {} features".format(ogr_rsamplyr.GetFeatureCount())
+    )
 
 # ogr_fllyr = ca.GetLayerByName('flowline')
 # if ogr_fllyr is not None:

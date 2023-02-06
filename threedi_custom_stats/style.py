@@ -16,7 +16,12 @@ STYLE_DIR = os.path.join(os.path.dirname(__file__), "style")
 
 class Style:
     def __init__(
-        self, name: str, output_type: str, params: dict, qml: str, styling_method
+        self,
+        name: str,
+        output_type: str,
+        params: dict,
+        qml: str,
+        styling_method,
     ):
         self.name = name
         assert output_type in ("flowline", "node", "cell", "raster")
@@ -71,10 +76,16 @@ def style_balance(
     )
     layer.renderer().setClassAttribute(class_attribute_string)
     layer.renderer().deleteAllClasses()
-    min_expression = QgsExpression("minimum({})".format(class_attribute_string))
-    max_expression = QgsExpression("maximum({})".format(class_attribute_string))
+    min_expression = QgsExpression(
+        "minimum({})".format(class_attribute_string)
+    )
+    max_expression = QgsExpression(
+        "maximum({})".format(class_attribute_string)
+    )
     context = QgsExpressionContext()
-    context.appendScopes(QgsExpressionContextUtils.globalProjectLayerScopes(layer))
+    context.appendScopes(
+        QgsExpressionContextUtils.globalProjectLayerScopes(layer)
+    )
     min_val = min_expression.evaluate(context)
     max_val = max_expression.evaluate(context)
     abs_max = max(abs(min_val), abs(max_val))
@@ -121,18 +132,20 @@ def style_as_vector(layer, qml: str, x: str, y: str):
     layer.loadNamedStyle(qml)
 
     # set data defined rotation
-    rotation_expression = (
-        'degrees(azimuth( make_point( 0,0), make_point( "{x}",  "{y}" )))'.format(
-            x=x, y=y
-        )
+    rotation_expression = 'degrees(azimuth( make_point( 0,0), make_point( "{x}",  "{y}" )))'.format(
+        x=x, y=y
     )
     data_defined_angle = (
-        QgsMarkerSymbol().dataDefinedAngle().fromExpression(rotation_expression)
+        QgsMarkerSymbol()
+        .dataDefinedAngle()
+        .fromExpression(rotation_expression)
     )
     layer.renderer().sourceSymbol().setDataDefinedAngle(data_defined_angle)
 
     # update coloring
-    class_attribute_string = 'sqrt("{x}" * "{x}" + "{y}" * "{y}")'.format(x=x, y=y)
+    class_attribute_string = 'sqrt("{x}" * "{x}" + "{y}" * "{y}")'.format(
+        x=x, y=y
+    )
     layer.renderer().setClassAttribute(class_attribute_string)
     layer.renderer().updateClasses(
         vlayer=layer,
@@ -158,7 +171,9 @@ def style_flow_direction(layer, qml: str, column: str, invert=False):
         END
     """
     data_defined_angle = (
-        QgsMarkerSymbol().dataDefinedAngle().fromExpression(rotation_expression)
+        QgsMarkerSymbol()
+        .dataDefinedAngle()
+        .fromExpression(rotation_expression)
     )
     layer.renderer().sourceSymbol()[1].subSymbol().setDataDefinedAngle(
         data_defined_angle
@@ -184,16 +199,16 @@ def style_flow_direction(layer, qml: str, column: str, invert=False):
         )
     )
     data_defined_marker_size = (
-        QgsMarkerSymbol().dataDefinedSize().fromExpression(marker_size_expression)
+        QgsMarkerSymbol()
+        .dataDefinedSize()
+        .fromExpression(marker_size_expression)
     )
     layer.renderer().sourceSymbol()[1].subSymbol().setDataDefinedSize(
         data_defined_marker_size
     )
 
-    line_width_expression = (
-        "coalesce(scale_linear(abs({column}), {p10}, {p90}, 0.1, 1), 0)".format(
-            column=column, p10=p10, p90=p90
-        )
+    line_width_expression = "coalesce(scale_linear(abs({column}), {p10}, {p90}, 0.1, 1), 0)".format(
+        column=column, p10=p10, p90=p90
     )
     data_defined_line_width = QgsProperty.fromExpression(line_width_expression)
     layer.renderer().sourceSymbol()[0].setDataDefinedProperty(
@@ -216,7 +231,9 @@ def style_gradient(layer, qml: str, column: str):
     style_flow_direction(layer=layer, qml=qml, column=column, invert=True)
 
 
-def style_ts_reduction_analysis(layer, qml: str, col1: str, col2: str, col3: str):
+def style_ts_reduction_analysis(
+    layer, qml: str, col1: str, col2: str, col3: str
+):
     layer.loadNamedStyle(qml)
     filter_expression = "{col1} >10 or {col2} > 50 or {col3} > 80".format(
         col1=col1, col2=col2, col3=col3
@@ -329,7 +346,9 @@ DEFAULT_STYLES = {
     "ts_max": {"flowline": STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE},
     "grad": {"flowline": STYLE_GRADIENT},
     "bed_grad": {"flowline": STYLE_GRADIENT},
-    "cross_section_water_level": {"flowline": STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE},
+    "cross_section_water_level": {
+        "flowline": STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE
+    },
     # Nodes
     "s1": {
         "node": STYLE_SINGLE_COLUMN_GRADUATED_NODE,

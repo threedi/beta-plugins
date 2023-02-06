@@ -30,11 +30,9 @@ __revision__ = "$Format:%H$"
 import numpy as np
 import os
 from pathlib import Path
-from typing import Tuple, Union
 
 from osgeo import ogr
 from qgis.core import QgsCoordinateReferenceSystem
-from qgis.core import QgsFeature
 from qgis.core import QgsFeatureSink
 from qgis.core import QgsField
 from qgis.core import QgsFields
@@ -42,7 +40,6 @@ from qgis.core import QgsMarkerSymbol
 from qgis.core import QgsProcessing
 from qgis.core import QgsProcessingAlgorithm
 from qgis.core import QgsProcessingContext
-from qgis.core import QgsProcessingFeatureSource
 from qgis.core import QgsProcessingParameterNumber
 from qgis.core import QgsProcessingParameterEnum
 from qgis.core import QgsProcessingParameterFeatureSink
@@ -115,7 +112,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         )
         self.addParameter(
             QgsProcessingParameterFile(
-                self.RESULTS_3DI_INPUT, self.tr("Results 3Di file"), extension="nc"
+                self.RESULTS_3DI_INPUT,
+                self.tr("Results 3Di file"),
+                extension="nc",
             )
         )
 
@@ -190,7 +189,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         """
         Here is where the processing itself takes place.
         """
-        gridadmin_fn = self.parameterAsFile(parameters, self.GRIDADMIN_INPUT, context)
+        gridadmin_fn = self.parameterAsFile(
+            parameters, self.GRIDADMIN_INPUT, context
+        )
         results_3di_fn = self.parameterAsFile(
             parameters, self.RESULTS_3DI_INPUT, context
         )
@@ -215,7 +216,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             else None
         )  # use `is not None` to handle `== 0` properly
         feedback.pushInfo(f"Using subset: {subset}")
-        content_types = [self.TYPES_1D[i] for i in parameters[self.INCLUDE_TYPES_1D]]
+        content_types = [
+            self.TYPES_1D[i] for i in parameters[self.INCLUDE_TYPES_1D]
+        ]
         feedback.pushInfo(f"Using content_types: {content_types}")
         self.field_name = self.parameterAsString(
             parameters, self.FIELD_NAME_INPUT, context
@@ -229,7 +232,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
 
         flowlines_sink_fields = QgsFields()
         flowlines_sink_fields.append(QgsField(name="id", type=QVariant.Int))
-        flowlines_sink_fields.append(QgsField(name="spatialite_id", type=QVariant.Int))
+        flowlines_sink_fields.append(
+            QgsField(name="spatialite_id", type=QVariant.Int)
+        )
         flowlines_sink_fields.append(
             QgsField(name="content_type", type=QVariant.String)
         )
@@ -237,8 +242,12 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         flowlines_sink_fields.append(
             QgsField(name="kcu_description", type=QVariant.String)
         )
-        flowlines_sink_fields.append(QgsField(name="gauge_line_id", type=QVariant.Int))
-        flowlines_sink_fields.append(QgsField(name="q_net_sum", type=QVariant.Double))
+        flowlines_sink_fields.append(
+            QgsField(name="gauge_line_id", type=QVariant.Int)
+        )
+        flowlines_sink_fields.append(
+            QgsField(name="q_net_sum", type=QVariant.Double)
+        )
 
         crs = QgsCoordinateReferenceSystem(f"EPSG:{gr.epsg_code}")
         (flowlines_sink, self.flowlines_sink_dest_id) = self.parameterAsSink(
@@ -250,8 +259,8 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             crs=crs,
         )
 
-        self.target_field_idx = cross_section_lines.dataProvider().fieldNameIndex(
-            self.field_name
+        self.target_field_idx = (
+            cross_section_lines.dataProvider().fieldNameIndex(self.field_name)
         )
         if self.target_field_idx == -1:
             attribute = QgsField(
@@ -259,8 +268,10 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             )
             cross_section_lines.dataProvider().addAttributes([attribute])
             cross_section_lines.updateFields()
-            self.target_field_idx = cross_section_lines.dataProvider().fieldNameIndex(
-                self.field_name
+            self.target_field_idx = (
+                cross_section_lines.dataProvider().fieldNameIndex(
+                    self.field_name
+                )
             )
 
         feedback.setProgress(0)
@@ -313,7 +324,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
                     tgt_wkb_type=QgsWkbTypes.LineString,
                     tgt_fields=flowlines_sink_fields,
                 )
-                flowlines_sink.addFeature(qgs_feature, QgsFeatureSink.FastInsert)
+                flowlines_sink.addFeature(
+                    qgs_feature, QgsFeatureSink.FastInsert
+                )
             feedback.setProgress(100 * i / nr_features)
 
         np.savetxt(
@@ -361,11 +374,13 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         # set arrow rotation
         rotation_expression = f'if( "{self.field_name}" < 0, 0, 180)'
         data_defined_angle = (
-            QgsMarkerSymbol().dataDefinedAngle().fromExpression(rotation_expression)
+            QgsMarkerSymbol()
+            .dataDefinedAngle()
+            .fromExpression(rotation_expression)
         )
-        cross_section_lines.renderer().symbol()[0].subSymbol().setDataDefinedAngle(
-            data_defined_angle
-        )
+        cross_section_lines.renderer().symbol()[
+            0
+        ].subSymbol().setDataDefinedAngle(data_defined_angle)
 
         # make arrow invisible if attribute value for field self.field_name is NULL
         enable_symbol_layer = QgsProperty.fromExpression(
@@ -376,7 +391,9 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
         )
         context.project().addMapLayer(cross_section_lines)
 
-        flowlines_output_layer = context.getMapLayer(self.flowlines_sink_dest_id)
+        flowlines_output_layer = context.getMapLayer(
+            self.flowlines_sink_dest_id
+        )
         flowlines_output_layer.loadNamedStyle(
             str(STYLE_DIR / "cross_sectional_discharge_flowlines.qml")
         )
@@ -401,7 +418,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
     def shortHelpString(self):
         return self.tr(
             """
-            <h3>Calculate total net discharge over a cross-section line.</h3> 
+            <h3>Calculate total net discharge over a cross-section line.</h3>
             <p>The result will be written to a field specified by <i>output field name</i>. This field will be created if it does not exist.</p>
             <p>The sign (positive/negative) of the output values depends on the drawing direction of the cross-section line. Positive values indicate flow from the left-hand side of the cross-section line to the right-hand side. Negative values indicate flow from right to left.</p>
             <h3>Parameters</h3>
@@ -419,7 +436,7 @@ class CrossSectionalDischargeAlgorithm(QgsProcessingAlgorithm):
             <p>Limit the analysis to flowlines in a specific flow domain.</p>
             <h4>1D Flowline types to include</h4>
             <p>Further filtering of specific 1D flowlines. This setting does not affect 2D or 1D/2D flowlines.</p>
-            <h4>Output field name</h4>            
+            <h4>Output field name</h4>           
             <p>Name of the field in the <i>cross-section lines</i> layer to which total net discharge will be written.</p>
             <h3>Outputs</h3>
             <h4>Total net discharge per cross-section line</h4>

@@ -6,10 +6,19 @@ from osgeo import ogr
 from threedigrid.admin.utils import KCUDescriptor
 
 # local
-try:
-    from .aggregation_classes import *
-except ImportError:
-    from aggregation_classes import *
+from .aggregation_classes import (
+    AggregationVariableList,
+    AggregationSign,
+    AggregationMethod,
+    AggregationVariable,
+    VT_NODE,
+    VT_FLOW,
+    PRM_NONE,
+    VT_FLOW_HYBRID,
+    PRM_SPLIT,
+    VT_NODE_HYBRID,
+    PRM_1D
+)
 
 KCU_DICT = KCUDescriptor()
 NODE_TYPE_DICT = {
@@ -414,4 +423,20 @@ AGGREGATION_SIGNS = [
     AGGREGATION_SIGN_NA,
 ]
 
-NON_TS_REDUCING_KCU = [3, 4, 51, 52, 53, 54, 55, 56, 57, 58, 150, 200, 300, 400, 500]
+NON_TS_REDUCING_KCU = [
+    3,
+    4,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    150,
+    200,
+    300,
+    400,
+    500,
+]
