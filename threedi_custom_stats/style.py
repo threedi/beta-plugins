@@ -346,9 +346,8 @@ DEFAULT_STYLES = {
     "ts_max": {"flowline": STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE},
     "grad": {"flowline": STYLE_GRADIENT},
     "bed_grad": {"flowline": STYLE_GRADIENT},
-    "cross_section_water_level": {
-        "flowline": STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE
-    },
+    "wl_at_xsec": {"flowline": STYLE_SINGLE_COLUMN_GRADUATED_FLOWLINE},
+
     # Nodes
     "s1": {
         "node": STYLE_SINGLE_COLUMN_GRADUATED_NODE,
