@@ -33,4 +33,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
     """
     #
     from .threedi_custom_stats import ThreeDiCustomStats
+
     return ThreeDiCustomStats(iface)

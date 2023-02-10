@@ -4,6 +4,7 @@ from .algorithms import CrossSectionalDischargeAlgorithm
 
 class ThreeDiCustomStatisticsProvider(QgsProcessingProvider):
     """Loads the Processing Toolbox algorithms"""
+
     def __init__(self):
         """
         Default constructor.

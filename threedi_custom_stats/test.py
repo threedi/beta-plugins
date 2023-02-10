@@ -2,9 +2,9 @@ from threedi_result_aggregation import *
 from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 from threedigrid.admin.gridresultadmin import GridH5AggregateResultAdmin
 
-ga ='C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\gridadmin.h5'
-res ='C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\results_3di.nc'
-agg_res = 'C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\aggregate_results_3di.nc'
+ga = "C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\gridadmin.h5"
+res = "C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\results_3di.nc"
+agg_res = "C:\\Users\\leendert.vanwolfswin\\Documents\\purmerend\\overhwere_opp\\70mm\\aggregate_results_3di.nc"
 
 gr = GridH5ResultAdmin(ga, res)
 gr_agg = GridH5ResultAdmin(ga, agg_res)
@@ -64,8 +64,8 @@ gr_agg.nodes.Meta.subset_fields.keys()
 
 from threedi_result_aggregation import *
 
-ga = 'C:/Users/leendert.vanwolfswin/Documents/mead/rev6 45 mm 40mm per uur/gridadmin.h5'
-res = 'C:/Users/leendert.vanwolfswin/Documents/mead/rev6 45 mm 40mm per uur/results_3di.nc'
+ga = "C:/Users/leendert.vanwolfswin/Documents/mead/rev6 45 mm 40mm per uur/gridadmin.h5"
+res = "C:/Users/leendert.vanwolfswin/Documents/mead/rev6 45 mm 40mm per uur/results_3di.nc"
 
 das = []
 
@@ -75,32 +75,37 @@ das = []
 #                        )
 #            )
 
-das.append(Aggregation(variable=AGGREGATION_VARIABLES.get_by_short_name('s1'),
-                       method=AGGREGATION_METHODS.get_by_short_name('first_non_empty')
-                       )
-           )
+das.append(
+    Aggregation(
+        variable=AGGREGATION_VARIABLES.get_by_short_name("s1"),
+        method=AGGREGATION_METHODS.get_by_short_name("first_non_empty"),
+    )
+)
 
-ca, rast = aggregate_threedi_results(gridadmin=ga,
-                                     results_3di=res,
-                                     demanded_aggregations=das,
-                                     interpolation_method='linear',
-                                     resample_point_layer=False,
-                                     output_flowlines=False,
-                                     output_cells=False,
-                                     output_rasters=False,
-                                     output_nodes=True
-                                    )
+ca, rast = aggregate_threedi_results(
+    gridadmin=ga,
+    results_3di=res,
+    demanded_aggregations=das,
+    interpolation_method="linear",
+    resample_point_layer=False,
+    output_flowlines=False,
+    output_cells=False,
+    output_rasters=False,
+    output_nodes=True,
+)
 
-ogr_rsamplyr = ca.GetLayerByName('flowline')
+ogr_rsamplyr = ca.GetLayerByName("flowline")
 if ogr_rsamplyr is not None:
-    print('flowline layer has {} features'.format(ogr_rsamplyr.GetFeatureCount()))
+    print(
+        "flowline layer has {} features".format(ogr_rsamplyr.GetFeatureCount())
+    )
 
 # ogr_fllyr = ca.GetLayerByName('flowline')
 # if ogr_fllyr is not None:
 #     print('flowline layer has {} features'.format(ogr_fllyr.GetFeatureCount()))
-ogr_nlyr = ca.GetLayerByName('node')
+ogr_nlyr = ca.GetLayerByName("node")
 if ogr_nlyr is not None:
-    print('node layer has {} features'.format(ogr_nlyr.GetFeatureCount()))
+    print("node layer has {} features".format(ogr_nlyr.GetFeatureCount()))
 
 # ogr_clyr = ca.GetLayerByName('cell')
 # if ogr_clyr is not None:
@@ -119,4 +124,3 @@ if ogr_nlyr is not None:
 
 # print(len(ca['values']))
 # print(gr.lines.count)
-

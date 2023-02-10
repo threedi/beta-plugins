@@ -21,22 +21,20 @@
  *                                                                         *
  ***************************************************************************/
 """
+from typing import List
+
+from osgeo.gdal import GetDriverByName
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
-from qgis.core import (
-    Qgis,
-    QgsApplication,
-    QgsProject,
-    QgsTask,
-    QgsRasterLayer
-)
+from qgis.core import Qgis, QgsApplication, QgsProject, QgsTask
 
-from .threedi_result_aggregation import *
-from .ogr2qgis import *
+from .threedi_result_aggregation.base import aggregate_threedi_results
+from .ogr2qgis import as_qgis_memory_layer
 
 # Initialize Qt resources from file resources.py
 from .resources import *
+
 # Import the code for the dialog
 from .threedi_custom_stats_dialog import ThreeDiCustomStatsDialog
 from .processing.provider import ThreeDiCustomStatisticsProvider
@@ -50,25 +48,25 @@ import os.path
 
 
 class Aggregate3DiResults(QgsTask):
-
-    def __init__(self,
-                 description: str,
-                 parent: ThreeDiCustomStatsDialog,
-                 gridadmin: str,
-                 results_3di: str,
-                 demanded_aggregations: List,
-                 bbox,
-                 start_time: int,
-                 end_time: int,
-                 subsets,
-                 interpolation_method,
-                 resample_point_layer: bool,
-                 resolution,
-                 output_flowlines: bool,
-                 output_cells: bool,
-                 output_nodes: bool,
-                 output_rasters: bool
-                 ):
+    def __init__(
+        self,
+        description: str,
+        parent: ThreeDiCustomStatsDialog,
+        gridadmin: str,
+        results_3di: str,
+        demanded_aggregations: List,
+        bbox,
+        start_time: int,
+        end_time: int,
+        subsets,
+        interpolation_method,
+        resample_point_layer: bool,
+        resolution,
+        output_flowlines: bool,
+        output_cells: bool,
+        output_nodes: bool,
+        output_rasters: bool,
+    ):
         super().__init__(description, QgsTask.CanCancel)
         self.exception = None
         self.parent = parent
@@ -88,11 +86,12 @@ class Aggregate3DiResults(QgsTask):
         self.output_nodes = output_nodes
         self.output_rasters = output_rasters
 
-        self.parent.iface.messageBar().pushMessage("3Di Custom Statistics",
-                                                   "Started aggregating 3Di results",
-                                                   level=Qgis.Info,
-                                                   duration=3
-                                                   )
+        self.parent.iface.messageBar().pushMessage(
+            "3Di Custom Statistics",
+            "Started aggregating 3Di results",
+            level=Qgis.Info,
+            duration=3,
+        )
         self.parent.iface.mainWindow().repaint()  # to show the message before the task starts
 
     def run(self):
@@ -111,7 +110,7 @@ class Aggregate3DiResults(QgsTask):
                 output_flowlines=self.output_flowlines,
                 output_cells=self.output_cells,
                 output_nodes=self.output_nodes,
-                output_rasters=self.output_rasters
+                output_rasters=self.output_rasters,
             )
 
             return True
@@ -133,80 +132,108 @@ class Aggregate3DiResults(QgsTask):
             # raster layer
             if len(self.mem_rasts) > 0:
                 for rastname, rast in self.mem_rasts.items():
-                    raster_output_dir = self.parent.mQgsFileWidgetRasterFolder.filePath()
-                    raster_output_fn = os.path.join(raster_output_dir, rastname + '.tif')
-                    drv = gdal.GetDriverByName('GTiff')
-                    gdal_tif = drv.CreateCopy(utf8_path=raster_output_fn, src=rast)
-                    gdal_tif = None
-                    self.parent.iface.addRasterLayer(raster_output_fn,
-                                                     "Aggregation results: raster {}".format(rastname))
+                    raster_output_dir = (
+                        self.parent.mQgsFileWidgetRasterFolder.filePath()
+                    )
+                    raster_output_fn = os.path.join(
+                        raster_output_dir, rastname + ".tif"
+                    )
+                    drv = GetDriverByName("GTiff")
+                    drv.CreateCopy(
+                        utf8_path=raster_output_fn, src=rast
+                    )
+                    self.parent.iface.addRasterLayer(
+                        raster_output_fn,
+                        "Aggregation results: raster {}".format(rastname),
+                    )
 
             # cell layer
-            ogr_lyr = self.ogr_ds.GetLayerByName('cell')
+            ogr_lyr = self.ogr_ds.GetLayerByName("cell")
             if ogr_lyr is not None:
                 if ogr_lyr.GetFeatureCount() > 0:
                     # polygon layer
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: cells')
+                    qgs_lyr = as_qgis_memory_layer(
+                        ogr_lyr, "Aggregation results: cells"
+                    )
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
                     style = self.parent.comboBoxCellsStyleType.currentData()
-                    style_kwargs = self.parent.get_styling_parameters(output_type=style.output_type)
+                    style_kwargs = self.parent.get_styling_parameters(
+                        output_type=style.output_type
+                    )
                     style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
 
             # flowline layer
-            ogr_lyr = self.ogr_ds.GetLayerByName('flowline')
+            ogr_lyr = self.ogr_ds.GetLayerByName("flowline")
             if ogr_lyr is not None:
                 if ogr_lyr.GetFeatureCount() > 0:
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: flowlines')
+                    qgs_lyr = as_qgis_memory_layer(
+                        ogr_lyr, "Aggregation results: flowlines"
+                    )
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
-                    style = self.parent.comboBoxFlowlinesStyleType.currentData()
-                    style_kwargs = self.parent.get_styling_parameters(output_type=style.output_type)
+                    style = (
+                        self.parent.comboBoxFlowlinesStyleType.currentData()
+                    )
+                    style_kwargs = self.parent.get_styling_parameters(
+                        output_type=style.output_type
+                    )
                     style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
 
             # node layer
-            ogr_lyr = self.ogr_ds.GetLayerByName('node')
+            ogr_lyr = self.ogr_ds.GetLayerByName("node")
             if ogr_lyr is not None:
                 if ogr_lyr.GetFeatureCount() > 0:
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: nodes')
+                    qgs_lyr = as_qgis_memory_layer(
+                        ogr_lyr, "Aggregation results: nodes"
+                    )
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
                     style = self.parent.comboBoxNodesStyleType.currentData()
-                    style_kwargs = self.parent.get_styling_parameters(output_type=style.output_type)
+                    style_kwargs = self.parent.get_styling_parameters(
+                        output_type=style.output_type
+                    )
                     style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
 
             # resampled point layer
-            ogr_lyr = self.ogr_ds.GetLayerByName('node_resampled')
+            ogr_lyr = self.ogr_ds.GetLayerByName("node_resampled")
             if ogr_lyr is not None:
                 if ogr_lyr.GetFeatureCount() > 0:
-                    qgs_lyr = as_qgis_memory_layer(ogr_lyr, 'Aggregation results: resampled nodes')
+                    qgs_lyr = as_qgis_memory_layer(
+                        ogr_lyr, "Aggregation results: resampled nodes"
+                    )
                     project = QgsProject.instance()
                     project.addMapLayer(qgs_lyr)
                     style = self.parent.comboBoxNodesStyleType.currentData()
-                    style_kwargs = self.parent.get_styling_parameters(output_type=style.output_type)
+                    style_kwargs = self.parent.get_styling_parameters(
+                        output_type=style.output_type
+                    )
                     style.apply(qgis_layer=qgs_lyr, style_kwargs=style_kwargs)
 
             self.parent.setEnabled(True)
-            self.parent.iface.messageBar().pushMessage("3Di Custom Statistics",
-                                                       "Finished custom aggregation",
-                                                       level=Qgis.Success,
-                                                       duration=3
-                                                       )
+            self.parent.iface.messageBar().pushMessage(
+                "3Di Custom Statistics",
+                "Finished custom aggregation",
+                level=Qgis.Success,
+                duration=3,
+            )
 
         else:
             self.parent.setEnabled(True)
-            self.parent.iface.messageBar().pushMessage("3Di Custom Statistics",
-                                                       "Aggregating 3Di results returned no results",
-                                                       level=Qgis.Warning,
-                                                       duration=3
-                                                       )
+            self.parent.iface.messageBar().pushMessage(
+                "3Di Custom Statistics",
+                "Aggregating 3Di results returned no results",
+                level=Qgis.Warning,
+                duration=3,
+            )
 
     def cancel(self):
-        self.parent.iface.messageBar().pushMessage("3Di Custom Statistics",
-                                                   "Pre-processing simulation results cancelled by user",
-                                                   level=Qgis.Info,
-                                                   duration=3
-                                                   )
+        self.parent.iface.messageBar().pushMessage(
+            "3Di Custom Statistics",
+            "Pre-processing simulation results cancelled by user",
+            level=Qgis.Info,
+            duration=3,
+        )
         super().cancel()
 
 
@@ -227,11 +254,10 @@ class ThreeDiCustomStats:
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale = QSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
-            self.plugin_dir,
-            'i18n',
-            'ThreeDiCustomStats_{}.qm'.format(locale))
+            self.plugin_dir, "i18n", "ThreeDiCustomStats_{}.qm".format(locale)
+        )
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
@@ -240,7 +266,7 @@ class ThreeDiCustomStats:
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&3Di Custom Statistics')
+        self.menu = self.tr("&3Di Custom Statistics")
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -267,19 +293,20 @@ class ThreeDiCustomStats:
         :rtype: QString
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('ThreeDiCustomStats', message)
+        return QCoreApplication.translate("ThreeDiCustomStats", message)
 
     def add_action(
-            self,
-            icon_path,
-            text,
-            callback,
-            enabled_flag=True,
-            add_to_menu=True,
-            add_to_toolbar=True,
-            status_tip=None,
-            whats_this=None,
-            parent=None):
+        self,
+        icon_path,
+        text,
+        callback,
+        enabled_flag=True,
+        add_to_menu=True,
+        add_to_toolbar=True,
+        status_tip=None,
+        whats_this=None,
+        parent=None,
+    ):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -335,9 +362,7 @@ class ThreeDiCustomStats:
             self.iface.addToolBarIcon(action)
 
         if add_to_menu:
-            self.iface.addPluginToMenu(
-                self.menu,
-                action)
+            self.iface.addPluginToMenu(self.menu, action)
 
         self.actions.append(action)
 
@@ -346,12 +371,13 @@ class ThreeDiCustomStats:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/threedi_custom_stats/icon.png'
+        icon_path = ":/plugins/threedi_custom_stats/icon.png"
         self.add_action(
             icon_path,
-            text=self.tr(u'3Di Custom Statistics'),
+            text=self.tr("3Di Custom Statistics"),
             callback=self.run,
-            parent=self.iface.mainWindow())
+            parent=self.iface.mainWindow(),
+        )
 
         # will be set False in run()
         self.first_start = True
@@ -361,8 +387,8 @@ class ThreeDiCustomStats:
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
             self.iface.removePluginMenu(
-                self.tr(u'&3Di Custom Statistics'),
-                action)
+                self.tr("&3Di Custom Statistics"), action
+            )
             self.iface.removeToolBarIcon(action)
         QgsApplication.processingRegistry().removeProvider(self.provider)
 
@@ -388,32 +414,36 @@ class ThreeDiCustomStats:
             # Filtering parameters
             start_time = self.dlg.doubleSpinBoxStartTime.value()
             end_time = self.dlg.doubleSpinBoxEndTime.value()
-            bbox_qgs_rectangle = self.dlg.mExtentGroupBox.outputExtent()  # bbox is now a https://qgis.org/pyqgis/master/core/QgsRectangle.html#qgis.core.QgsRectangle
+            bbox_qgs_rectangle = (
+                self.dlg.mExtentGroupBox.outputExtent()
+            )  # bbox is now a https://qgis.org/pyqgis/master/core/QgsRectangle.html#qgis.core.QgsRectangle
 
             bbox = None
             if bbox_qgs_rectangle is not None:
                 if not bbox_qgs_rectangle.isEmpty():
-                    bbox = [bbox_qgs_rectangle.xMinimum(),
-                            bbox_qgs_rectangle.yMinimum(),
-                            bbox_qgs_rectangle.xMaximum(),
-                            bbox_qgs_rectangle.yMaximum()]
+                    bbox = [
+                        bbox_qgs_rectangle.xMinimum(),
+                        bbox_qgs_rectangle.yMinimum(),
+                        bbox_qgs_rectangle.xMaximum(),
+                        bbox_qgs_rectangle.yMaximum(),
+                    ]
             subsets = []
             if self.dlg.checkBox1D2DConnections.isChecked():
-                subsets.append('1D2D')
+                subsets.append("1D2D")
             if self.dlg.checkBoxAll1D.isChecked():
-                subsets.append('All1D')
+                subsets.append("All1D")
             if self.dlg.checkBoxAll2D.isChecked():
-                subsets.append('All2D')
+                subsets.append("All2D")
             if self.dlg.checkBoxAllSewerage.isChecked():
-                subsets.append('AllSewerage')
+                subsets.append("AllSewerage")
             if self.dlg.checkBoxCulverts.isChecked():
-                subsets.append('Culverts')
+                subsets.append("Culverts")
             if self.dlg.checkBoxOrifices.isChecked():
-                subsets.append('Orifices')
+                subsets.append("Orifices")
             if self.dlg.checkBoxPipes.isChecked():
-                subsets.append('Pipes')
+                subsets.append("Pipes")
             if self.dlg.checkBoxWeirs.isChecked():
-                subsets.append('Weirs')
+                subsets.append("Weirs")
 
             # Resolution
             resolution = self.dlg.doubleSpinBoxResolution.value()
@@ -427,12 +457,12 @@ class ThreeDiCustomStats:
             # Resample point layer
             resample_point_layer = self.dlg.checkBoxResample.isChecked()
             if resample_point_layer:
-                interpolation_method = 'linear'
+                interpolation_method = "linear"
             else:
                 interpolation_method = None
 
             aggregate_threedi_results_task = Aggregate3DiResults(
-                description='Aggregate 3Di Results',
+                description="Aggregate 3Di Results",
                 parent=self.dlg,
                 gridadmin=grid_admin,
                 results_3di=results_3di,
@@ -447,6 +477,6 @@ class ThreeDiCustomStats:
                 output_flowlines=output_flowlines,
                 output_cells=output_cells,
                 output_nodes=output_nodes,
-                output_rasters=output_rasters
+                output_rasters=output_rasters,
             )
             self.tm.addTask(aggregate_threedi_results_task)

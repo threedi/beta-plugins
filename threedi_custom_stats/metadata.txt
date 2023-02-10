@@ -6,7 +6,7 @@
 name=3Di Custom Statistics
 qgisMinimumVersion=3.0
 description=This plugin calculates statistics of 3Di results. The user chooses the variable, aggregation method and spatiotemporal filtering.
-version=0.5.0
+version=0.4.4
 author=Leendert van Wolfswinkel | Nelen & Schuurmans
 email=leendert.vanwolfswinkel@nelen-schuurmans.nl
 
