@@ -402,6 +402,20 @@ def hybrid_time_aggregate(
         result, _ = gradients(
             gr=gr, flowline_ids=nodes_or_lines.id, gradient_type="bed_level"
         )
+    elif aggregation.variable.short_name == "wl_at_xsec":
+        water_levels_per_timestep, tintervals = water_levels_at_cross_section(
+            gr=gr,
+            flowline_ids=nodes_or_lines.id,
+            start_time=start_time,
+            end_time=end_time,
+            aggregation_sign=aggregation.sign,
+        )
+        result = aggregate_prepared_timeseries(
+            timeseries=water_levels_per_timestep,
+            tintervals=tintervals,
+            start_time=start_time,
+            aggregation=aggregation,
+        )
     else:
         raise ValueError(
             'Unknown aggregation variable "{}".'.format(
@@ -544,6 +558,36 @@ def flowline_node_indices(nodes: Nodes, lines: Lines):
     return start_node_indices, end_node_indices
 
 
+def node_variable_timeseries_for_flowline(
+    gr: GridH5ResultAdmin,
+    flowline_ids: np.array,
+    node_variable: str,
+    aggregation_sign: AggregationSign = None,
+    start_time: float = None,
+    end_time: float = None,
+):
+    """
+    Get a timeseries of water levels at both sides of each flowline
+    """
+    lines = gr.lines.filter(id__in=flowline_ids)
+    nodes = filter_nodes_by_lines(gr.nodes, lines)
+    dummy_aggregation_method = AggregationMethod(
+        short_name="dummy", long_name="dummy"
+    )
+    water_level_aggregation = Aggregation(
+        variable=AGGREGATION_VARIABLES.get_by_short_name(node_variable),
+        method=dummy_aggregation_method,  # value is not used in prepare_timeseries()
+        sign=aggregation_sign,
+    )
+    timeseries, time_intervals = prepare_timeseries(
+        nodes_or_lines=nodes,
+        start_time=start_time,
+        end_time=end_time,
+        aggregation=water_level_aggregation,
+    )
+    return timeseries, time_intervals
+
+
 def gradients(
     gr: GridH5ResultAdmin,
     flowline_ids: np.array,
@@ -565,19 +609,13 @@ def gradients(
         nodes=nodes, lines=lines
     )
     if gradient_type == "water_level":
-        dummy_aggregation_method = AggregationMethod(
-            short_name="dummy", long_name="dummy"
-        )
-        water_level_aggregation = Aggregation(
-            variable=AGGREGATION_VARIABLES.get_by_short_name("s1"),
-            method=dummy_aggregation_method,  # value is not used in prepare_timeseries()
-            sign=aggregation_sign,
-        )
-        levels, time_intervals = prepare_timeseries(
-            nodes_or_lines=nodes,
+        levels, time_intervals = node_variable_timeseries_for_flowline(
+            gr=gr,
+            flowline_ids=flowline_ids,
+            node_variable="s1",
+            aggregation_sign=aggregation_sign,
             start_time=start_time,
-            end_time=end_time,
-            aggregation=water_level_aggregation,
+            end_time=end_time
         )
     elif gradient_type == "bed_level":
         levels = nodes.dmax
@@ -591,6 +629,38 @@ def gradients(
     distances = get_lengths(lines)
     gradients = (levels_end - levels_start).T / distances
     return gradients, time_intervals
+
+
+def water_levels_at_cross_section(
+    gr: GridH5ResultAdmin,
+    flowline_ids: np.array,
+    aggregation_sign: AggregationSign = None,
+    start_time: float = None,
+    end_time: float = None,
+) -> Tuple[np.array, np.array]:
+    """
+    Calculate the water level at the cross section as the average of the water levels at either side of the flowline
+    for a set of flowlines
+
+    # TODO: take into account that cells are not necesarily the same size
+    :returns: - 2D numpy array; one column is one time step; one row is one flowline;
+    - 1D numpy array of time intervals
+    """
+    lines = gr.lines.filter(id__in=flowline_ids)
+    nodes = filter_nodes_by_lines(gr.nodes, lines)
+    start_node_indices, end_node_indices = flowline_node_indices(nodes=nodes, lines=lines)
+    levels, time_intervals = node_variable_timeseries_for_flowline(
+        gr=gr,
+        flowline_ids=flowline_ids,
+        node_variable="s1",
+        aggregation_sign=aggregation_sign,
+        start_time=start_time,
+        end_time=end_time
+    )
+    levels_start = levels.T[start_node_indices]
+    levels_end = levels.T[end_node_indices]
+    water_levels = ((levels_end + levels_start) / 2).T
+    return water_levels, time_intervals
 
 
 def empty_raster_from_vector_layer(
