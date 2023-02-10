@@ -7,20 +7,31 @@ from shapely.geometry import Point, LineString, MultiLineString, MultiPoint
 from threedigrid.admin.gridresultadmin import GridH5ResultAdmin
 from threedigrid.admin.lines.models import Lines
 
-from .threedi_result_aggregation.aggregation_classes import Aggregation, AggregationSign
-from .threedi_result_aggregation.constants import AGGREGATION_VARIABLES, AGGREGATION_METHODS
-from .threedi_result_aggregation.base import prepare_timeseries, aggregate_prepared_timeseries
+from .threedi_result_aggregation.aggregation_classes import (
+    Aggregation,
+    AggregationSign,
+)
+from .threedi_result_aggregation.constants import (
+    AGGREGATION_VARIABLES,
+    AGGREGATION_METHODS,
+)
+from .threedi_result_aggregation.base import (
+    prepare_timeseries,
+    aggregate_prepared_timeseries,
+)
 from .threedi_result_aggregation.threedigrid_ogr import threedigrid_to_ogr
 
 
 Q_NET_SUM = Aggregation(
-    variable=AGGREGATION_VARIABLES.get_by_short_name('q'),
-    method=AGGREGATION_METHODS.get_by_short_name('sum'),
-    sign=AggregationSign('net', 'Net')
+    variable=AGGREGATION_VARIABLES.get_by_short_name("q"),
+    method=AGGREGATION_METHODS.get_by_short_name("sum"),
+    sign=AggregationSign("net", "Net"),
 )
 
 
-def intersected_segments(line: Union[LineString, MultiLineString], intersecting_line: LineString) -> List[LineString]:
+def intersected_segments(
+    line: Union[LineString, MultiLineString], intersecting_line: LineString
+) -> List[LineString]:
     """
     Returns the segments of `line` that are intersected by `intersecting_line`.
 
@@ -36,10 +47,15 @@ def intersected_segments(line: Union[LineString, MultiLineString], intersecting_
         raise TypeError("line is not a LineString or MultiLinestring")
     for single_line in lines:
         line_segments = [
-            LineString([single_line.coords[i], single_line.coords[i+1]]) for i in range(len(single_line.coords) - 1)
+            LineString([single_line.coords[i], single_line.coords[i + 1]])
+            for i in range(len(single_line.coords) - 1)
         ]
         intersection = single_line.intersection(intersecting_line)
-        intersection_points = intersection.geoms if type(intersection) == MultiPoint else [intersection]
+        intersection_points = (
+            intersection.geoms
+            if type(intersection) == MultiPoint
+            else [intersection]
+        )
         result = []
         for line_segment in line_segments:
             for point in intersection_points:
@@ -64,41 +80,49 @@ def is_left_of_line(point: Point, line: LineString) -> Union[bool, None]:
     if point.intersects(line):
         return None
     start, end = [Point(coord) for coord in line.coords]
-    return ((end.x - start.x)*(point.y - start.y) - (end.y - start.y)*(point.x - start.x)) > 0
+    return (
+        (end.x - start.x) * (point.y - start.y)
+        - (end.y - start.y) * (point.x - start.x)
+    ) > 0
 
 
-def flowline_start_nodes_left_of_line(flowlines: Lines, gauge_line: LineString) -> List[bool]:
+def flowline_start_nodes_left_of_line(
+    flowlines: Lines, gauge_line: LineString
+) -> List[bool]:
     result = []
     for i in range(flowlines.count):
         line_coords = flowlines.line_coords[:, i]
         shapely_flowline = LineString(
             [
                 Point((line_coords[0], line_coords[1])),
-                Point((line_coords[2], line_coords[3]))
+                Point((line_coords[2], line_coords[3])),
             ]
         )
         gauge_line_segments = intersected_segments(
-            line=gauge_line,
-            intersecting_line=shapely_flowline
+            line=gauge_line, intersecting_line=shapely_flowline
         )
         if len(gauge_line_segments) == 0:
             continue
         elif len(gauge_line_segments) > 1:
-            raise ValueError(f"Gauge line intersects flowline {flowlines.id[i]} multiple times")
+            raise ValueError(
+                f"Gauge line intersects flowline {flowlines.id[i]} multiple times"
+            )
         else:
             gauge_line_segment = gauge_line_segments[0]
         shapely_flowline_start_point = Point(flowlines.line_coords[0:2, i])
-        result.append(is_left_of_line(shapely_flowline_start_point, gauge_line_segment))
+        result.append(
+            is_left_of_line(shapely_flowline_start_point, gauge_line_segment)
+        )
     return result
 
 
 def left_to_right_discharge(
-        gr: GridH5ResultAdmin,
-        gauge_line: LineString,
-        start_time: float = None,
-        end_time: float = None,
-        subset: str = None,
-        content_types: List[str] = None
+    gr: GridH5ResultAdmin,
+    gauge_line: LineString,
+    start_time: float = None,
+    end_time: float = None,
+    subset: str = None,
+    content_types: List[str] = None,
 ) -> Tuple[Lines, List[bool], np.array, np.array, float]:
     """
     Calculate the total net discharge from the left of a `gauge_line` to the right of that gauge line
@@ -112,36 +136,37 @@ def left_to_right_discharge(
     sum of net discharge per flowline in left -> right direction,
     total left -> right discharge
     """
-    intersecting_lines = gr.lines\
-        .filter(line_coords__intersects_bbox=gauge_line.bounds)\
-        .filter(line_coords__intersects_geometry=gauge_line)
-    if subset: 
+    intersecting_lines = gr.lines.filter(
+        line_coords__intersects_bbox=gauge_line.bounds
+    ).filter(line_coords__intersects_geometry=gauge_line)
+    if subset:
         intersecting_lines = intersecting_lines.subset(subset)
     if content_types:
         # filtering on content_type only affects flowlines with a content_type (i.e. 1D flowlines)
         # therefore we append b''
-        content_types.append('')
+        content_types.append("")
         # 1D/2D flowlines between an added calculation point and a 2D node should are not affected either
         # therefore we append v2_added_c
-        content_types.append('v2_added_c')
+        content_types.append("v2_added_c")
         # convert to bytes because filtering with a mix of empty and non-empty strings does not work otherwise
-        content_types = [s.encode('utf-8') for s in content_types]
-        intersecting_lines = intersecting_lines.filter(content_type__in=content_types)
+        content_types = [s.encode("utf-8") for s in content_types]
+        intersecting_lines = intersecting_lines.filter(
+            content_type__in=content_types
+        )
     ts, tintervals = prepare_timeseries(
         nodes_or_lines=intersecting_lines,
         start_time=start_time,
         end_time=end_time,
-        aggregation=Q_NET_SUM
+        aggregation=Q_NET_SUM,
     )
     agg_by_flowline = aggregate_prepared_timeseries(
         timeseries=ts,
         tintervals=tintervals,
         start_time=start_time,
-        aggregation=Q_NET_SUM
+        aggregation=Q_NET_SUM,
     )
     is_left_to_right = flowline_start_nodes_left_of_line(
-        flowlines=intersecting_lines,
-        gauge_line=gauge_line
+        flowlines=intersecting_lines, gauge_line=gauge_line
     )
     direction = np.where(is_left_to_right, 1, -1)
     agg_by_flowline_left_to_right = agg_by_flowline * direction
@@ -153,18 +178,24 @@ def left_to_right_discharge(
     timesteps = np.cumsum(np.concatenate(([0], tintervals[:-1]))) + start_time
     ts_gauge_line = np.dstack([timesteps, ts_values_gauge_line]).squeeze()
 
-    return intersecting_lines, is_left_to_right, ts_gauge_line, agg_by_flowline_left_to_right, summed_vals
+    return (
+        intersecting_lines,
+        is_left_to_right,
+        ts_gauge_line,
+        agg_by_flowline_left_to_right,
+        summed_vals,
+    )
 
 
 def left_to_right_discharge_ogr(
-        gr: GridH5ResultAdmin,
-        gauge_line: LineString,
-        tgt_ds: ogr.DataSource,
-        start_time: float = None,
-        end_time: float = None,
-        subset: str = None,
-        content_types: List[str] = None,
-        gauge_line_id: int = None
+    gr: GridH5ResultAdmin,
+    gauge_line: LineString,
+    tgt_ds: ogr.DataSource,
+    start_time: float = None,
+    end_time: float = None,
+    subset: str = None,
+    content_types: List[str] = None,
+    gauge_line_id: int = None,
 ) -> Tuple[np.array, float]:
     """
     Calculate the total net discharge from the left of a `gauge_line` to the right of that gauge line
@@ -177,24 +208,36 @@ def left_to_right_discharge_ogr(
 
     :returns: total left -> right discharge
     """
-    intersecting_lines, is_left_to_right, ts_gauge_line, q_net_sum_left_to_right, summed_vals = left_to_right_discharge(
+    (
+        intersecting_lines,
+        is_left_to_right,
+        ts_gauge_line,
+        q_net_sum_left_to_right,
+        summed_vals,
+    ) = left_to_right_discharge(
         gr=gr,
         gauge_line=gauge_line,
         start_time=start_time,
         end_time=end_time,
         subset=subset,
-        content_types=content_types
+        content_types=content_types,
     )
     gauge_line_ids = [gauge_line_id] * intersecting_lines.count
-    attributes = {"gauge_line_id": gauge_line_ids, "q_net_sum": q_net_sum_left_to_right}
-    attr_data_types = {"gauge_line_id": ogr.OFTInteger, "q_net_sum": ogr.OFTReal}
+    attributes = {
+        "gauge_line_id": gauge_line_ids,
+        "q_net_sum": q_net_sum_left_to_right,
+    }
+    attr_data_types = {
+        "gauge_line_id": ogr.OFTInteger,
+        "q_net_sum": ogr.OFTReal,
+    }
     threedigrid_to_ogr(
         threedigrid_src=intersecting_lines,
         tgt_ds=tgt_ds,
         attributes=attributes,
-        attr_data_types=attr_data_types
+        attr_data_types=attr_data_types,
     )
-    ogr_lyr = tgt_ds.GetLayerByName('flowline')
+    ogr_lyr = tgt_ds.GetLayerByName("flowline")
     for i, feature in enumerate(ogr_lyr):
         if is_left_to_right[i]:
             geom = feature.GetGeometryRef()
