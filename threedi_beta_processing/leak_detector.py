@@ -174,7 +174,7 @@ class LeakDetector:
                     return
             self._cell_dict[cell_id] = Cell(ld=self, id=cell_id, coords=cell_coords)
             if feedback:
-                feedback.setProgress(100*i/len(cell_properties_dict))
+                feedback.setProgress(100 * i / len(cell_properties_dict))
 
         # Find cell neighbours
         if feedback:
@@ -191,7 +191,7 @@ class LeakDetector:
             reference_cell.add_neigh(neigh_cell=neigh_cell, location=location)
             neigh_cell.add_neigh(neigh_cell=reference_cell, location=OPPOSITE[location])
             if feedback:
-                feedback.setProgress(100*i/len(flowlines_list))
+                feedback.setProgress(100 * i / len(flowlines_list))
 
         # Create edges
         if feedback:
@@ -215,7 +215,7 @@ class LeakDetector:
             self.edges.append(edge)
             self._edge_dict[tuple(cell_ids)] = edge
             if feedback:
-                feedback.setProgress(100*i/len(flowlines_list))
+                feedback.setProgress(100 * i / len(flowlines_list))
 
         # Update edge exchange level from obstacles
         if obstacles:
@@ -251,7 +251,7 @@ class LeakDetector:
                     edge = self.edges[i]
                     if edge.exchange_level < crest_level:
                         edge.exchange_level = crest_level
-                feedback.setProgress(100*i/len(obstacle_indices))
+                feedback.setProgress(100 * i / len(obstacle_indices))
 
     @property
     def cells(self) -> List:
@@ -296,7 +296,7 @@ class LeakDetector:
         for i, cell_pair in enumerate(self.cell_pairs()):
             try:
                 cell_pair.find_obstacles()
-                feedback.setProgress(50*((i+1)/len(self.line_nodes)))
+                feedback.setProgress(50 * ((i + 1) / len(self.line_nodes)))
                 if feedback.isCanceled():
                     return
             except Exception as e:
@@ -307,7 +307,7 @@ class LeakDetector:
         for i, cell_pair in enumerate(self.cell_pairs()):
             try:
                 cell_pair.find_connecting_obstacles()
-                feedback.setProgress(50 + 50*((i+1)/len(self.line_nodes)))
+                feedback.setProgress(50 + 50 * ((i + 1) / len(self.line_nodes)))
                 if feedback.isCanceled():
                     return
             except IndexError as e:
@@ -404,7 +404,7 @@ class Obstacle:
     @property
     def from_edge(self):
         if not self._from_edge:
-            self._from_edge=self._find_edge(cell=self.from_cell, side=self.from_side, pos=self.from_pos)
+            self._from_edge = self._find_edge(cell=self.from_cell, side=self.from_side, pos=self.from_pos)
         return self._from_edge
 
     @from_edge.setter
@@ -414,7 +414,7 @@ class Obstacle:
     @property
     def to_edge(self):
         if not self._to_edge:
-            self._to_edge=self._find_edge(cell=self.to_cell, side=self.to_side, pos=self.to_pos)
+            self._to_edge = self._find_edge(cell=self.to_cell, side=self.to_side, pos=self.to_pos)
         return self._to_edge
 
     @to_edge.setter
@@ -1338,3 +1338,70 @@ def lowest(elements: List[Union[Obstacle, Edge]]):
             min_element_height = getattr(element, attr_name)
             lowest_element = element
     return lowest_element
+
+
+def wet_cross_sectional_area(
+        exchange_levels: np.ndarray,
+        pixel_size: float,
+        water_level: float,
+        obstacle_crest_level: float = None
+):
+    """
+    Calculate the wet cross-sectional area from a 1D array of exchange levels (bed level values) and a water level.
+    obstacle_crest_level may be specified to overrule exchange levels that are lower
+    """
+    obstacle_crest_level = np.min(exchange_levels) if obstacle_crest_level is None else obstacle_crest_level
+    bed_levels = np.maximum(exchange_levels, obstacle_crest_level)
+    water_depths = np.maximum(water_level - np.minimum(water_level, bed_levels), 0)
+    return np.sum(water_depths * pixel_size)
+
+
+def wetted_perimeter(
+        exchange_levels: np.ndarray,
+        pixel_size: float,
+        water_level: float,
+        obstacle_crest_level: float = None
+):
+    """
+    Calculate the wetted perimeter of a 2D cross-section; only the horizontal wet surface are taken into account
+    """
+    obstacle_crest_level = np.min(exchange_levels) if obstacle_crest_level is None else obstacle_crest_level
+    return np.sum((np.maximum(exchange_levels, obstacle_crest_level) < water_level) * pixel_size)
+
+
+def discharge_reduction_factor(
+        exchange_levels: np.ndarray,
+        pixel_size: float,
+        water_level: float,
+        old_obstacle_crest_level: float = None,
+        new_obstacle_crest_level: float = None
+):
+    old_wet_cross_sectional_area = wet_cross_sectional_area(
+        exchange_levels=exchange_levels,
+        pixel_size=pixel_size,
+        water_level=water_level,
+        obstacle_crest_level=old_obstacle_crest_level
+    )
+    new_wet_cross_sectional_area = wet_cross_sectional_area(
+        exchange_levels=exchange_levels,
+        pixel_size=pixel_size,
+        water_level=water_level,
+        obstacle_crest_level=new_obstacle_crest_level
+    )
+    if old_wet_cross_sectional_area == 0 or new_wet_cross_sectional_area == 0:
+        return 0
+    old_wetted_perimeter = wetted_perimeter(
+        exchange_levels=exchange_levels,
+        pixel_size=pixel_size,
+        water_level=water_level,
+        obstacle_crest_level=old_obstacle_crest_level
+    )
+    new_wetted_perimeter = wetted_perimeter(
+        exchange_levels=exchange_levels,
+        pixel_size=pixel_size,
+        water_level=water_level,
+        obstacle_crest_level=new_obstacle_crest_level
+    )
+    result = np.sqrt(new_wet_cross_sectional_area / new_wetted_perimeter) / \
+             np.sqrt(old_wet_cross_sectional_area / old_wetted_perimeter)
+    return result

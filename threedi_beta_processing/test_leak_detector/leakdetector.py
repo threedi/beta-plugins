@@ -1,9 +1,10 @@
 from pathlib import Path
 
+import numpy as np
 from osgeo import gdal
 from threedigrid.admin.gridadmin import GridH5Admin
 
-from leak_detector import LeakDetector
+from leak_detector import LeakDetector, wet_cross_sectional_area
 
 DATA_DIR = Path(__file__).parent / 'data'
 DEM_FILENAME = DATA_DIR / 'dem_0_01.tif'
