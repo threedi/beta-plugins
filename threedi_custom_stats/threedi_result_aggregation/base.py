@@ -255,7 +255,8 @@ def prepare_timeseries(
 
 def aggregate_prepared_timeseries(
     timeseries, tintervals, start_time, aggregation: Aggregation
-):
+) -> np.array:
+    """Return an array with one value for each node or line"""
     if aggregation.method.short_name == "sum":
         raw_values_per_time_interval = np.multiply(timeseries.T, tintervals).T
         result = np.sum(raw_values_per_time_interval, axis=0)

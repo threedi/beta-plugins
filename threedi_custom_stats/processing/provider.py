@@ -1,6 +1,9 @@
 from qgis.core import QgsProcessingProvider
 from .algorithms import CrossSectionalDischargeAlgorithm
-from .leak_detector_algorithms import DetectLeakingObstaclesAlgorithm
+from .leak_detector_algorithms import (
+    DetectLeakingObstaclesAlgorithm,
+    DetectLeakingObstaclesWithDischargeThresholdAlgorithm
+)
 
 
 class ThreeDiCustomStatisticsProvider(QgsProcessingProvider):
@@ -15,6 +18,7 @@ class ThreeDiCustomStatisticsProvider(QgsProcessingProvider):
     def loadAlgorithms(self, *args, **kwargs):
         self.addAlgorithm(CrossSectionalDischargeAlgorithm())
         self.addAlgorithm(DetectLeakingObstaclesAlgorithm())
+        self.addAlgorithm(DetectLeakingObstaclesWithDischargeThresholdAlgorithm())
 
     def id(self, *args, **kwargs):
         """The ID of your plugin, used for identifying the provider.

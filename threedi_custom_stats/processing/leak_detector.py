@@ -5,7 +5,7 @@ import numpy as np
 from osgeo import gdal
 from shapely.geometry import LineString, Point
 from shapely.strtree import STRtree
-from scipy.ndimage import label, generate_binary_structure, maximum_position
+from scipy.ndimage import label, generate_binary_structure
 from scipy.signal import find_peaks
 from threedigrid.admin.gridadmin import GridH5Admin
 from threedigrid.admin.lines.models import Lines
@@ -314,7 +314,7 @@ class LeakDetector:
                 print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
                 raise e
 
-    def result_edges(self):
+    def result_edges(self, minimum_discharge_reduction: float = None):
         """Iterate over all edges that have an obstacle"""
         for edge in self.edges:
             if edge.obstacles:
@@ -1338,70 +1338,3 @@ def lowest(elements: List[Union[Obstacle, Edge]]):
             min_element_height = getattr(element, attr_name)
             lowest_element = element
     return lowest_element
-
-
-def wet_cross_sectional_area(
-        exchange_levels: np.ndarray,
-        pixel_size: float,
-        water_level: float,
-        obstacle_crest_level: float = None
-):
-    """
-    Calculate the wet cross-sectional area from a 1D array of exchange levels (bed level values) and a water level.
-    obstacle_crest_level may be specified to overrule exchange levels that are lower
-    """
-    obstacle_crest_level = np.min(exchange_levels) if obstacle_crest_level is None else obstacle_crest_level
-    bed_levels = np.maximum(exchange_levels, obstacle_crest_level)
-    water_depths = np.maximum(water_level - np.minimum(water_level, bed_levels), 0)
-    return np.sum(water_depths * pixel_size)
-
-
-def wetted_perimeter(
-        exchange_levels: np.ndarray,
-        pixel_size: float,
-        water_level: float,
-        obstacle_crest_level: float = None
-):
-    """
-    Calculate the wetted perimeter of a 2D cross-section; only the horizontal wet surface are taken into account
-    """
-    obstacle_crest_level = np.min(exchange_levels) if obstacle_crest_level is None else obstacle_crest_level
-    return np.sum((np.maximum(exchange_levels, obstacle_crest_level) < water_level) * pixel_size)
-
-
-def discharge_reduction_factor(
-        exchange_levels: np.ndarray,
-        pixel_size: float,
-        water_level: float,
-        old_obstacle_crest_level: float = None,
-        new_obstacle_crest_level: float = None
-):
-    old_wet_cross_sectional_area = wet_cross_sectional_area(
-        exchange_levels=exchange_levels,
-        pixel_size=pixel_size,
-        water_level=water_level,
-        obstacle_crest_level=old_obstacle_crest_level
-    )
-    new_wet_cross_sectional_area = wet_cross_sectional_area(
-        exchange_levels=exchange_levels,
-        pixel_size=pixel_size,
-        water_level=water_level,
-        obstacle_crest_level=new_obstacle_crest_level
-    )
-    if old_wet_cross_sectional_area == 0 or new_wet_cross_sectional_area == 0:
-        return 0
-    old_wetted_perimeter = wetted_perimeter(
-        exchange_levels=exchange_levels,
-        pixel_size=pixel_size,
-        water_level=water_level,
-        obstacle_crest_level=old_obstacle_crest_level
-    )
-    new_wetted_perimeter = wetted_perimeter(
-        exchange_levels=exchange_levels,
-        pixel_size=pixel_size,
-        water_level=water_level,
-        obstacle_crest_level=new_obstacle_crest_level
-    )
-    result = np.sqrt(new_wet_cross_sectional_area / new_wetted_perimeter) / \
-             np.sqrt(old_wet_cross_sectional_area / old_wetted_perimeter)
-    return result
