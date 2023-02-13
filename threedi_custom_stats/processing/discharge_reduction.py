@@ -23,7 +23,7 @@ class DischargeReductionFlowline:
         if which_obstacle == OLD:
             obstacle_crest_level = self.old_obstacle_crest_level
         elif which_obstacle == NEW:
-            obstacle_crest_level = self.old_obstacle_crest_level
+            obstacle_crest_level = self.new_obstacle_crest_level
         else:
             raise ValueError(f"Value of argument 'which_obstacle' must be 'OLD' or 'NEW', not {which_obstacle}")
         obstacle_crest_level = np.min(self.exchange_levels) if obstacle_crest_level is None else obstacle_crest_level
@@ -73,9 +73,9 @@ class DischargeReductionFlowline:
                  np.sqrt(old_wet_cross_sectional_area / old_wetted_perimeter)
         return result
 
-    def discharge_reduction_factors(self, water_levels: float):
+    def discharge_reduction_factors(self, water_levels: np.array):
         """Vectorized version of `discharge_reduction_factor`"""
-        v_discharge_reduction_factors = np.vectorize(self.discharge_reduction_factor)
+        v_discharge_reduction_factors = np.vectorize(self.discharge_reduction_factor, otypes=[float])
         return v_discharge_reduction_factors(water_levels)
 
     def discharge_reduction(
@@ -88,8 +88,11 @@ class DischargeReductionFlowline:
         Calculate the difference in net cumulative discharge when an obstacle is applied to a flowline's cross-section
         """
         old_total_discharge = np.sum(discharges * tintervals)
+        print(f"old_total_discharge: {old_total_discharge}")
         discharge_reduction_factors = self.discharge_reduction_factors(water_levels)
+        print(f"discharge_reduction_factors: {discharge_reduction_factors}")
         new_total_discharge = np.sum(discharges * discharge_reduction_factors * tintervals)
+        print(f"new_total_discharge: {new_total_discharge}")
         return new_total_discharge - old_total_discharge
 
 ### TEST ###
@@ -134,19 +137,31 @@ leak_detector = LeakDetector(
     )
 flowlines = GRIDRESULTADMIN.lines.filter(id__in=[5972])
 edge = leak_detector.edge(*flowlines.line_nodes[0])
+print(f"edge.exchange_level: {edge.exchange_level}")
+print(f"edge.exchange_levels: {edge.exchange_levels}")
 discharge_reduction_flowline = DischargeReductionFlowline(
     id=5972,
     pixel_size=leak_detector.dem.RasterXSize,
     exchange_levels=edge.exchange_levels,
-    new_obstacle_crest_level=134.4
+    new_obstacle_crest_level=134.3
 )
-
+drf = discharge_reduction_flowline.discharge_reduction_factor(water_level=134.57425)
+print(f"drf: {drf}")
 aggregation_sign = AggregationSign(short_name="net", long_name="Net")
 water_levels, tintervals = water_levels_at_cross_section(
             gr=GRIDRESULTADMIN,
             flowline_ids=flowlines.id,
             aggregation_sign=aggregation_sign,
         )
+water_levels = water_levels.flatten()
+tintervals = tintervals.flatten()
+print(f"water_levels: {water_levels}")
+drf_v = discharge_reduction_flowline.discharge_reduction_factors(
+    water_levels=np.array([134.32193, 134.37238, 134.41074,
+ 134.44113, 134.46786, 134.49088, 134.5123,  134.52995, 134.54704, 134.56166,
+ 134.57425, 134.5852,  134.59477]))
+print(f"drf_v: {drf_v}")
+
 Q_NET_SUM = Aggregation(
     variable=AGGREGATION_VARIABLES.get_by_short_name("q"),
     method=AGGREGATION_METHODS.get_by_short_name("sum"),
@@ -159,4 +174,6 @@ discharges, _ = prepare_timeseries(
     end_time=None,
     aggregation=Q_NET_SUM
 )
-print(discharge_reduction_flowline.discharge_reduction(water_levels, discharges, tintervals))
+discharges = discharges.flatten()
+dr = discharge_reduction_flowline.discharge_reduction(water_levels, discharges, tintervals)
+print(f"dr: {dr}")
