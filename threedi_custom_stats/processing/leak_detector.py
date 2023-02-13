@@ -470,8 +470,8 @@ class Edge:
                 bbox = [self.start_coord[0], self.start_coord[1] - pxsize, self.end_coord[0],
                         self.end_coord[1] + pxsize]
             arr = read_as_array(raster=self.ld.dem, bbox=bbox, pad=True)
-            exchange_levels = np.nanmax(arr, axis=int(self.is_bottom_up))
-            self.exchange_level = np.nanmin(exchange_levels)
+            self.exchange_levels = np.nanmax(arr, axis=int(self.is_bottom_up))
+            self.exchange_level = np.nanmin(self.exchange_levels)
 
     @property
     def is_bottom_up(self):

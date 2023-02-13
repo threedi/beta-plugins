@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import numpy as np
 from osgeo import gdal
 from threedigrid.admin.gridadmin import GridH5Admin
 
