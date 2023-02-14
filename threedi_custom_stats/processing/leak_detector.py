@@ -146,16 +146,16 @@ class LeakDetector:
         self.search_precision = search_precision
         self.min_peak_prominence = min_peak_prominence
 
-        flowlines = gridadmin.lines.subset('2D_OPEN_WATER').filter(id__in=flowline_ids)
-        if np.all(np.isnan(flowlines.dpumax)):
+        self.flowlines = gridadmin.lines.subset('2D_OPEN_WATER').filter(id__in=flowline_ids)
+        if np.all(np.isnan(self.flowlines.dpumax)):
             if not obstacles:
                 if feedback:
                     feedback.pushWarning(
                         "Gridadmin file does not contain elevation data. Exchange levels will be derived from the DEM. "
                         "Obstacles were not supplied and will be ignored."
                     )
-        self.line_nodes = flowlines.line_nodes
-        flowlines_list = flowlines.to_list()
+        self.line_nodes = self.flowlines.line_nodes
+        flowlines_list = self.flowlines.to_list()
 
         # Create cells
         if feedback:
@@ -314,7 +314,7 @@ class LeakDetector:
                 print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
                 raise e
 
-    def result_edges(self, minimum_discharge_reduction: float = None):
+    def result_edges(self):
         """Iterate over all edges that have an obstacle"""
         for edge in self.edges:
             if edge.obstacles:

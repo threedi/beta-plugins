@@ -132,9 +132,9 @@ def get_lengths(lines: Lines):
 
 def prepare_timeseries(
     nodes_or_lines: Union[Nodes, Lines],
-    start_time: float,
-    end_time: float,
     aggregation: Aggregation,
+    start_time: float = None,
+    end_time: float = None,
     cfl_strictness=1,
 ) -> Tuple[np.array, np.array]:
     """
