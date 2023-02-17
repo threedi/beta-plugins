@@ -155,7 +155,7 @@ class LeakDetector:
                         "Obstacles were not supplied and will be ignored."
                     )
         self.line_nodes = self.flowlines.line_nodes
-        flowlines_list = self.flowlines.to_list()
+        self.flowlines_list = self.flowlines.only("id", "line", "line_coords").to_list()
 
         # Create cells
         if feedback:
@@ -180,7 +180,7 @@ class LeakDetector:
         if feedback:
             feedback.pushInfo(f"{datetime.now()}")
             feedback.setProgressText("Find cell neighbours...")
-        for i, flowline in enumerate(flowlines_list):
+        for i, flowline in enumerate(self.flowlines_list):
             if feedback:
                 if feedback.isCanceled():
                     return
@@ -191,7 +191,7 @@ class LeakDetector:
             reference_cell.add_neigh(neigh_cell=neigh_cell, location=location)
             neigh_cell.add_neigh(neigh_cell=reference_cell, location=OPPOSITE[location])
             if feedback:
-                feedback.setProgress(100 * i / len(flowlines_list))
+                feedback.setProgress(100 * i / len(self.flowlines_list))
 
         # Create edges
         if feedback:
@@ -200,7 +200,7 @@ class LeakDetector:
         self.edges = list()
         self._edge_dict = dict()  # {line_nodes: Edge}
 
-        for i, flowline in enumerate(flowlines_list):
+        for i, flowline in enumerate(self.flowlines_list):
             if feedback:
                 if feedback.isCanceled():
                     return
@@ -215,7 +215,7 @@ class LeakDetector:
             self.edges.append(edge)
             self._edge_dict[tuple(cell_ids)] = edge
             if feedback:
-                feedback.setProgress(100 * i / len(flowlines_list))
+                feedback.setProgress(100 * i / len(self.flowlines_list))
 
         # Update edge exchange level from obstacles
         if obstacles:

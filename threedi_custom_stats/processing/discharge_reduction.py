@@ -1,7 +1,11 @@
 from pathlib import Path
+from typing import List, Tuple
+
+from shapely.geometry import LineString
 
 from leak_detector import LeakDetector, highest
-from threedi_result_aggregation.base import water_levels_at_cross_section, prepare_timeseries
+from threedi_result_aggregation.base import water_levels_at_cross_section, prepare_timeseries, \
+    aggregate_prepared_timeseries
 from threedi_result_aggregation.aggregation_classes import (
     Aggregation,
     AggregationSign,
@@ -109,81 +113,127 @@ class DischargeReductionFlowline:
         return new_total_discharge - old_total_discharge
 
 
-def discharge_reduction_for_detected_leaks(
-        leak_detector: LeakDetector,
-        grid_result_admin: GridH5ResultAdmin
-):
-
-    edges = leak_detector.result_edges()
-    flowline_ids = [edge["flowline_id"] for edge in edges]
-    flowlines = grid_result_admin.lines.filter(id__in=flowline_ids).only("id", "line")
-
-    # get discharge and water_level_at_cross_section timeseries
-    water_levels, tintervals = water_levels_at_cross_section(
-        gr=grid_result_admin,
-        flowline_ids=flowline_ids,
-        aggregation_sign=AggregationSign(short_name="net", long_name="Net")
-    )
-
-    q_net_sum = Aggregation(
+class LeakDetectorWithDischargeThreshold(LeakDetector):
+    # TODO: re-implement result_edges() and result_obstacles()
+    Q_NET_SUM = Aggregation(
         variable=AGGREGATION_VARIABLES.get_by_short_name("q"),
         method=AGGREGATION_METHODS.get_by_short_name("sum"),
         sign=AggregationSign("net", "Net"),
     )
-    discharges, _ = prepare_timeseries(nodes_or_lines=flowlines, aggregation=q_net_sum)
 
-    result = dict()
-    for i in range(flowlines.count):
-        edge = leak_detector.edge(*flowlines.line_nodes[i])
-        discharge_reduction_flowline = DischargeReductionFlowline(
-            id=flowlines.id[i],
-            pixel_size=leak_detector.dem.RasterXSize,
-            exchange_levels=edge.exchange_levels,
-            new_obstacle_crest_level=highest(edge.obstacles).crest_level
+    def __init__(
+        self,
+        grid_result_admin: GridH5ResultAdmin,
+        dem: gdal.Dataset,
+        flowline_ids: List[int],
+        min_obstacle_height: float,
+        search_precision: float,
+        min_peak_prominence: float,
+        min_discharge: float,
+        obstacles: List[Tuple[LineString, float]] = None,
+        feedback=None,
+        start_time: float = None,
+        end_time: float = None
+    ):
+        """
+        Initialize LeakDetector with GridH5ResultAdmin instead of GridH5Admin
+        and set start_time and end_time
+        """
+        self.grid_result_admin = grid_result_admin
+        self.min_discharge = min_discharge
+        self.start_time = start_time
+        self.end_time = end_time
+        self.unfiltered_flowlines = grid_result_admin.lines.subset('2D_OPEN_WATER').filter(id__in=flowline_ids)
+        self.discharges, self.tintervals = prepare_timeseries(
+            nodes_or_lines=self.unfiltered_flowlines,
+            aggregation=self.Q_NET_SUM
+        )
+        self.cumulative_discharges = aggregate_prepared_timeseries(
+            timeseries=self.discharges,
+            tintervals=self.tintervals,
+            start_time=self.start_time,
+            aggregation=self.Q_NET_SUM,
+        )
+        relevant_flowline_ids = self.unfiltered_flowlines.id[np.abs(self.cumulative_discharges) > self.min_discharge]
+
+        super().__init__(
+            gridadmin=grid_result_admin,
+            dem=dem,
+            flowline_ids=relevant_flowline_ids,
+            min_obstacle_height=min_obstacle_height,
+            search_precision=search_precision,
+            min_peak_prominence=min_peak_prominence,
+            obstacles=obstacles,
+            feedback=feedback
         )
 
-        result[flowlines.id[i]] = discharge_reduction_flowline.discharge_reduction(
-            water_levels[:, i],
-            discharges[:, i],
-            tintervals
+    def discharge_reduction_for_detected_leaks(self):
+        # get discharge and water_level_at_cross_section timeseries
+        water_levels, tintervals = water_levels_at_cross_section(
+            gr=self.grid_result_admin,
+            flowline_ids=list(self.flowlines.id),
+            aggregation_sign=AggregationSign(short_name="net", long_name="Net")
         )
+
+        # select discharge timeseries for flowlines for which cumulative discharge exceeds threshold from previously
+        # retrieved discharge timeseries
+        q_exceeds_threshold = np.in1d(self.unfiltered_flowlines.id, self.flowlines.id)
+        discharges = self.discharges[:, q_exceeds_threshold]
+
+        result = dict()
+        for i in range(self.flowlines.count):
+            flowline_id = self.flowlines_list[i]["id"]
+            edge = self.edge(*self.flowlines_list[i]["line"])
+            if highest(edge.obstacles):  # if no obstacle has been identified, it is not relevant to return the result
+                crest_level = highest(edge.obstacles).crest_level
+                discharge_reduction_flowline = DischargeReductionFlowline(
+                    id=flowline_id,
+                    pixel_size=leak_detector.dem.RasterXSize,
+                    exchange_levels=edge.exchange_levels,
+                    new_obstacle_crest_level=crest_level
+                )
+                result[flowline_id] = discharge_reduction_flowline.discharge_reduction(
+                    water_levels[:, i],
+                    discharges[:, i],
+                    tintervals
+                )
         return result
 
 
-### TEST ###
-DATA_DIR = Path(r"C:\Users\leendert.vanwolfswin\OneDrive - Nelen & Schuurmans\Documents 1\3Di\fuerthen_de - "
-                r"fuerthen_fuerthen (1)")
-RESULTS_DIR = DATA_DIR / "revision 14" / "results" / "sim_65948_fuerthen_40_mm_in_een_uur"
-DEM_FILENAME = DATA_DIR / "work in progress" / "schematisation" / "rasters" / "dem.tif"
-DEM_DATASOURCE = gdal.Open(str(DEM_FILENAME), gdal.GA_ReadOnly)
-GRIDADMIN_FILENAME = RESULTS_DIR / 'gridadmin.h5'
-RESULTS_FILENAME = RESULTS_DIR / 'results_3di.nc'
-GRIDADMIN = GridH5Admin(GRIDADMIN_FILENAME)
-GRIDRESULTADMIN = GridH5ResultAdmin(str(GRIDADMIN_FILENAME), str(RESULTS_FILENAME))
-MIN_PEAK_PROMINENCE = 0.05
-SEARCH_PRECISION = 0.001
-MIN_OBSTACLE_HEIGHT = 0.05
+if __name__ == "__main__":
+    DATA_DIR = Path(r"C:\Users\leendert.vanwolfswin\OneDrive - Nelen & Schuurmans\Documents 1\3Di\fuerthen_de - "
+                    r"fuerthen_fuerthen (1)")
+    RESULTS_DIR = DATA_DIR / "revision 14" / "results" / "sim_65948_fuerthen_40_mm_in_een_uur"
+    DEM_FILENAME = DATA_DIR / "work in progress" / "schematisation" / "rasters" / "dem.tif"
+    DEM_DATASOURCE = gdal.Open(str(DEM_FILENAME), gdal.GA_ReadOnly)
+    GRIDADMIN_FILENAME = RESULTS_DIR / 'gridadmin.h5'
+    RESULTS_FILENAME = RESULTS_DIR / 'results_3di.nc'
+    GRIDADMIN = GridH5Admin(GRIDADMIN_FILENAME)
+    GRIDRESULTADMIN = GridH5ResultAdmin(str(GRIDADMIN_FILENAME), str(RESULTS_FILENAME))
+    MIN_PEAK_PROMINENCE = 0.05
+    SEARCH_PRECISION = 0.001
+    MIN_OBSTACLE_HEIGHT = 0.05
 
-flowline_ids = [5972, 5973, 5974]  # exchange level is ~ 133 m, water level varies from 134 to 134.6
+    flowline_ids = [5972, 5973, 5974]  # exchange level is ~ 133 m, water level varies from 134 to 134.6
 
-leak_detector = LeakDetector(
-        gridadmin=GRIDADMIN,
+    leak_detector = LeakDetectorWithDischargeThreshold(
+        grid_result_admin=GRIDRESULTADMIN,
         dem=DEM_DATASOURCE,
         flowline_ids=flowline_ids,
         min_obstacle_height=MIN_OBSTACLE_HEIGHT,
         search_precision=SEARCH_PRECISION,
-        min_peak_prominence=MIN_PEAK_PROMINENCE
+        min_peak_prominence=MIN_PEAK_PROMINENCE,
+        min_discharge=100
     )
 
 
-class MockFeedback:
-    def setProgress(self, progress):
-        pass
+    class MockFeedback:
+        def setProgress(self, progress):
+            pass
 
-    def isCanceled(self):
-        return False
+        def isCanceled(self):
+            return False
 
+    leak_detector.run(MockFeedback())
 
-leak_detector.run(MockFeedback())
-
-print(discharge_reduction_for_detected_leaks(leak_detector=leak_detector, grid_result_admin=GRIDRESULTADMIN))
+    print(leak_detector.discharge_reduction_for_detected_leaks())

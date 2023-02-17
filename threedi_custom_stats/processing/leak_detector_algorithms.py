@@ -52,6 +52,7 @@ from qgis.core import (
 )
 
 from .leak_detector import LeakDetector
+from .discharge_reduction import discharge_reduction_for_detected_leaks
 from ..threedi_result_aggregation.base import prepare_timeseries, aggregate_prepared_timeseries
 from ..threedi_result_aggregation.aggregation_classes import Aggregation, AggregationSign
 from ..threedi_result_aggregation.constants import AGGREGATION_VARIABLES, AGGREGATION_METHODS
@@ -359,6 +360,8 @@ class DetectLeakingObstaclesAlgorithm(DetectLeakingObstaclesBase):
 class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstaclesAlgorithm):
     INPUT_RESULTS_THREEDI = "INPUT_RESULTS_THREEDI"
     INPUT_MIN_DISCHARGE = "INPUT_MIN_DISCHARGE"
+    INPUT_START_TIME = "INPUT_START_TIME"
+    INPUT_END_TIME = "INPUT_END_TIME"
 
     def initAlgorithm(self, config):
         super().initAlgorithm(config)
@@ -376,9 +379,27 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
         min_discharge_param.setMetadata({"widget_wrapper": {"decimals": 3}})
         self.addParameter(min_discharge_param)
 
+        start_time_param = QgsProcessingParameterNumber(
+            self.INPUT_START_TIME,
+            "Start time (s since start of simulation)",
+            type=QgsProcessingParameterNumber.Integer,
+            optional=True
+        )
+        self.addParameter(start_time_param)
+
+        end_time_param = QgsProcessingParameterNumber(
+            self.INPUT_END_TIME,
+            "End time (s since start of simulation)",
+            type=QgsProcessingParameterNumber.Integer,
+            optional=True
+        )
+        self.addParameter(end_time_param)
+
     def read_parameters(self, parameters, context, feedback):
         super().read_parameters(parameters, context, feedback)
         self.min_discharge = self.parameterAsDouble(parameters, self.INPUT_MIN_DISCHARGE, context)
+        self.start_time = self.parameterAsInt(parameters, self.INPUT_START_TIME, context)
+        self.end_time = self.parameterAsInt(parameters, self.INPUT_END_TIME, context)
         self.results_threedi_fn = self.parameterAsFile(parameters, self.INPUT_RESULTS_THREEDI, context)
         self.grid_result_admin = GridH5ResultAdmin(self.grid_admin_fn, self.results_threedi_fn)
 
@@ -388,14 +409,14 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
         flowlines = self.grid_result_admin.lines.filter(id__in=self.flowline_ids)
         ts, tintervals = prepare_timeseries(
             nodes_or_lines=flowlines,
-            start_time=None,  # TODO Add as processing algorithm parameter
-            end_time=None,  # TODO Add as processing algorithm parameter
+            start_time=self.start_time,
+            end_time=self.end_time,
             aggregation=Q_NET_SUM,
         )
         q_net_sum = aggregate_prepared_timeseries(
             timeseries=ts,
             tintervals=tintervals,
-            start_time=None,  # TODO Add as processing algorithm parameter
+            start_time=self.start_time,
             aggregation=Q_NET_SUM,
         )
         # Select flowlines with q_net_sum > threshold
