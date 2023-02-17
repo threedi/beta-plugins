@@ -1,19 +1,38 @@
+from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Iterator, Dict
 
 from shapely.geometry import LineString
 
 from leak_detector import LeakDetector, highest
-from threedi_result_aggregation.base import water_levels_at_cross_section, prepare_timeseries, \
-    aggregate_prepared_timeseries
-from threedi_result_aggregation.aggregation_classes import (
-    Aggregation,
-    AggregationSign,
-)
-from threedi_result_aggregation.constants import (
-    AGGREGATION_VARIABLES,
-    AGGREGATION_METHODS,
-)
+try:
+    from ..threedi_result_aggregation.base import (
+        water_levels_at_cross_section,
+        prepare_timeseries,
+        aggregate_prepared_timeseries
+    )
+    from ..threedi_result_aggregation.aggregation_classes import (
+        Aggregation,
+        AggregationSign,
+    )
+    from ..threedi_result_aggregation.constants import (
+        AGGREGATION_VARIABLES,
+        AGGREGATION_METHODS,
+    )
+except ImportError:
+    from threedi_result_aggregation.base import (
+        water_levels_at_cross_section,
+        prepare_timeseries,
+        aggregate_prepared_timeseries
+    )
+    from threedi_result_aggregation.aggregation_classes import (
+        Aggregation,
+        AggregationSign,
+    )
+    from threedi_result_aggregation.constants import (
+        AGGREGATION_VARIABLES,
+        AGGREGATION_METHODS,
+    )
 
 import numpy as np
 from osgeo import gdal
@@ -143,9 +162,12 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
         self.min_discharge = min_discharge
         self.start_time = start_time
         self.end_time = end_time
-        self.unfiltered_flowlines = grid_result_admin.lines.subset('2D_OPEN_WATER').filter(id__in=flowline_ids)
+        self.all_2d_open_water_flowlines = grid_result_admin.lines.subset('2D_OPEN_WATER').filter(id__in=flowline_ids)
+        if feedback:
+            feedback.pushInfo(f"{datetime.now()}")
+            feedback.setProgressText("Calculate cumulative discharges...")
         self.discharges, self.tintervals = prepare_timeseries(
-            nodes_or_lines=self.unfiltered_flowlines,
+            nodes_or_lines=self.all_2d_open_water_flowlines,
             aggregation=self.Q_NET_SUM
         )
         self.cumulative_discharges = aggregate_prepared_timeseries(
@@ -154,7 +176,9 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
             start_time=self.start_time,
             aggregation=self.Q_NET_SUM,
         )
-        relevant_flowline_ids = self.unfiltered_flowlines.id[np.abs(self.cumulative_discharges) > self.min_discharge]
+        relevant_flowline_ids = self.all_2d_open_water_flowlines.id[
+            np.abs(self.cumulative_discharges) > self.min_discharge
+        ]
 
         super().__init__(
             gridadmin=grid_result_admin,
@@ -166,9 +190,17 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
             obstacles=obstacles,
             feedback=feedback
         )
+        self.discharge_reduction = dict()
 
-    def discharge_reduction_for_detected_leaks(self):
-        # get discharge and water_level_at_cross_section timeseries
+    def calculate_discharge_reduction(self, feedback=None):
+        """
+        Calculate cumulative discharge reduction [m3] for flowlines for which an obstacle is identified.
+        Resulting {flowline_id: discharge_reduction} dict is stored in `self.discharge_reduction`
+        """
+        # get water_level_at_cross_section timeseries and time intervals
+        if feedback:
+            feedback.pushInfo(f"{datetime.now()}")
+            feedback.setProgressText("Calculate water levels at cell edges...")
         water_levels, tintervals = water_levels_at_cross_section(
             gr=self.grid_result_admin,
             flowline_ids=list(self.flowlines.id),
@@ -177,14 +209,16 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
 
         # select discharge timeseries for flowlines for which cumulative discharge exceeds threshold from previously
         # retrieved discharge timeseries
-        q_exceeds_threshold = np.in1d(self.unfiltered_flowlines.id, self.flowlines.id)
-        discharges = self.discharges[:, q_exceeds_threshold]
+        if feedback:
+            feedback.pushInfo(f"{datetime.now()}")
+            feedback.setProgressText("Calculate discharge reduction...")
+        exceeds_threshold = np.in1d(self.all_2d_open_water_flowlines.id, self.flowlines.id)
+        discharges = self.discharges[:, exceeds_threshold]
 
-        result = dict()
         for i in range(self.flowlines.count):
             flowline_id = self.flowlines_list[i]["id"]
             edge = self.edge(*self.flowlines_list[i]["line"])
-            if highest(edge.obstacles):  # if no obstacle has been identified, it is not relevant to return the result
+            if edge.obstacles:  # skip if no obstacle has been identified
                 crest_level = highest(edge.obstacles).crest_level
                 discharge_reduction_flowline = DischargeReductionFlowline(
                     id=flowline_id,
@@ -192,12 +226,45 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
                     exchange_levels=edge.exchange_levels,
                     new_obstacle_crest_level=crest_level
                 )
-                result[flowline_id] = discharge_reduction_flowline.discharge_reduction(
+                self.discharge_reduction[flowline_id] = discharge_reduction_flowline.discharge_reduction(
                     water_levels[:, i],
                     discharges[:, i],
                     tintervals
                 )
-        return result
+
+    def flowlines_with_high_discharge_reduction(self) -> List[int]:
+        """Return a list of ids of flowlines for which the discharge reduction exceeds the threshold"""
+        return [
+            flowline_id
+            for flowline_id, discharge_reduction in self.discharge_reduction.items()
+            if discharge_reduction > self.min_discharge
+        ]
+
+    def result_edges(self, flowline_ids: List[int] = None) -> Iterator[Dict]:
+        """
+        Return all edges that have an obstacle and a discharge reduction that exceeds `min_discharge`
+        Returns results for all edges if flowline_ids is not specified, or results for specific flowlines only
+        """
+        if flowline_ids:
+            relevant_flowline_ids = list(set(flowline_ids) & set(self.flowlines_with_high_discharge_reduction()))
+        else:
+            relevant_flowline_ids = self.flowlines_with_high_discharge_reduction()
+        for edge in super().result_edges(relevant_flowline_ids):
+            edge["discharge_reduction"] = self.discharge_reduction[edge["flowline_id"]]
+            yield edge
+
+    def result_obstacles(self, flowline_ids=None) -> Iterator[Dict]:
+        """
+        Return the highest obstacle for each edge where the discharge reduction exceeds `min_discharge`
+        Returns results for all edges if flowline_ids is not specified, or results for specific flowlines only
+        """
+        if flowline_ids:
+            relevant_flowline_ids = list(set(flowline_ids) & set(self.flowlines_with_high_discharge_reduction()))
+        else:
+            relevant_flowline_ids = self.flowlines_with_high_discharge_reduction()
+        for obstacle in super().result_obstacles(relevant_flowline_ids):
+            obstacle["discharge_reduction"] = self.discharge_reduction[obstacle["flowline_id"]]
+            yield obstacle
 
 
 if __name__ == "__main__":
@@ -214,16 +281,16 @@ if __name__ == "__main__":
     SEARCH_PRECISION = 0.001
     MIN_OBSTACLE_HEIGHT = 0.05
 
-    flowline_ids = [5972, 5973, 5974]  # exchange level is ~ 133 m, water level varies from 134 to 134.6
+    # flowline_ids = [5972, 5973, 5974]
 
     leak_detector = LeakDetectorWithDischargeThreshold(
         grid_result_admin=GRIDRESULTADMIN,
         dem=DEM_DATASOURCE,
-        flowline_ids=flowline_ids,
+        flowline_ids=list(GRIDRESULTADMIN.lines.id),
         min_obstacle_height=MIN_OBSTACLE_HEIGHT,
         search_precision=SEARCH_PRECISION,
         min_peak_prominence=MIN_PEAK_PROMINENCE,
-        min_discharge=100
+        min_discharge=1000
     )
 
 
@@ -235,5 +302,6 @@ if __name__ == "__main__":
             return False
 
     leak_detector.run(MockFeedback())
-
-    print(leak_detector.discharge_reduction_for_detected_leaks())
+    leak_detector.calculate_discharge_reduction()
+    print([i for i in leak_detector.result_edges()])
+    print([i for i in leak_detector.result_obstacles()])

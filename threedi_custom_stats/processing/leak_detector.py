@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Union, List, Tuple, Optional
+from typing import Dict, Union, List, Tuple, Optional, Iterator
 
 import numpy as np
 from osgeo import gdal
@@ -155,7 +155,17 @@ class LeakDetector:
                         "Obstacles were not supplied and will be ignored."
                     )
         self.line_nodes = self.flowlines.line_nodes
-        self.flowlines_list = self.flowlines.only("id", "line", "line_coords").to_list()
+        flowlines_dict = self.flowlines.only("id", "line", "line_coords").data
+        self.flowlines_list = []
+        for i in range(len(flowlines_dict["id"])):
+            self.flowlines_list.append(
+                {
+                    "id": flowlines_dict["id"][i],
+                    "line": flowlines_dict["line"][:, i],
+                    "line_coords": flowlines_dict["line_coords"][:, i]
+                }
+            )
+
 
         # Create cells
         if feedback:
@@ -314,28 +324,36 @@ class LeakDetector:
                 print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
                 raise e
 
-    def result_edges(self):
-        """Iterate over all edges that have an obstacle"""
+    def result_edges(self, flowline_ids=None) -> Iterator[Dict]:
+        """
+        Iterate over all edges that have an obstacle
+        Return results for all edges if flowline_ids is not specified, or results for specific flowlines only
+        """
         for edge in self.edges:
-            if edge.obstacles:
-                yield {
-                    "flowline_id": edge.flowline_id,
-                    "exchange_level": edge.exchange_level,
-                    "crest_level": highest(edge.obstacles).crest_level,
-                    "geometry": edge.geometry
-                }
+            if flowline_ids is None or edge.flowline_id in flowline_ids:
+                if edge.obstacles:
+                    yield {
+                        "flowline_id": edge.flowline_id,
+                        "exchange_level": edge.exchange_level,
+                        "crest_level": highest(edge.obstacles).crest_level,
+                        "geometry": edge.geometry
+                    }
 
-    def result_obstacles(self):
-        """Iterator of highest obstacle for each edge"""
+    def result_obstacles(self, flowline_ids=None) -> Iterator[Dict]:
+        """
+        Return all edges that have an obstacle
+        Returns results for all edges if flowline_ids is not specified, or results for specific flowlines only
+        """
         for edge in self.edges:
-            if edge.obstacles:
-                highest_obstacle = highest(edge.obstacles)
-                yield {
-                    "flowline_id": edge.flowline_id,
-                    "exchange_level": edge.exchange_level,
-                    "crest_level": highest_obstacle.crest_level,
-                    "geometry": highest_obstacle.geometry
-                }
+            if flowline_ids is None or edge.flowline_id in flowline_ids:
+                if edge.obstacles:
+                    highest_obstacle = highest(edge.obstacles)
+                    yield {
+                        "flowline_id": edge.flowline_id,
+                        "exchange_level": edge.exchange_level,
+                        "crest_level": highest_obstacle.crest_level,
+                        "geometry": highest_obstacle.geometry
+                    }
 
 
 class Obstacle:

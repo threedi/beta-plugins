@@ -13,7 +13,7 @@
 from pathlib import Path
 
 from osgeo import gdal
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Iterator
 
 from shapely import wkt
 
@@ -52,8 +52,7 @@ from qgis.core import (
 )
 
 from .leak_detector import LeakDetector
-from .discharge_reduction import discharge_reduction_for_detected_leaks
-from ..threedi_result_aggregation.base import prepare_timeseries, aggregate_prepared_timeseries
+from .discharge_reduction import LeakDetectorWithDischargeThreshold
 from ..threedi_result_aggregation.aggregation_classes import Aggregation, AggregationSign
 from ..threedi_result_aggregation.constants import AGGREGATION_VARIABLES, AGGREGATION_METHODS
 
@@ -64,6 +63,11 @@ Q_NET_SUM = Aggregation(
 )
 
 STYLE_DIR = Path(__file__).parent / "style"
+
+QVARIANT_PYTHON_TYPES = {
+    QVariant.Int: int,
+    QVariant.Double: float
+}
 
 
 class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
@@ -80,6 +84,12 @@ class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
 
     OUTPUT_EDGES = "OUTPUT_EDGES"
     OUTPUT_OBSTACLES = "OUTPUT_OBSTACLES"
+
+    SINK_FIELD_DATA = [
+        {"name": "id", "type": QVariant.Int},
+        {"name": "exchange_level", "type": QVariant.Double},
+        {"name": "crest_level", "type": QVariant.Double}
+    ]
 
     def initAlgorithm(self, config):
 
@@ -166,8 +176,8 @@ class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
         return success, msg
 
     def read_parameters(self, parameters, context, feedback):
-        gridadmin_fn = self.parameterAsFile(parameters, self.INPUT_GRIDADMIN, context)
-        self.gr = GridH5Admin(gridadmin_fn)
+        self.gridadmin_fn = self.parameterAsFile(parameters, self.INPUT_GRIDADMIN, context)
+        self.gridadmin = GridH5Admin(self.gridadmin_fn)
         dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
         dem_fn = dem.dataProvider().dataSourceUri()
         self.dem_ds = gdal.Open(dem_fn)
@@ -176,30 +186,25 @@ class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
         self.min_obstacle_height = self.parameterAsDouble(parameters, self.INPUT_MIN_OBSTACLE_HEIGHT, context)
         self.search_precision = self.parameterAsDouble(parameters, self.INPUT_SEARCH_PRECISION, context)
 
-        crs = QgsCoordinateReferenceSystem(f"EPSG:{self.gr.epsg_code}")
+        crs = QgsCoordinateReferenceSystem(f"EPSG:{self.gridadmin.epsg_code}")
 
-        self.edges_sink_fields = QgsFields()
-        self.edges_sink_fields.append(QgsField(name="id", type=QVariant.Int))
-        self.edges_sink_fields.append(QgsField(name="exchange_level", type=QVariant.Double))
-        self.edges_sink_fields.append(QgsField(name="crest_level", type=QVariant.Double))
-        (self.edges_sink, self.edges_sink_dest_id) = self.parameterAsSink(
+        self.sink_fields = QgsFields()
+        for field_data in self.SINK_FIELD_DATA:
+            self.sink_fields.append(QgsField(**field_data))
+
+        self.edges_sink, self.edges_sink_dest_id = self.parameterAsSink(
             parameters,
             self.OUTPUT_EDGES,
             context,
-            fields=self.edges_sink_fields,
+            fields=self.sink_fields,
             geometryType=QgsWkbTypes.LineString,
             crs=crs
         )
-
-        self.obstacles_sink_fields = QgsFields()
-        self.obstacles_sink_fields.append(QgsField(name="id", type=QVariant.Int))
-        self.obstacles_sink_fields.append(QgsField(name="exchange_level", type=QVariant.Double))
-        self.obstacles_sink_fields.append(QgsField(name="crest_level", type=QVariant.Double))
-        (self.obstacles_sink, self.obstacles_sink_dest_id) = self.parameterAsSink(
+        self.obstacles_sink, self.obstacles_sink_dest_id = self.parameterAsSink(
             parameters,
             self.OUTPUT_OBSTACLES,
             context,
-            fields=self.obstacles_sink_fields,
+            fields=self.sink_fields,
             geometryType=QgsWkbTypes.LineString,
             crs=crs
         )
@@ -209,7 +214,7 @@ class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
             field_index = flowlines_source.fields().indexFromName('id')
             self.flowline_ids = [feature.attributes()[field_index] for feature in flowlines_source.getFeatures()]
         else:
-            self.flowline_ids = list(self.gr.lines.id)
+            self.flowline_ids = list(self.gridadmin.lines.id)
 
         if obstacles_source:
             feedback.setProgressText("Read linear obstacles input...")
@@ -249,7 +254,7 @@ class DetectLeakingObstaclesAlgorithm(DetectLeakingObstaclesBase):
         self.read_parameters(parameters, context, feedback)
         feedback.setProgressText("Read computational grid...")
         leak_detector = LeakDetector(
-            gridadmin=self.gr,
+            gridadmin=self.gridadmin,
             dem=self.dem_ds,
             flowline_ids=self.flowline_ids,
             min_obstacle_height=self.min_obstacle_height,
@@ -263,33 +268,17 @@ class DetectLeakingObstaclesAlgorithm(DetectLeakingObstaclesBase):
         feedback.setProgressText("Find obstacles...")
         leak_detector.run(feedback=feedback)
         feedback.setProgressText("Create 'Obstacle on cell edge' features...")
-        for result in leak_detector.result_edges():
-            if feedback.isCanceled():
-                return {}
-            feature = QgsFeature()
-            feature.setFields(self.edges_sink_fields)
-            feature.setAttribute(0, int(result["flowline_id"]))
-            feature.setAttribute(1, float(result["exchange_level"]))
-            feature.setAttribute(2, float(result["crest_level"]))
-            geometry = QgsGeometry()
-            geometry.fromWkb(result["geometry"].wkb)
-            feature.setGeometry(geometry)
-            self.edges_sink.addFeature(feature, QgsFeatureSink.FastInsert)
-
+        self.add_features_to_sink(
+            feedback=feedback,
+            sink=self.edges_sink,
+            features_data=leak_detector.result_edges()
+        )
         feedback.setProgressText("Create 'Obstacle in DEM' features...")
-        for result in leak_detector.result_obstacles():
-            if feedback.isCanceled():
-                return {}
-            feature = QgsFeature()
-            feature.setFields(self.obstacles_sink_fields)
-            feature.setAttribute(0, int(result["flowline_id"]))
-            feature.setAttribute(1, float(result["exchange_level"]))
-            feature.setAttribute(2, float(result["crest_level"]))
-            geometry = QgsGeometry()
-            geometry.fromWkb(result["geometry"].wkb)
-            feature.setGeometry(geometry)
-            self.obstacles_sink.addFeature(feature, QgsFeatureSink.FastInsert)
-
+        self.add_features_to_sink(
+            feedback=feedback,
+            sink=self.obstacles_sink,
+            features_data=leak_detector.result_obstacles()
+        )
         return {
             self.OUTPUT_EDGES: self.edges_sink_dest_id,
             self.OUTPUT_OBSTACLES: self.obstacles_sink_dest_id
@@ -363,6 +352,13 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
     INPUT_START_TIME = "INPUT_START_TIME"
     INPUT_END_TIME = "INPUT_END_TIME"
 
+    SINK_FIELD_DATA = [
+        {"name": "id", "type": QVariant.Int},
+        {"name": "exchange_level", "type": QVariant.Double},
+        {"name": "crest_level", "type": QVariant.Double},
+        {"name": "discharge_reduction", "type": QVariant.Double}
+    ]
+
     def initAlgorithm(self, config):
         super().initAlgorithm(config)
         self.addParameter(
@@ -401,36 +397,33 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
         self.start_time = self.parameterAsInt(parameters, self.INPUT_START_TIME, context)
         self.end_time = self.parameterAsInt(parameters, self.INPUT_END_TIME, context)
         self.results_threedi_fn = self.parameterAsFile(parameters, self.INPUT_RESULTS_THREEDI, context)
-        self.grid_result_admin = GridH5ResultAdmin(self.grid_admin_fn, self.results_threedi_fn)
+        self.grid_result_admin = GridH5ResultAdmin(self.gridadmin_fn, self.results_threedi_fn)
+
+    def add_features_to_sink(self, feedback, sink: QgsFeatureSink, features_data: Iterator):
+        for feature_data in features_data:
+            if feedback.isCanceled():
+                return {}
+            feature = QgsFeature()
+            feature.setFields(self.sink_fields)
+            for i, field in enumerate(self.SINK_FIELD_DATA):
+                convert = QVARIANT_PYTHON_TYPES[field["type"]]
+                feature.setAttribute(i, convert(feature_data[field["name"]]))
+            geometry = QgsGeometry()
+            geometry.fromWkb(feature_data["geometry"].wkb)
+            feature.setGeometry(geometry)
+            sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
     def processAlgorithm(self, parameters, context, feedback):
         self.read_parameters(parameters, context, feedback)
-        feedback.setProgressText("Calculate cumulative discharges...")
-        flowlines = self.grid_result_admin.lines.filter(id__in=self.flowline_ids)
-        ts, tintervals = prepare_timeseries(
-            nodes_or_lines=flowlines,
-            start_time=self.start_time,
-            end_time=self.end_time,
-            aggregation=Q_NET_SUM,
-        )
-        q_net_sum = aggregate_prepared_timeseries(
-            timeseries=ts,
-            tintervals=tintervals,
-            start_time=self.start_time,
-            aggregation=Q_NET_SUM,
-        )
-        # Select flowlines with q_net_sum > threshold
-        relevant_flowline_ids = flowlines.id[q_net_sum > self.min_discharge]
-        feedback.pushInfo(f"relevant_flowline_ids: {relevant_flowline_ids}")
-        feedback.pushInfo(f"Leaking obstacles will be determined for {len(relevant_flowline_ids)} flowlines")
         feedback.setProgressText("Read computational grid...")
-        leak_detector = LeakDetector(
-            gridadmin=self.gr,
+        leak_detector = LeakDetectorWithDischargeThreshold(
+            grid_result_admin=self.grid_result_admin,
             dem=self.dem_ds,
             flowline_ids=self.flowline_ids,
             min_obstacle_height=self.min_obstacle_height,
             search_precision=self.search_precision,
             min_peak_prominence=self.min_obstacle_height,
+            min_discharge=self.min_discharge,
             obstacles=self.input_obstacles,
             feedback=feedback
         )
@@ -438,6 +431,20 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
             return {}
         feedback.setProgressText("Find obstacles...")
         leak_detector.run(feedback=feedback)
+        leak_detector.calculate_discharge_reduction(feedback=feedback)
+        feedback.setProgressText("Create 'Obstacle on cell edge' features...")
+        self.add_features_to_sink(
+            feedback=feedback,
+            sink=self.edges_sink,
+            features_data=leak_detector.result_edges()
+        )
+        feedback.setProgressText("Create 'Obstacle in DEM' features...")
+        self.add_features_to_sink(
+            feedback=feedback,
+            sink=self.obstacles_sink,
+            features_data=leak_detector.result_obstacles()
+        )
+
         return {
             self.OUTPUT_EDGES: self.edges_sink_dest_id,
             self.OUTPUT_OBSTACLES: self.obstacles_sink_dest_id
