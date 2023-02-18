@@ -156,15 +156,12 @@ class LeakDetector:
                     )
         self.line_nodes = self.flowlines.line_nodes
         flowlines_dict = self.flowlines.only("id", "line", "line_coords").data
-        self.flowlines_list = []
+        self.flowlines_data = dict()
         for i in range(len(flowlines_dict["id"])):
-            self.flowlines_list.append(
-                {
-                    "id": flowlines_dict["id"][i],
-                    "line": flowlines_dict["line"][:, i],
-                    "line_coords": flowlines_dict["line_coords"][:, i]
-                }
-            )
+            self.flowlines_data[flowlines_dict["id"][i]] = {
+                "line": flowlines_dict["line"][:, i],
+                "line_coords": flowlines_dict["line_coords"][:, i]
+            }
 
         # Create cells
         if feedback:
@@ -189,44 +186,45 @@ class LeakDetector:
         if feedback:
             feedback.pushInfo(f"{datetime.now()}")
             feedback.setProgressText("Find cell neighbours...")
-        for i, flowline in enumerate(self.flowlines_list):
+        for i, flowline_data in enumerate(self.flowlines_data.values()):
             if feedback:
                 if feedback.isCanceled():
                     return
-            cell_ids: Tuple = flowline["line"]
+            cell_ids: Tuple = flowline_data["line"]
             reference_cell = self.cell(cell_ids[0])
             neigh_cell = self.cell(cell_ids[1])
             location = reference_cell.locate_cell(neigh_cell, neigh_is_next=True)
             reference_cell.add_neigh(neigh_cell=neigh_cell, location=location)
             neigh_cell.add_neigh(neigh_cell=reference_cell, location=OPPOSITE[location])
             if feedback:
-                feedback.setProgress(100 * i / len(self.flowlines_list))
+                feedback.setProgress(100 * i / len(self.flowlines_data))
 
         # Create edges
         if feedback:
             feedback.pushInfo(f"{datetime.now()}")
             feedback.setProgressText("Create edges...")
         self.edges = list()
-        self._edge_dict = dict()  # {line_nodes: Edge}
-
-        for i, flowline in enumerate(self.flowlines_list):
+        self._edge_by_line_nodes = dict()  # {line_nodes: Edge}
+        self._edge_by_flowline_id = dict()  # {flowline_id: Edge}
+        for i, (flowline_id, flowline_data) in enumerate(self.flowlines_data.items()):
             if feedback:
                 if feedback.isCanceled():
                     return
-            cell_ids: Tuple = flowline["line"]
+            cell_ids = tuple(flowline_data["line"])
             edge = Edge(
                 ld=self,
                 cell_ids=cell_ids,
-                flowline_id=flowline["id"],
+                flowline_id=flowline_id,
             )
-            edge.calculate_geometries(flowline_coords=flowline["line_coords"])
+            edge.calculate_geometries(flowline_coords=flowline_data["line_coords"])
             edge.calculate_exchange_levels(
                 # exchange_level=flowline["dpumax"]  # Commented out because of a bug in how Tables writes to h5 file
             )
             self.edges.append(edge)
-            self._edge_dict[tuple(cell_ids)] = edge
+            self._edge_by_line_nodes[cell_ids] = edge
+            self._edge_by_flowline_id[flowline_id] = edge
             if feedback:
-                feedback.setProgress(100 * i / len(self.flowlines_list))
+                feedback.setProgress(100 * i / len(self.flowlines_data))
 
         # Update edge exchange level from obstacles
         if obstacles:
@@ -288,13 +286,10 @@ class LeakDetector:
             reference_cell = reference_cell.id
         if isinstance(neigh_cell, Cell):
             neigh_cell = neigh_cell.id
-        return self._edge_dict[(reference_cell, neigh_cell)]
+        return self._edge_by_line_nodes[(reference_cell, neigh_cell)]
 
     def get_edge_by_flowline_id(self, flowline_id):
-        id_mask = self.flowlines.id == flowline_id
-        reference_cell_id, neigh_cell_id = self.flowlines.line_nodes[id_mask][0]
-        edge = self.edge(reference_cell_id, neigh_cell_id)
-        return edge
+        return self._edge_by_flowline_id[flowline_id]
 
     def cell_pairs(self):
         """Return an interator of all cell pairs that can be created by using the cell_ids as reference cell"""

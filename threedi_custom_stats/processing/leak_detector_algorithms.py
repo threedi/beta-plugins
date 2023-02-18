@@ -389,7 +389,7 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
         return leak_detector
 
     def add_features_to_sink(self, feedback, sink: QgsFeatureSink, features_data: Iterator):
-        for feature_data in features_data:
+        for i, feature_data in enumerate(features_data):
             if feedback.isCanceled():
                 return {}
             feature = QgsFeature()
