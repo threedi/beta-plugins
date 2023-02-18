@@ -5,9 +5,9 @@ from typing import List, Tuple, Iterator, Dict
 from shapely.geometry import LineString
 
 try:
-    from .leak_detector import LeakDetector, highest
+    from .leak_detector import LeakDetector, Edge, highest
 except ImportError:
-    from leak_detector import LeakDetector, highest
+    from leak_detector import LeakDetector, Edge, highest
 try:
     from ..threedi_result_aggregation.base import (
         water_levels_at_cross_section,
@@ -46,95 +46,6 @@ OLD = "OLD"
 NEW = "NEW"
 
 
-class DischargeReductionFlowline:
-    def __init__(
-        self,
-        id: int,
-        pixel_size: float,
-        exchange_levels: np.ndarray,
-        old_obstacle_crest_level: float = None,
-        new_obstacle_crest_level: float = None
-    ):
-        self.id = id
-        self.pixel_size = pixel_size
-        self.exchange_levels = exchange_levels
-        self.old_obstacle_crest_level = old_obstacle_crest_level
-        self.new_obstacle_crest_level = new_obstacle_crest_level
-
-    def _get_obstacle_crest_level(self, which_obstacle: str):
-        if which_obstacle == OLD:
-            obstacle_crest_level = self.old_obstacle_crest_level
-        elif which_obstacle == NEW:
-            obstacle_crest_level = self.new_obstacle_crest_level
-        else:
-            raise ValueError(f"Value of argument 'which_obstacle' must be 'OLD' or 'NEW', not {which_obstacle}")
-        obstacle_crest_level = np.min(self.exchange_levels) if obstacle_crest_level is None else obstacle_crest_level
-        return obstacle_crest_level
-
-    def wet_cross_sectional_area(self, water_level: float, which_obstacle: str):
-        """
-        Calculate the wet cross-sectional area from a 1D array of exchange levels (bed level values) and a water level.
-        obstacle_crest_level may be specified to overrule exchange levels that are lower
-        """
-        obstacle_crest_level = self._get_obstacle_crest_level(which_obstacle)
-        bed_levels = np.maximum(self.exchange_levels, obstacle_crest_level)
-        water_depths = np.maximum(water_level - np.minimum(water_level, bed_levels), 0)
-        return np.sum(water_depths * self.pixel_size)
-
-    def wetted_perimeter(self, water_level: float, which_obstacle: str):
-        """
-        Calculate the wetted perimeter of a 2D cross-section; only the horizontal wet surface are taken into account
-        """
-        obstacle_crest_level = self._get_obstacle_crest_level(which_obstacle)
-        return np.sum((np.maximum(self.exchange_levels, obstacle_crest_level) < water_level) * self.pixel_size)
-
-    def discharge_reduction_factor(self, water_level: float):
-        """
-        reduction = Q_new/Q_old
-        Based on:
-         A: wet cross-sectional area
-         v: flow velocity
-         P: wetted perimeter
-
-         Q = A*v (discharge)
-         R = A/P (hydraulic radius)
-         v = C*sqrt(R*i) (Chezy)
-        So:
-         Q = A * C * sqrt((A/P)*i)
-
-        Assuming C and i are constant, we can ignore them when dividing Q_new by Q_old:
-         reduction = (A_new * sqrt(A_new/P_new)) / (A_old * sqrt(A_old/P_old))
-        """
-        old_wet_cross_sectional_area = self.wet_cross_sectional_area(water_level=water_level, which_obstacle=OLD)
-        new_wet_cross_sectional_area = self.wet_cross_sectional_area(water_level=water_level, which_obstacle=NEW)
-        if old_wet_cross_sectional_area == 0 or new_wet_cross_sectional_area == 0:
-            return 0
-        old_wetted_perimeter = self.wetted_perimeter(water_level=water_level, which_obstacle=OLD)
-        new_wetted_perimeter = self.wetted_perimeter(water_level=water_level,which_obstacle=NEW)
-        result = np.sqrt(new_wet_cross_sectional_area / new_wetted_perimeter) / \
-                 np.sqrt(old_wet_cross_sectional_area / old_wetted_perimeter)
-        return result
-
-    def discharge_reduction_factors(self, water_levels: np.array):
-        """Vectorized version of `discharge_reduction_factor`"""
-        v_discharge_reduction_factors = np.vectorize(self.discharge_reduction_factor, otypes=[float])
-        return v_discharge_reduction_factors(water_levels)
-
-    def discharge_reduction(
-            self,
-            water_levels: np.array,
-            discharges: np.array,
-            tintervals: np.array
-    ):
-        """
-        Calculate the difference in net cumulative discharge when an obstacle is applied to a flowline's cross-section
-        """
-        old_total_discharge = np.sum(discharges * tintervals)
-        discharge_reduction_factors = self.discharge_reduction_factors(water_levels)
-        new_total_discharge = np.sum(discharges * discharge_reduction_factors * tintervals)
-        return old_total_discharge, new_total_discharge, new_total_discharge - old_total_discharge
-
-
 class LeakDetectorWithDischargeThreshold(LeakDetector):
     # TODO: re-implement result_edges() and result_obstacles()
     Q_NET_SUM = Aggregation(
@@ -144,18 +55,18 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
     )
 
     def __init__(
-        self,
-        grid_result_admin: GridH5ResultAdmin,
-        dem: gdal.Dataset,
-        flowline_ids: List[int],
-        min_obstacle_height: float,
-        search_precision: float,
-        min_peak_prominence: float,
-        min_discharge: float,
-        obstacles: List[Tuple[LineString, float]] = None,
-        feedback=None,
-        start_time: float = None,
-        end_time: float = None
+            self,
+            grid_result_admin: GridH5ResultAdmin,
+            dem: gdal.Dataset,
+            flowline_ids: List[int],
+            min_obstacle_height: float,
+            min_discharge: float,
+            search_precision: float = None,
+            min_peak_prominence: float = None,
+            obstacles: List[Tuple[LineString, float]] = None,
+            feedback=None,
+            start_time: float = None,
+            end_time: float = None
     ):
         """
         Initialize LeakDetector with GridH5ResultAdmin instead of GridH5Admin
@@ -181,7 +92,7 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
         )
         relevant_flowline_ids = self.all_2d_open_water_flowlines.id[
             np.abs(self.cumulative_discharges) > self.min_discharge
-        ]
+            ]
 
         super().__init__(
             gridadmin=grid_result_admin,
@@ -193,55 +104,56 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
             obstacles=obstacles,
             feedback=feedback
         )
-        self.discharge_reduction = dict()
+
+        # convert edges to EdgeWithDischargeThreshold
+        self._edge_dict = {
+            line_nodes: EdgeWithDischargeThreshold.from_edge(edge=edge, ld=self)
+            for line_nodes, edge in self._edge_dict.items()
+        }  # {line_nodes: Edge}
+        self.edges = list(self._edge_dict.values())
+
+        # attributes set in calculate_water_levels_at_cross_section
+        self.water_levels = None
+        self.tintervals = None
+
+    def run(self, feedback=None):
+        super().run(feedback)
+        self.calculate_water_levels_at_cross_section(feedback)
+        self.calculate_discharge_reduction()
+
+    def calculate_water_levels_at_cross_section(self, feedback):
+        # get water_level_at_cross_section timeseries and time intervals
+        if feedback:
+            feedback.pushInfo(f"{datetime.now()}")
+            feedback.setProgressText("Calculate water levels at cell edges...")
+        self.water_levels, self.tintervals = water_levels_at_cross_section(
+            gr=self.grid_result_admin,
+            flowline_ids=list(self.flowlines.id),
+            aggregation_sign=AggregationSign(short_name="net", long_name="Net")
+        )
 
     def calculate_discharge_reduction(self, feedback=None):
         """
         Calculate cumulative discharge reduction [m3] for flowlines for which an obstacle is identified.
         Resulting {flowline_id: discharge_reduction} dict is stored in `self.discharge_reduction`
         """
-        # get water_level_at_cross_section timeseries and time intervals
-        if feedback:
-            feedback.pushInfo(f"{datetime.now()}")
-            feedback.setProgressText("Calculate water levels at cell edges...")
-        water_levels, tintervals = water_levels_at_cross_section(
-            gr=self.grid_result_admin,
-            flowline_ids=list(self.flowlines.id),
-            aggregation_sign=AggregationSign(short_name="net", long_name="Net")
-        )
 
         # select discharge timeseries for flowlines for which cumulative discharge exceeds threshold from previously
         # retrieved discharge timeseries
         if feedback:
             feedback.pushInfo(f"{datetime.now()}")
             feedback.setProgressText("Calculate discharge reduction...")
-        exceeds_threshold = np.in1d(self.all_2d_open_water_flowlines.id, self.flowlines.id)
-        discharges = self.discharges[:, exceeds_threshold]
 
-        for i in range(self.flowlines.count):
-            flowline_id = self.flowlines_list[i]["id"]
-            edge = self.edge(*self.flowlines_list[i]["line"])
+        for edge in self.edges:
             if edge.obstacles:  # skip if no obstacle has been identified
-                crest_level = highest(edge.obstacles).crest_level
-                discharge_reduction_flowline = DischargeReductionFlowline(
-                    id=flowline_id,
-                    pixel_size=self.dem.RasterXSize,
-                    exchange_levels=edge.exchange_levels,
-                    new_obstacle_crest_level=crest_level
-                )
-                edge.discharge_without_obstacle, edge.discharge_with_obstacle, edge.discharge_reduction = \
-                    discharge_reduction_flowline.discharge_reduction(
-                        water_levels[:, i],
-                        discharges[:, i],
-                        tintervals
-                )
+                edge.calculate_discharge_reduction()
 
     def flowlines_with_high_discharge_reduction(self) -> List[int]:
         """Return a list of ids of flowlines for which the discharge reduction exceeds the threshold"""
         return [
-            flowline_id
-            for flowline_id, discharge_reduction in self.discharge_reduction.items()
-            if discharge_reduction > self.min_discharge
+            edge.flowline_id
+            for edge in self.edges
+            if edge.discharge_reduction or float("inf") > self.min_discharge
         ]
 
     def result_edges(self, flowline_ids: List[int] = None) -> Iterator[Dict]:
@@ -279,6 +191,123 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
             yield edge_dict
 
 
+class EdgeWithDischargeThreshold(Edge):
+    def __init__(
+            self,
+            ld: LeakDetectorWithDischargeThreshold,
+            cell_ids: Tuple[int],
+            flowline_id: int,
+    ):
+        super().__init__(
+            ld=ld,
+            cell_ids=cell_ids,
+            flowline_id=flowline_id,
+        )
+        self.discharge_without_obstacle = None
+        self.discharge_with_obstacle = None
+        self.discharge_reduction = None
+
+        # new attributes
+        self.new_obstacle_crest_level = None
+
+    @classmethod
+    def from_edge(cls, edge: Edge, ld: LeakDetectorWithDischargeThreshold):
+        result_edge = cls(
+            ld=ld,
+            cell_ids=edge.cell_ids,
+            flowline_id=edge.flowline_id
+        )
+        result_edge.obstacles = edge.obstacles
+
+        # attributes set in calculate_geometries()
+        result_edge.flowline_geometry = edge.flowline_geometry
+        result_edge.geometry = edge.geometry
+        result_edge.start_coord = edge.start_coord
+        result_edge.end_coord = edge.end_coord
+
+        # attributes set in calculate_exchange_level()
+        if edge.exchange_levels is not None:
+            result_edge.exchange_level = edge.exchange_level
+            result_edge.exchange_levels = edge.exchange_levels
+        else:
+            # force to read from DEM because we neede exchange_levels for further calculations
+            result_edge.calculate_exchange_levels()
+        return result_edge
+
+    def _get_obstacle_crest_level(self, which_obstacle: str):
+        if which_obstacle == OLD:
+            obstacle_crest_level = self.exchange_level
+        elif which_obstacle == NEW:
+            obstacle_crest_level = highest(self.obstacles).crest_level if self.obstacles else None
+        else:
+            raise ValueError(f"Value of argument 'which_obstacle' must be 'OLD' or 'NEW', not {which_obstacle}")
+        obstacle_crest_level = np.min(self.exchange_levels) if obstacle_crest_level is None else obstacle_crest_level
+        return obstacle_crest_level
+
+    def wet_cross_sectional_area(self, water_level: float, which_obstacle: str):
+        """
+        Calculate the wet cross-sectional area from a 1D array of exchange levels (bed level values) and a water level.
+        obstacle_crest_level may be specified to overrule exchange levels that are lower
+        """
+        obstacle_crest_level = self._get_obstacle_crest_level(which_obstacle)
+        bed_levels = np.maximum(self.exchange_levels, obstacle_crest_level)
+        water_depths = np.maximum(water_level - np.minimum(water_level, bed_levels), 0)
+        return np.sum(water_depths * self.ld.dem.RasterXSize)
+
+    def wetted_perimeter(self, water_level: float, which_obstacle: str):
+        """
+        Calculate the wetted perimeter of a 2D cross-section; only the horizontal wet surface are taken into account
+        """
+        obstacle_crest_level = self._get_obstacle_crest_level(which_obstacle)
+        return np.sum((np.maximum(self.exchange_levels, obstacle_crest_level) < water_level) * self.ld.dem.RasterXSize)
+
+    def discharge_reduction_factor(self, water_level: float):
+        """
+        reduction = Q_new/Q_old
+        Based on:
+         A: wet cross-sectional area
+         v: flow velocity
+         P: wetted perimeter
+
+         Q = A*v (discharge)
+         R = A/P (hydraulic radius)
+         v = C*sqrt(R*i) (Chezy)
+        So:
+         Q = A * C * sqrt((A/P)*i)
+
+        Assuming C and i are constant, we can ignore them when dividing Q_new by Q_old:
+         reduction = (A_new * sqrt(A_new/P_new)) / (A_old * sqrt(A_old/P_old))
+        """
+        old_wet_cross_sectional_area = self.wet_cross_sectional_area(water_level=water_level, which_obstacle=OLD)
+        new_wet_cross_sectional_area = self.wet_cross_sectional_area(water_level=water_level, which_obstacle=NEW)
+        if old_wet_cross_sectional_area == 0 or new_wet_cross_sectional_area == 0:
+            return 0
+        old_wetted_perimeter = self.wetted_perimeter(water_level=water_level, which_obstacle=OLD)
+        new_wetted_perimeter = self.wetted_perimeter(water_level=water_level, which_obstacle=NEW)
+        result = np.sqrt(new_wet_cross_sectional_area / new_wetted_perimeter) / \
+                 np.sqrt(old_wet_cross_sectional_area / old_wetted_perimeter)
+        return result
+
+    def discharge_reduction_factors(self, water_levels: np.array):
+        """Vectorized version of `discharge_reduction_factor`"""
+        v_discharge_reduction_factors = np.vectorize(self.discharge_reduction_factor, otypes=[float])
+        return v_discharge_reduction_factors(water_levels)
+
+    def calculate_discharge_reduction(self):
+        """
+        Calculate the difference in net cumulative discharge when an obstacle is applied to a flowline's cross-section
+        """
+        q_selector = self.ld.all_2d_open_water_flowlines.id == self.flowline_id
+        discharges = self.ld.discharges[:, q_selector]
+        wl_selector = self.ld.flowlines.id == self.flowline_id
+        water_levels = self.ld.water_levels[:, wl_selector]
+
+        self.discharge_without_obstacle = np.sum(discharges * self.ld.tintervals)
+        discharge_reduction_factors = self.discharge_reduction_factors(water_levels)
+        self.discharge_with_obstacle = np.sum(discharges * discharge_reduction_factors * self.ld.tintervals)
+        self.discharge_reduction = self.discharge_with_obstacle - self.discharge_without_obstacle
+
+
 if __name__ == "__main__":
     DATA_DIR = Path(r"C:\Users\leendert.vanwolfswin\OneDrive - Nelen & Schuurmans\Documents 1\3Di\fuerthen_de - "
                     r"fuerthen_fuerthen (1)")
@@ -313,7 +342,8 @@ if __name__ == "__main__":
         def isCanceled(self):
             return False
 
-    leak_detector.run(MockFeedback())
+
+    leak_detector.run()
     leak_detector.calculate_discharge_reduction()
     print([i for i in leak_detector.result_edges()])
     print([i for i in leak_detector.result_obstacles()])

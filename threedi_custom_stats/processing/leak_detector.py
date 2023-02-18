@@ -127,8 +127,8 @@ class LeakDetector:
             dem: gdal.Dataset,
             flowline_ids: List[int],
             min_obstacle_height: float,
-            search_precision: float,
-            min_peak_prominence: float,
+            search_precision: float = None,
+            min_peak_prominence: float = None,
             obstacles: List[Tuple[LineString, float]] = None,
             feedback=None
     ):
@@ -143,8 +143,8 @@ class LeakDetector:
         """
         self.dem = dem
         self.min_obstacle_height = min_obstacle_height
-        self.search_precision = search_precision
-        self.min_peak_prominence = min_peak_prominence
+        self.search_precision = search_precision or self.suitable_search_precision()
+        self.min_peak_prominence = min_peak_prominence or min_obstacle_height
 
         self.flowlines = gridadmin.lines.subset('2D_OPEN_WATER').filter(id__in=flowline_ids)
         if np.all(np.isnan(self.flowlines.dpumax)):
@@ -165,7 +165,6 @@ class LeakDetector:
                     "line_coords": flowlines_dict["line_coords"][:, i]
                 }
             )
-
 
         # Create cells
         if feedback:
@@ -219,7 +218,9 @@ class LeakDetector:
                 ld=self,
                 cell_ids=cell_ids,
                 flowline_id=flowline["id"],
-                flowline_coords=flowline["line_coords"],
+            )
+            edge.calculate_geometries(flowline_coords=flowline["line_coords"])
+            edge.calculate_exchange_levels(
                 # exchange_level=flowline["dpumax"]  # Commented out because of a bug in how Tables writes to h5 file
             )
             self.edges.append(edge)
@@ -263,6 +264,9 @@ class LeakDetector:
                         edge.exchange_level = crest_level
                 feedback.setProgress(100 * i / len(obstacle_indices))
 
+    def suitable_search_precision(self):
+        return min(self.min_obstacle_height/10, 0.1)
+
     @property
     def cells(self) -> List:
         return list(self._cell_dict.values())
@@ -300,11 +304,12 @@ class LeakDetector:
                 cell_pair = CellPair(self, reference_cell, neigh_cell)
                 yield cell_pair
 
-    def run(self, feedback):
+    def run(self, feedback=None):
         """
         Find all obstacles
 
-        :param feedback: Object that has .setProgress() and .isCanceled() methods, like QgsProcessingFeedback
+        :param feedback: Object that has `setProgress()`, `isCanceled()` and `pushInfo()` methods,
+        like QgsProcessingFeedback
         :return: None
         """
 
@@ -312,9 +317,10 @@ class LeakDetector:
         for i, cell_pair in enumerate(self.cell_pairs()):
             try:
                 cell_pair.find_obstacles()
-                feedback.setProgress(50 * ((i + 1) / len(self.line_nodes)))
-                if feedback.isCanceled():
-                    return
+                if feedback:
+                    feedback.setProgress(50 * ((i + 1) / len(self.line_nodes)))
+                    if feedback.isCanceled():
+                        return
             except Exception as e:
                 print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
                 raise e
@@ -323,9 +329,10 @@ class LeakDetector:
         for i, cell_pair in enumerate(self.cell_pairs()):
             try:
                 cell_pair.find_connecting_obstacles()
-                feedback.setProgress(50 + 50 * ((i + 1) / len(self.line_nodes)))
-                if feedback.isCanceled():
-                    return
+                if feedback:
+                    feedback.setProgress(50 + 50 * ((i + 1) / len(self.line_nodes)))
+                    if feedback.isCanceled():
+                        return
             except IndexError as e:
                 print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
                 raise e
@@ -456,19 +463,33 @@ class Edge:
             self,
             ld: LeakDetector,
             cell_ids: Tuple[int],
-            flowline_id: int,
-            flowline_coords: Tuple[float, float, float, float],
-            exchange_level: float = None
+            flowline_id: int
     ):
         self.ld = ld
         self.cell_ids = cell_ids
         self.flowline_id = flowline_id
-        x0, y0, x1, y1 = flowline_coords
-        self.flowline_geometry = LineString([Point(x0, y0), Point(x1, y1)])
         self.obstacles: List[Obstacle] = list()
 
+        # attributes set in calculate_geometries()
+        self.flowline_geometry = None
+        self.geometry = None
+        self.start_coord = None
+        self.end_coord = None
+
+        # attributes set in calculate_exchange_level()
+        self.exchange_level = None
+        self.exchange_levels = None
+
+    def calculate_geometries(self, flowline_coords: Tuple[float, float, float, float]):
+        """
+        Set the geometries of the edge and the flowline crossing the edge
+        sets `self.flowline_geometry`, `self.geometry`, `self.start_coord`, `self.end_coord`
+        """
+        x0, y0, x1, y1 = flowline_coords
+        self.flowline_geometry = LineString([Point(x0, y0), Point(x1, y1)])
+
         # set start and end coordinates
-        cell_1, cell_2 = [ld.cell(i) for i in cell_ids]
+        cell_1, cell_2 = [self.ld.cell(i) for i in self.cell_ids]
         side_coords1 = cell_1.side_coords()
         side_coords2 = cell_2.side_coords()
         for side_1 in [TOP, BOTTOM, LEFT, RIGHT]:
@@ -478,11 +499,15 @@ class Edge:
                     self.start_coord, self.end_coord = intersection_coords
         self.geometry = LineString([Point(*self.start_coord), Point(*self.end_coord)])
 
+    def calculate_exchange_levels(self, exchange_level: float = None):
+        """
+        Sets `self.exchange_level`, `self.exchange_levels`
+        If `exchange_level` is None, exchange_level(s) will be read from the DEM
+        """
         # set exchange_level
-        if exchange_level:
+        if exchange_level is not None:
             if np.isnan(exchange_level):
                 exchange_level = None
-        if exchange_level:
             self.exchange_level = exchange_level
         else:
             # calculate exchange level from DEM: 1D array of max of pixel pairs along the edge
