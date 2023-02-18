@@ -13,7 +13,7 @@
 from pathlib import Path
 
 from osgeo import gdal
-from typing import Any, Dict, Tuple, Iterator
+from typing import Any, Dict, Tuple, Iterator, List
 
 from shapely import wkt
 
@@ -62,7 +62,7 @@ Q_NET_SUM = Aggregation(
     sign=AggregationSign("net", "Net"),
 )
 
-STYLE_DIR = Path(__file__).parent / "style"
+STYLE_DIR = Path(__file__).parent.parent / "style"
 
 QVARIANT_PYTHON_TYPES = {
     QVariant.Int: int,
@@ -84,12 +84,6 @@ class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
 
     OUTPUT_EDGES = "OUTPUT_EDGES"
     OUTPUT_OBSTACLES = "OUTPUT_OBSTACLES"
-
-    SINK_FIELD_DATA = [
-        {"name": "id", "type": QVariant.Int},
-        {"name": "exchange_level", "type": QVariant.Double},
-        {"name": "crest_level", "type": QVariant.Double}
-    ]
 
     def initAlgorithm(self, config):
 
@@ -175,6 +169,18 @@ class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
             msg = '; '.join(msg_list)
         return success, msg
 
+    @staticmethod
+    def sink_field_data() -> List[Dict]:
+        """
+        Return a list of dicts that contain the data needed to defined fields in the feature sinks (output layers).
+        Each dict contains the name (str) and the type (QVariant)
+        """
+        return [
+            {"name": "flowline_id", "type": QVariant.Int},
+            {"name": "exchange_level", "type": QVariant.Double},
+            {"name": "crest_level", "type": QVariant.Double}
+        ]
+
     def read_parameters(self, parameters, context, feedback):
         self.gridadmin_fn = self.parameterAsFile(parameters, self.INPUT_GRIDADMIN, context)
         self.gridadmin = GridH5Admin(self.gridadmin_fn)
@@ -189,7 +195,7 @@ class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
         crs = QgsCoordinateReferenceSystem(f"EPSG:{self.gridadmin.epsg_code}")
 
         self.sink_fields = QgsFields()
-        for field_data in self.SINK_FIELD_DATA:
+        for field_data in self.sink_field_data():
             self.sink_fields.append(QgsField(**field_data))
 
         self.edges_sink, self.edges_sink_dest_id = self.parameterAsSink(
@@ -352,13 +358,6 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
     INPUT_START_TIME = "INPUT_START_TIME"
     INPUT_END_TIME = "INPUT_END_TIME"
 
-    SINK_FIELD_DATA = [
-        {"name": "id", "type": QVariant.Int},
-        {"name": "exchange_level", "type": QVariant.Double},
-        {"name": "crest_level", "type": QVariant.Double},
-        {"name": "discharge_reduction", "type": QVariant.Double}
-    ]
-
     def initAlgorithm(self, config):
         super().initAlgorithm(config)
         self.addParameter(
@@ -391,6 +390,13 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
         )
         self.addParameter(end_time_param)
 
+    def sink_field_data(self):
+        return super().sink_field_data() + [
+            {"name": "discharge_without_obstacle", "type": QVariant.Double},
+            {"name": "discharge_with_obstacle", "type": QVariant.Double},
+            {"name": "discharge_reduction", "type": QVariant.Double}
+        ]
+
     def read_parameters(self, parameters, context, feedback):
         super().read_parameters(parameters, context, feedback)
         self.min_discharge = self.parameterAsDouble(parameters, self.INPUT_MIN_DISCHARGE, context)
@@ -405,7 +411,7 @@ class DetectLeakingObstaclesWithDischargeThresholdAlgorithm(DetectLeakingObstacl
                 return {}
             feature = QgsFeature()
             feature.setFields(self.sink_fields)
-            for i, field in enumerate(self.SINK_FIELD_DATA):
+            for i, field in enumerate(self.sink_field_data()):
                 convert = QVARIANT_PYTHON_TYPES[field["type"]]
                 feature.setAttribute(i, convert(feature_data[field["name"]]))
             geometry = QgsGeometry()

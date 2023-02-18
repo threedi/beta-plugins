@@ -4,7 +4,10 @@ from typing import List, Tuple, Iterator, Dict
 
 from shapely.geometry import LineString
 
-from leak_detector import LeakDetector, highest
+try:
+    from .leak_detector import LeakDetector, highest
+except ImportError:
+    from leak_detector import LeakDetector, highest
 try:
     from ..threedi_result_aggregation.base import (
         water_levels_at_cross_section,
@@ -129,7 +132,7 @@ class DischargeReductionFlowline:
         old_total_discharge = np.sum(discharges * tintervals)
         discharge_reduction_factors = self.discharge_reduction_factors(water_levels)
         new_total_discharge = np.sum(discharges * discharge_reduction_factors * tintervals)
-        return new_total_discharge - old_total_discharge
+        return old_total_discharge, new_total_discharge, new_total_discharge - old_total_discharge
 
 
 class LeakDetectorWithDischargeThreshold(LeakDetector):
@@ -222,14 +225,15 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
                 crest_level = highest(edge.obstacles).crest_level
                 discharge_reduction_flowline = DischargeReductionFlowline(
                     id=flowline_id,
-                    pixel_size=leak_detector.dem.RasterXSize,
+                    pixel_size=self.dem.RasterXSize,
                     exchange_levels=edge.exchange_levels,
                     new_obstacle_crest_level=crest_level
                 )
-                self.discharge_reduction[flowline_id] = discharge_reduction_flowline.discharge_reduction(
-                    water_levels[:, i],
-                    discharges[:, i],
-                    tintervals
+                edge.discharge_without_obstacle, edge.discharge_with_obstacle, edge.discharge_reduction = \
+                    discharge_reduction_flowline.discharge_reduction(
+                        water_levels[:, i],
+                        discharges[:, i],
+                        tintervals
                 )
 
     def flowlines_with_high_discharge_reduction(self) -> List[int]:
@@ -249,9 +253,13 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
             relevant_flowline_ids = list(set(flowline_ids) & set(self.flowlines_with_high_discharge_reduction()))
         else:
             relevant_flowline_ids = self.flowlines_with_high_discharge_reduction()
-        for edge in super().result_edges(relevant_flowline_ids):
-            edge["discharge_reduction"] = self.discharge_reduction[edge["flowline_id"]]
-            yield edge
+        for edge_dict in super().result_edges(relevant_flowline_ids):
+            flowline_id = edge_dict["flowline_id"]
+            edge = self.get_edge_by_flowline_id(flowline_id)
+            edge_dict["discharge_without_obstacle"] = edge.discharge_without_obstacle
+            edge_dict["discharge_with_obstacle"] = edge.discharge_with_obstacle
+            edge_dict["discharge_reduction"] = edge.discharge_reduction
+            yield edge_dict
 
     def result_obstacles(self, flowline_ids=None) -> Iterator[Dict]:
         """
@@ -262,9 +270,13 @@ class LeakDetectorWithDischargeThreshold(LeakDetector):
             relevant_flowline_ids = list(set(flowline_ids) & set(self.flowlines_with_high_discharge_reduction()))
         else:
             relevant_flowline_ids = self.flowlines_with_high_discharge_reduction()
-        for obstacle in super().result_obstacles(relevant_flowline_ids):
-            obstacle["discharge_reduction"] = self.discharge_reduction[obstacle["flowline_id"]]
-            yield obstacle
+        for edge_dict in super().result_obstacles(relevant_flowline_ids):
+            flowline_id = edge_dict["flowline_id"]
+            edge = self.get_edge_by_flowline_id(flowline_id)
+            edge_dict["discharge_without_obstacle"] = edge.discharge_without_obstacle
+            edge_dict["discharge_with_obstacle"] = edge.discharge_with_obstacle
+            edge_dict["discharge_reduction"] = edge.discharge_reduction
+            yield edge_dict
 
 
 if __name__ == "__main__":

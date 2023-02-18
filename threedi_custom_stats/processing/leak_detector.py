@@ -286,6 +286,12 @@ class LeakDetector:
             neigh_cell = neigh_cell.id
         return self._edge_dict[(reference_cell, neigh_cell)]
 
+    def get_edge_by_flowline_id(self, flowline_id):
+        id_mask = self.flowlines.id == flowline_id
+        reference_cell_id, neigh_cell_id = self.flowlines.line_nodes[id_mask][0]
+        edge = self.edge(reference_cell_id, neigh_cell_id)
+        return edge
+
     def cell_pairs(self):
         """Return an interator of all cell pairs that can be created by using the cell_ids as reference cell"""
         for reference_cell in self.cells:
