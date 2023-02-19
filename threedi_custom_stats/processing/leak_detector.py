@@ -318,7 +318,7 @@ class LeakDetector:
             try:
                 cell_pair.find_obstacles()
                 if feedback:
-                    feedback.setProgress(50 * ((i + 1) / len(self.line_nodes)))
+                    feedback.setProgress(50 * ((i + 1) / len(self.flowlines__id)))
                     if feedback.isCanceled():
                         return
             except Exception as e:
@@ -330,7 +330,7 @@ class LeakDetector:
             try:
                 cell_pair.find_connecting_obstacles()
                 if feedback:
-                    feedback.setProgress(50 + 50 * ((i + 1) / len(self.line_nodes)))
+                    feedback.setProgress(50 + 50 * ((i + 1) / len(self.flowlines__id)))
                     if feedback.isCanceled():
                         return
             except IndexError as e:
@@ -893,7 +893,8 @@ class CellPair:
         """
         Transforms pixel position from one array to another
 
-        :param pos: pixel position (numpy array index) that should be transformed. must be a tuple of 2 ints or a numpy array with row 0 = row index and row 1 = col index
+        :param pos: pixel position (numpy array index) that should be transformed. must be a tuple of 2 ints or a numpy
+        array with row 0 = row index and row 1 = col index
         :param from_array: 'reference', 'neigh', or 'merged'
         :param to_array: 'reference', 'neigh' or 'merged'
         """
@@ -1034,7 +1035,7 @@ class CellPair:
         from_val = pixels[from_pos]
         to_val = pixels[to_pos]
 
-        # case: flat(ish) cellpair (from_val or max_to_val is not significantly higher than lowest pixel)
+        # case: flat(ish) cellpair (from_val or max_to_val is not significantly higher than the lowest pixel)
         if np.nanmin([from_val, to_val]) - np.nanmin(pixels) < self.ld.search_precision:
             return None
 
