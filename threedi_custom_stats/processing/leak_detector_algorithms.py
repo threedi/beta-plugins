@@ -250,13 +250,13 @@ class DetectLeakingObstaclesBase(QgsProcessingAlgorithm):
         self.add_features_to_sink(
             feedback=feedback,
             sink=self.edges_sink,
-            features_data=leak_detector.result_edges()
+            features_data=leak_detector.results(geometry='EDGE')
         )
         feedback.setProgressText("Create 'Obstacle in DEM' features...")
         self.add_features_to_sink(
             feedback=feedback,
             sink=self.obstacles_sink,
-            features_data=leak_detector.result_obstacles()
+            features_data=leak_detector.results(geometry='OBSTACLE')
         )
 
         return {

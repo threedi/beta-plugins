@@ -147,6 +147,7 @@ class LeakDetector:
         self.min_peak_prominence = min_peak_prominence or min_obstacle_height
 
         self.flowlines = gridadmin.lines.subset('2D_OPEN_WATER').filter(id__in=flowline_ids)
+        self.flowlines__id = self.flowlines.id
         if np.all(np.isnan(self.flowlines.dpumax)):
             if not obstacles:
                 if feedback:
@@ -154,50 +155,46 @@ class LeakDetector:
                         "Gridadmin file does not contain elevation data. Exchange levels will be derived from the DEM. "
                         "Obstacles were not supplied and will be ignored."
                     )
-        self.line_nodes = self.flowlines.line_nodes
-        flowlines_dict = self.flowlines.only("id", "line", "line_coords").data
-        self.flowlines_data = dict()
-        for i in range(len(flowlines_dict["id"])):
-            self.flowlines_data[flowlines_dict["id"][i]] = {
-                "line": flowlines_dict["line"][:, i],
-                "line_coords": flowlines_dict["line_coords"][:, i]
-            }
+        self.flowlines__line_nodes = self.bind_to_flowline_ids(self.flowlines.line_nodes)
+        self.flowlines__line_coords = self.bind_to_flowline_ids(self.flowlines.line_coords.T)
 
         # Create cells
         if feedback:
             feedback.pushInfo(f"{datetime.now()}")
             feedback.setProgressText("Read cells...")
-        threedigrid_cells = gridadmin.cells.filter(id__in=self.line_nodes.flatten())
-        cell_properties = threedigrid_cells.only('id', 'cell_coords').data
-        cell_properties_dict = dict(
-            zip(cell_properties['id'], np.round(cell_properties['cell_coords'].T, COORD_DECIMALS))
+        unique_cell_ids = np.unique(np.squeeze(self.flowlines.line_nodes.data))
+        cells__cell_coords = dict(
+            zip(
+            gridadmin.cells.filter(id__in=unique_cell_ids).id,
+            np.round(gridadmin.cells.filter(id__in=unique_cell_ids).cell_coords.T, COORD_DECIMALS)
+            )
         )
 
         self._cell_dict = dict()
-        for i, (cell_id, cell_coords) in enumerate(cell_properties_dict.items()):
+        for i, (cell_id, cell_coords) in enumerate(cells__cell_coords.items()):
             if feedback:
                 if feedback.isCanceled():
                     return
             self._cell_dict[cell_id] = Cell(ld=self, id=cell_id, coords=cell_coords)
             if feedback:
-                feedback.setProgress(100 * i / len(cell_properties_dict))
+                feedback.setProgress(100 * i / len(cells__cell_coords))
 
         # Find cell neighbours
         if feedback:
             feedback.pushInfo(f"{datetime.now()}")
             feedback.setProgressText("Find cell neighbours...")
-        for i, flowline_data in enumerate(self.flowlines_data.values()):
+        for i, flowline_id in enumerate(self.flowlines__id):
             if feedback:
                 if feedback.isCanceled():
                     return
-            cell_ids: Tuple = flowline_data["line"]
+            cell_ids: Tuple = self.flowlines__line_nodes[flowline_id]
             reference_cell = self.cell(cell_ids[0])
             neigh_cell = self.cell(cell_ids[1])
             location = reference_cell.locate_cell(neigh_cell, neigh_is_next=True)
             reference_cell.add_neigh(neigh_cell=neigh_cell, location=location)
             neigh_cell.add_neigh(neigh_cell=reference_cell, location=OPPOSITE[location])
             if feedback:
-                feedback.setProgress(100 * i / len(self.flowlines_data))
+                feedback.setProgress(100 * i / len(self.flowlines__id))
 
         # Create edges
         if feedback:
@@ -206,17 +203,17 @@ class LeakDetector:
         self.edges = list()
         self._edge_by_line_nodes = dict()  # {line_nodes: Edge}
         self._edge_by_flowline_id = dict()  # {flowline_id: Edge}
-        for i, (flowline_id, flowline_data) in enumerate(self.flowlines_data.items()):
+        for i, flowline_id in enumerate(self.flowlines__id):
             if feedback:
                 if feedback.isCanceled():
                     return
-            cell_ids = tuple(flowline_data["line"])
+            cell_ids = tuple(self.flowlines__line_nodes[flowline_id])
             edge = Edge(
                 ld=self,
                 cell_ids=cell_ids,
                 flowline_id=flowline_id,
             )
-            edge.calculate_geometries(flowline_coords=flowline_data["line_coords"])
+            edge.calculate_geometries(flowline_coords=self.flowlines__line_coords[flowline_id])
             edge.calculate_exchange_levels(
                 # exchange_level=flowline["dpumax"]  # Commented out because of a bug in how Tables writes to h5 file
             )
@@ -224,7 +221,7 @@ class LeakDetector:
             self._edge_by_line_nodes[cell_ids] = edge
             self._edge_by_flowline_id[flowline_id] = edge
             if feedback:
-                feedback.setProgress(100 * i / len(self.flowlines_data))
+                feedback.setProgress(100 * i / len(self.flowlines__id))
 
         # Update edge exchange level from obstacles
         if obstacles:
@@ -264,6 +261,14 @@ class LeakDetector:
 
     def suitable_search_precision(self):
         return min(self.min_obstacle_height/10, 0.1)
+
+    def bind_to_flowline_ids(self, obj):
+        """
+        Return a dict of {flowline_id: obj_item} pairs
+        :param obj:
+        :return:
+        """
+        return dict(zip(self.flowlines__id, obj))
 
     @property
     def cells(self) -> List:
@@ -332,36 +337,16 @@ class LeakDetector:
                 print(f"Something went wrong in cell pair ({cell_pair.reference_cell.id, cell_pair.neigh_cell.id})")
                 raise e
 
-    def result_edges(self, flowline_ids=None) -> Iterator[Dict]:
+    def results(self, geometry: str, flowline_ids=None) -> Iterator[Dict]:
         """
         Iterate over all edges that have an obstacle
         Return results for all edges if flowline_ids is not specified, or results for specific flowlines only
+        `geometry` can be 'EDGE' or 'OBSTACLE'
         """
         for edge in self.edges:
             if flowline_ids is None or edge.flowline_id in flowline_ids:
                 if edge.obstacles:
-                    yield {
-                        "flowline_id": edge.flowline_id,
-                        "exchange_level": edge.exchange_level,
-                        "crest_level": highest(edge.obstacles).crest_level,
-                        "geometry": edge.geometry
-                    }
-
-    def result_obstacles(self, flowline_ids=None) -> Iterator[Dict]:
-        """
-        Return all edges that have an obstacle
-        Returns results for all edges if flowline_ids is not specified, or results for specific flowlines only
-        """
-        for edge in self.edges:
-            if flowline_ids is None or edge.flowline_id in flowline_ids:
-                if edge.obstacles:
-                    highest_obstacle = highest(edge.obstacles)
-                    yield {
-                        "flowline_id": edge.flowline_id,
-                        "exchange_level": edge.exchange_level,
-                        "crest_level": highest_obstacle.crest_level,
-                        "geometry": highest_obstacle.geometry
-                    }
+                    yield edge.as_dict(geometry=geometry)
 
 
 class Obstacle:
@@ -520,6 +505,20 @@ class Edge:
     @property
     def is_bottom_up(self):
         return self.start_coord[0] == self.end_coord[0]
+
+    def as_dict(self, geometry: str):
+        if geometry == 'EDGE':
+            geom = self.geometry
+        elif geometry == 'OBSTACLE':
+            geom = highest(self.obstacles).geometry if self.obstacles else None
+        else:
+            raise ValueError(f"'geometry' must be 'EDGE' or 'OBSTACLE', not {geometry}")
+        return {
+            "flowline_id": self.flowline_id,
+            "exchange_level": self.exchange_level,
+            "crest_level": highest(self.obstacles).crest_level if self.obstacles else None,
+            "geometry": geom
+        }
 
 
 class Cell:
