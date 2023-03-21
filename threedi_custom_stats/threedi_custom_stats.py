@@ -24,7 +24,6 @@
 from typing import List
 
 from osgeo.gdal import GetDriverByName
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 from qgis.core import Qgis, QgsApplication, QgsProject, QgsTask
@@ -253,20 +252,10 @@ class ThreeDiCustomStats:
 
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
-        # initialize locale
-        locale = QSettings().value("locale/userLocale")[0:2]
-        locale_path = os.path.join(
-            self.plugin_dir, "i18n", "ThreeDiCustomStats_{}.qm".format(locale)
-        )
-
-        if os.path.exists(locale_path):
-            self.translator = QTranslator()
-            self.translator.load(locale_path)
-            QCoreApplication.installTranslator(self.translator)
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr("&3Di Custom Statistics")
+        self.menu = "&3Di Custom Statistics"
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -279,21 +268,6 @@ class ThreeDiCustomStats:
         """Create the Qgis Processing Toolbox provider and its algorithms"""
         self.provider = ThreeDiCustomStatisticsProvider()
         QgsApplication.processingRegistry().addProvider(self.provider)
-
-    # noinspection PyMethodMayBeStatic
-    def tr(self, message):
-        """Get the translation for a string using Qt translation API.
-
-        We implement this ourselves since we do not inherit QObject.
-
-        :param message: String for translation.
-        :type message: str, QString
-
-        :returns: Translated version of message.
-        :rtype: QString
-        """
-        # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate("ThreeDiCustomStats", message)
 
     def add_action(
         self,
@@ -374,7 +348,7 @@ class ThreeDiCustomStats:
         icon_path = ":/plugins/threedi_custom_stats/icon.png"
         self.add_action(
             icon_path,
-            text=self.tr("3Di Custom Statistics"),
+            text="3Di Custom Statistics",
             callback=self.run,
             parent=self.iface.mainWindow(),
         )
@@ -387,7 +361,7 @@ class ThreeDiCustomStats:
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
             self.iface.removePluginMenu(
-                self.tr("&3Di Custom Statistics"), action
+                "&3Di Custom Statistics", action
             )
             self.iface.removeToolBarIcon(action)
         QgsApplication.processingRegistry().removeProvider(self.provider)
