@@ -300,7 +300,7 @@ class EdgeWithDischargeThreshold(Edge):
         if self.obstacles:
             discharge_reduction_factors = self.discharge_reduction_factors(self.water_levels_at_cross_section)
             self.discharge_with_obstacle = np.nansum(self.discharges * discharge_reduction_factors * self.ld.tintervals)
-            self.discharge_reduction = self.discharge_with_obstacle - self.discharge_without_obstacle
+            self.discharge_reduction = abs(self.discharge_with_obstacle - self.discharge_without_obstacle)
 
 
 if __name__ == "__main__":
