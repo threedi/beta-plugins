@@ -196,7 +196,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 multi_step_feedback.setProgressText(
                     f"Rasterizing channel {channel.id}..."
                 )
-                points = [QgsPoint(*point.coords[0]) for point in channel.points]
+                points = [QgsPoint(*point.geom.coords[0]) for point in channel.points]
 
                 # create temporary mesh file
                 provider_meta = QgsProviderRegistry.instance().providerMetadata("mdal")
@@ -208,6 +208,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 mesh_format = "Ugrid"
                 crs = QgsCoordinateReferenceSystem()
                 provider_meta.createMeshData(mesh, temp_mesh_fullpath, mesh_format, crs)
+                provider_meta.createMeshData(mesh=mesh, fileName=temp_mesh_fullpath, driverName="mdal", crs=crs)
                 mesh_layer = QgsMeshLayer(temp_mesh_fullpath, "editable mesh", "mdal")
 
                 # add points to mesh
