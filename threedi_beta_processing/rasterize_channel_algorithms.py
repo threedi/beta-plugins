@@ -46,6 +46,7 @@ from .rasterize_channel import (
     CrossSectionLocation,
     EmptyOffsetError,
     InvalidOffsetError,
+    WidthsNotIncreasingError,
     fill_wedges,
 )
 from .rasterize_channel_utils import merge_rasters
@@ -180,6 +181,12 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError(
                     f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
                     f"for some cross-sectional widths. It may help to split the channel in the middle of its bends."
+                )
+            except WidthsNotIncreasingError:
+                errors.append(channel_id)
+                feedback.reportError(
+                    f"ERROR: Could not read channel with id {channel.id}: the widths in the cross-section table for one "
+                    f"or more cross-section locations are not all increasing with height."
                 )
             multi_step_feedback.setProgress(100 * i / channel_features.featureCount())
 
