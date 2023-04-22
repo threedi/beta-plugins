@@ -24,10 +24,11 @@ except ImportError:
 
 
 def indexed_point():
-    point = IndexedPoint(3.4, 2.4, index=3)
+    point = IndexedPoint(3.4, 2.4, np.float64(48.3), index=3)
     assert point.index == 3
     assert point.x == 3.4
     assert point.y == 2.4
+    assert point.z == 48.3
 
 
 def triangle():
@@ -177,8 +178,8 @@ def cross_section_location():
     cross_section_loc = CrossSectionLocation(
         reference_level=10.0,
         bank_level=12.0,
-        widths=[0.0, 2.0, 4.0],
         heights=[0.0, 1.0, 2.0],
+        widths=[0.0, 2.0, 4.0],
         geometry=Point(1, 1),
     )
     return cross_section_loc
@@ -210,6 +211,7 @@ def channel_properties(channel):
         channel.cross_section_location_positions
         == np.array([0.5 * channel.geometry.length])
     ).all()
+    print(str(channel.outline))
     assert (
         str(channel.outline)
         == "POLYGON ((-1.414213562373095 1.414213562373095, -0.4142135623730949 2.414213562373095, 0.5857864376269051 3.414213562373095, 3.414213562373095 0.5857864376269051, 2.414213562373095 -0.4142135623730949, 1.414213562373095 -1.414213562373095, -1.414213562373095 1.414213562373095))"
@@ -225,15 +227,17 @@ def channel_parallel_offsets(channel):
 
     po1 = channel.parallel_offsets[1]
     heights_at_vertices = po1.heights_at_vertices
-    assert (heights_at_vertices == np.array([1.0, 1.0])).all()
+    assert (heights_at_vertices == np.array([11.0, 11.0])).all()
     # assert [str(point) for point in po1.points] == ['POINT Z (-0.7071067811865475 0.7071067811865475 1)', 'POINT Z (1.292893218813453 2.707106781186547 1)'].reverse()
 
     po5 = channel.parallel_offsets[4]
     heights_at_vertices = po5.heights_at_vertices
-    assert (heights_at_vertices == np.array([2.0, 2.0])).all()
-    assert [str(point) for point in po5.points] == [
-        "POINT Z (3.414213562373095 0.5857864376269051 2)",
-        "POINT Z (1.414213562373095 -1.414213562373095 2)",
+    assert (heights_at_vertices == np.array([12.0, 12.0])).all()
+    points_str = [str(point.geom) for point in po5.points]
+    print(points_str)
+    assert points_str == [
+        "POINT Z (3.414213562373095 0.5857864376269051 12)",
+        "POINT Z (1.414213562373095 -1.414213562373095 12)",
     ]
 
 
@@ -390,32 +394,32 @@ def parallel_offset_heights_at_vertices():
 
 
 def run_tests():
-    # indexed_point()
-    # triangle()
-    # channel = channel_init()
-    # channel_vertex_positions(channel)
-    # xsec = cross_section_location()
-    # cross_section_location_height_at(xsec)
-    # channel_add_cross_section_location(channel, xsec)
+    indexed_point()
+    triangle()
+    channel = channel_init()
+    channel_vertex_positions(channel)
+    xsec = cross_section_location()
+    cross_section_location_height_at(xsec)
+    channel_add_cross_section_location(channel, xsec)
     # channel_properties(channel)
-    # channel_max_width_at(channel)
-    # channel.generate_parallel_offsets()
-    # two_vertex_channel()
+    channel_max_width_at(channel)
+    channel.generate_parallel_offsets()
+    two_vertex_channel()
     wedge_on_both_sides()
-    # parallel_offset_heights_at_vertices()
+    parallel_offset_heights_at_vertices()
     # cross_section_starting_at_0_0()
-    # test_find_wedge_channels()
+    test_find_wedge_channels()
     # fill_wedge()
 
-    # channel_parallel_offsets(channel)
-    # for tri in channel.triangles:
-    #     print(tri)
-    # print(channel.outline)
-    # selects = []
-    # for i, tri in enumerate(channel.triangles):
-    #     selects.append(f"SELECT {i+1} as id, geom_from_wkt('{str(tri)}')")
-    # print("\nUNION\n".join(selects))
-    # return channel.points
+    channel_parallel_offsets(channel)
+    for tri in channel.triangles:
+        print(tri)
+    print(channel.outline)
+    selects = []
+    for i, tri in enumerate(channel.triangles):
+        selects.append(f"SELECT {i+1} as id, geom_from_wkt('{str(tri)}')")
+    print("\nUNION\n".join(selects))
+    return channel.points
 
 
 run_tests()

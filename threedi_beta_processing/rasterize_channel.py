@@ -3,11 +3,12 @@ from typing import Iterator, List, Union, Set, Tuple
 import numpy as np
 from shapely import wkt
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon
-from shapely.ops import cascaded_union, nearest_points, transform
+from shapely.ops import unary_union, nearest_points, transform
 
 
 def parse_cross_section_table(table: str) -> Tuple[List, List]:
     """Returns [heights], [widths]"""
+    # TODO if there are multiple widths for one height, keep only the highest width
     heights = []
     widths = []
     for row in table.split("\n"):
@@ -41,7 +42,7 @@ def variable_buffer(linestring: LineString, radii: List[float]) -> Polygon:
         MultiPolygon([buffered_points[i], buffered_points[i + 1]]).convex_hull
         for i in range(len(buffered_points) - 1)
     ]
-    result = cascaded_union(convex_hulls)
+    result = unary_union(convex_hulls)
     return result
 
 
@@ -67,16 +68,30 @@ class WidthsNotIncreasingError(ValueError):
     pass
 
 
-class IndexedPoint(Point):
+class IndexedPoint:
     def __init__(self, *args, index: int):
-        super().__init__(*args)
+        self.geom = Point(*args)  # since shapely 2.0, it is no longer possible to add any custom attributes to a Point,
+                                  # so it is impossible to inherit all from Point and add index
         self.index = index
+
+    @property
+    def x(self):
+        return self.geom.x
+
+    @property
+    def y(self):
+        return self.geom.y
+
+    @property
+    def z(self):
+        return self.geom.z
+
 
 
 class Triangle:
     def __init__(self, points: List[IndexedPoint]):
         self.points = points
-        self.geometry = Polygon(LineString(points))
+        self.geometry = Polygon(LineString([point.geom for point in points]))
         self.vertex_indices = [point.index for point in points]
 
     @property
@@ -94,7 +109,7 @@ class Triangle:
             return False
         valid = True
         for start, end in [(0, 1), (0, 2), (1, 2)]:
-            line = LineString([self.points[start], self.points[end]])
+            line = LineString([self.points[start].geom, self.points[end].geom])
             if line.crosses(line_1) or line.crosses(line_2):
                 valid = False
         return valid
@@ -475,7 +490,7 @@ class Channel:
                 po = wedge_fill_points_source.parallel_offset_at(offset)
                 existing_point = po.points[wedge_fill_points_source_idx]
                 wedge_fill_point = IndexedPoint(
-                    existing_point, index=existing_point.index
+                    existing_point.geom, index=existing_point.index
                 )
                 wedge_fill_point.index = last_index + 1
                 wedge_fill_points.append(wedge_fill_point)
@@ -518,8 +533,8 @@ class ParallelOffset:
             raise EmptyOffsetError
         if type(self.geometry) != LineString:
             raise InvalidOffsetError
-        if offset_distance > 0:
-            self.geometry = reverse(self.geometry)
+        # if offset_distance > 0:
+        #     self.geometry = reverse(self.geometry)
         self.offset_distance = offset_distance
         width = np.abs(self.offset_distance * 2)
         cross_section_location_points = []
@@ -548,11 +563,7 @@ class ParallelOffset:
     def points(self):
         result = []
         for i, (x, y) in enumerate(self.geometry.coords):
-            result.append(
-                IndexedPoint(
-                    x, y, self.heights_at_vertices[i], index=self.vertex_indices[i]
-                )
-            )
+            result.append(IndexedPoint(x, y, self.heights_at_vertices[i], index=self.vertex_indices[i]))
         return result
 
     def set_vertex_indices(self, first_vertex_index):
@@ -594,8 +605,8 @@ def triangulate_between(
     :param side_2_points: list of points located along a line on side 2
     :param side_2_distances: distance along the line on which these points are located
     """
-    side_1_line = LineString(side_1_points)
-    side_2_line = LineString(side_2_points)
+    side_1_line = LineString([point.geom for point in side_1_points])
+    side_2_line = LineString([point.geom for point in side_2_points])
     side_1_idx = 0
     side_2_idx = 0
     side_1_last_idx = len(side_1_points) - 1
