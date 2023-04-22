@@ -4,8 +4,6 @@ import os
 ROOT_DIR_FILES = [
     '__init__.py',
     'dem_sampling_algorithms.py',
-    'leak_detector_algorithms.py',
-    'leak_detector.py',
     'metadata.txt',
     'rasterize_channel.py',
     'rasterize_channel_algorithms.py',

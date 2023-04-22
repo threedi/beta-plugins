@@ -6,7 +6,7 @@
 name=3Di Beta Processing
 qgisMinimumVersion=3.22
 description=Processing algorithms for 3Di (beta)
-version=0.4.5
+version=0.5.0
 author=Nelen & Schuurmans
 email=leendert.vanwolfswinkel@nelen-schuurmans.nl
 

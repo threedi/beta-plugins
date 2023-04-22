@@ -75,6 +75,8 @@ def threedigrid_to_ogr(
             KCU_DICT.get, otypes=[str]
         )(threedigrid_src.kcu)
         default_attr_types["kcu_description"] = ogr.OFTString
+        default_attributes["exchange_level"] = threedigrid_src.dpumax.astype(float)
+        default_attr_types["exchange_level"] = ogr.OFTReal
 
     if isinstance(threedigrid_src, Cells) or isinstance(
         threedigrid_src, Nodes
