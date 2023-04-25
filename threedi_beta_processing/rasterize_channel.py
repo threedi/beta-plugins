@@ -129,6 +129,7 @@ class CrossSectionLocation:
         self.bank_level = bank_level
         self.widths = np.array(widths)
         self.heights = np.array(heights) + reference_level
+        self.thalweg_y =
         self.geometry = geometry
         self.parent = parent
 
@@ -137,6 +138,7 @@ class CrossSectionLocation:
         qgs_geometry = feature.geometry()
         wkt_geometry = qgs_geometry.asWkt()
         shapely_geometry = wkt.loads(wkt_geometry)
+        cross_section_shape = feature.attribute("cross_section_shape")
         table = feature.attribute("cross_section_table")
         heights, widths = parse_cross_section_table(table)
 
@@ -527,14 +529,17 @@ class Channel:
 
 class ParallelOffset:
     def __init__(self, parent: Channel, offset_distance):
+        """
+        The side is determined by the sign of the distance parameter (negative for right side offset, positive for left
+        side offset). Left and right are determined by following the direction of the given geometric points of the
+        LineString.
+        """
         self.parent = parent
         self.geometry = parent.geometry.parallel_offset(offset_distance)
         if self.geometry.is_empty:
             raise EmptyOffsetError
         if type(self.geometry) != LineString:
             raise InvalidOffsetError
-        # if offset_distance > 0:
-        #     self.geometry = reverse(self.geometry)
         self.offset_distance = offset_distance
         width = np.abs(self.offset_distance * 2)
         cross_section_location_points = []
