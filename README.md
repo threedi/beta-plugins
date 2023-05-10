@@ -21,10 +21,7 @@ The plugins are developed for QGIS to aid in the modelling with 3Di. They are te
 ## Overview of available beta plugins
 Below the currently available beta plugins are listed. Most plugins have some documentation of their own. Click on the plugin's folder in the overview above to view these.
 
-* apiconsole3di: starts a 3Di simulation through the (deprecated but still operational) API v1. Made by Ivar Lokhorst (Nelen & Schuurmans).
 * build2dmodel: Extracts elevation, landuse and soil rasters from lizard and converts them to proper 3Di rasters. Made by Ivar Lokhorst (Nelen & Schuurmans).
-* edit3dischematisation: alters 1D views to make them editable. Requires loading the model through the threediPlugin. Made by Ivar Lokhorst (Nelen & Schuurmans).
-* import_hydx: imports a GWSW Hydx dataset to a 3Di model. Made by Arnold van 't Veld (Nelen & Schuurmans).
 * pipelevelcalculator: Calculate pipe levels based on a design and DEM. Made by Emile de Badts (Nelen & Schuurmans).
 * resultsdownloader: Searches for 3Di simulation results and facilitates downloading/visualising these. Made by Ivar Lokhorst / Emiel Verstegen (Nelen & Schuurmans).
 * threedi_custom_stats: 3Di Custom Statistics. Calculate custom aggregations (e.g. sum, max, min, first, last, etc) for flow variables (waterlevel, volume, velocity, discharge, etc.). Made by Leendert van Wolfswinkel (Nelen & Schuurmans).
