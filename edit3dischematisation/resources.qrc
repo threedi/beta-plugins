@@ -1,6 +1,0 @@
-<RCC>
-    <qresource prefix="/plugins/Edit3DiSchematisation" >
-        <file>edit_icon.png</file>
-        <file>stopedit_icon.png</file>
-    </qresource>
-</RCC>
