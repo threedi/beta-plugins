@@ -1,3 +1,11 @@
+# TODO for YZ support
+#  - For YZ, the channel geometry is not necessarily located at the (y-dimension) center of the cross-section
+#  - We can assume that the channel geometry is located at the thalweg, i.e. the lowest point in the river bed
+#  - For each cross-section, calculate thalweg location in the Y dimension
+#  - Two option: thalweg is lowest point in cross-section, or thalweg is middle of cross-section
+#  - Instead of widths, use offsets, i.e. Y relative to thalweg (positive for points to the left of the thalweg, negative for points to the right of the thalweg)
+#  - I.e., for tab. trapezium and rectangle, convert widths to offsets
+
 from typing import Iterator, List, Union, Set, Tuple
 
 import numpy as np
@@ -129,7 +137,7 @@ class CrossSectionLocation:
         self.bank_level = bank_level
         self.widths = np.array(widths)
         self.heights = np.array(heights) + reference_level
-        self.thalweg_y =
+        self.thalweg_y = # TODO calculate this as the width at the minimum height
         self.geometry = geometry
         self.parent = parent
 
