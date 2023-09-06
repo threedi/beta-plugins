@@ -528,7 +528,7 @@ class Channel:
 class ParallelOffset:
     def __init__(self, parent: Channel, offset_distance):
         self.parent = parent
-        self.geometry = parent.geometry.parallel_offset(offset_distance)
+        self.geometry = parent.geometry if offset_distance == 0 else parent.geometry.parallel_offset(offset_distance)
         if self.geometry.is_empty:
             raise EmptyOffsetError
         if type(self.geometry) != LineString:
