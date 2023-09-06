@@ -14,7 +14,7 @@ from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 from shapely.ops import unary_union, nearest_points, transform
 
 
-def parse_cross_section_table(table: str) -> Tuple[List, List]:
+def parse_cross_section_table(table: str, yz_output: bool = False) -> Tuple[List, List]:
     """Returns [heights], [widths]"""
     # TODO if there are multiple widths for one height, keep only the highest width
     heights = []
@@ -23,6 +23,13 @@ def parse_cross_section_table(table: str) -> Tuple[List, List]:
         height, width = row.split(",")
         heights.append(float(height))
         widths.append(float(width))
+    if yz_output:
+        heights = list(reversed(heights)) + heights
+        widths_array = np.array(widths)
+        if widths[0] == 0: # do no duplicate middle y value if it is
+            widths = np.hstack([widths_array[0:-1], widths_array + np.max(widths_array)])
+        else:
+            widths = np.hstack([widths_array, widths_array + np.max(widths_array)])
     return heights, widths
 
 
@@ -137,7 +144,6 @@ class CrossSectionLocation:
         self.bank_level = bank_level
         self.widths = np.array(widths)
         self.heights = np.array(heights) + reference_level
-        self.thalweg_y = # TODO calculate this as the width at the minimum height
         self.geometry = geometry
         self.parent = parent
 
@@ -167,6 +173,14 @@ class CrossSectionLocation:
     @property
     def max_width(self):
         return np.max(np.array(self.widths))
+
+    @property
+    def thalweg_y(self):
+        """Returns distance between the start of the cross-section at the left bank and the lowest point of the
+        cross-section"""
+        self.y_ordinates
+        # - Use find_peaks algorithm to get the index of the y value
+        # - Select the y value
 
     def bank_levels_as_list(self, add_value: float) -> List[float]:
         """Return list of the same length as the nr. of cross section table entries, of value bank_level + add_value"""
