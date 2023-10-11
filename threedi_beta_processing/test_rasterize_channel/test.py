@@ -240,9 +240,53 @@ def channel_parallel_offsets(channel):
         "POINT Z (1.414213562373095 -1.414213562373095 12)",
     ]
 
+def channel_parallel_offsets_sjon():
+    channel_geom = LineString([[504780, 1138670], [506413.953763, 1137405.558352], [507387.560077, 1136652.129216]])
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(32648)
+
+    channel = Channel(
+        geometry=channel_geom,
+        connection_node_start_id=1,
+        connection_node_end_id=2,
+        id=1
+    )
+
+    xsec = CrossSectionLocation(
+        reference_level=-1.8,
+        bank_level=2.322,
+        heights=[0.0, 1.2, 3.433, 4.138, 6.069, 7.303, 7.838, 7.967, 10.321, 11.888, 12.603, 13.394, 14.16, 16.059, 16.728, 18.202, 19.562, 20.779, 22.443, 23.8, 24.675, 24.905, 28.586, 28.931, 30.259, 31.319, 32.547, 33.464, 34.698, 36.634, 39.481, 41.137, 43.68, 77.182, 79.4, 80.578, 82.647, 83.618, 85.552, 85.709, 60.724, 42.898, 94.393],
+        widths=[0.0, 0.104, 0.174, 0.245, 0.449, 0.551, 0.594, 0.606, 0.836, 0.953, 0.996, 1.037, 1.076, 1.159, 1.176, 1.208, 1.231, 1.257, 1.284, 1.307, 1.316, 1.32, 1.381, 1.387, 1.404, 1.421, 1.486, 1.539, 1.616, 1.721, 1.898, 2.038, 2.258, 2.31, 2.933, 3.254, 3.938, 3.983, 4.098, 4.122, 4.272, 4.381, 4.672],
+        geometry=Point(506413.953763, 1137405.558352)
+    )
+
+    channel.add_cross_section_location(xsec)
+    channel.generate_parallel_offsets()
+
+    # # assert len(channel.parallel_offsets) == 5
+    # offset_distances = [po.offset_distance for po in channel.parallel_offsets]
+    # print(offset_distances)
+    # print(channel.offset_distances)
+    # assert offset_distances == [2.0, 1.0, 0.0, -1.0, -2.0]
+    #
+    # po1 = channel.parallel_offsets[1]
+    # heights_at_vertices = po1.heights_at_vertices
+    # assert (heights_at_vertices == np.array([11.0, 11.0])).all()
+    # # assert [str(point) for point in po1.points] == ['POINT Z (-0.7071067811865475 0.7071067811865475 1)', 'POINT Z (1.292893218813453 2.707106781186547 1)'].reverse()
+    #
+    # po5 = channel.parallel_offsets[4]
+    # heights_at_vertices = po5.heights_at_vertices
+    # assert (heights_at_vertices == np.array([12.0, 12.0])).all()
+    # points_str = [str(point.geom) for point in po5.points]
+    # print(points_str)
+    # assert points_str == [
+    #     "POINT Z (3.414213562373095 0.5857864376269051 12)",
+    #     "POINT Z (1.414213562373095 -1.414213562373095 12)",
+    # ]
+
 
 def two_vertex_channel():
-    "Test the edge case where all parallel offsets are only two vertices long"
+    """Test the edge case where all parallel offsets are only two vertices long"""
     wkt_geometry = "LineString (0 0, 10 10)"
     channel_geom = wkt.loads(wkt_geometry)
     channel = Channel(
@@ -411,7 +455,8 @@ def run_tests():
     test_find_wedge_channels()
     # fill_wedge()
 
-    channel_parallel_offsets(channel)
+    # channel_parallel_offsets(channel)
+    channel_parallel_offsets_sjon()
     for tri in channel.triangles:
         print(tri)
     print(channel.outline)
@@ -421,5 +466,6 @@ def run_tests():
     print("\nUNION\n".join(selects))
     return channel.points
 
-
+from shapely import __version__ as v
+print(v)
 run_tests()
