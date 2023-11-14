@@ -2,10 +2,10 @@
 #  - For YZ, the channel geometry is not necessarily located at the (y-dimension) center of the cross-section
 #  - We can assume that the channel geometry is located at the thalweg, i.e. the lowest point in the river bed
 #  - For each cross-section, calculate thalweg location in the Y dimension
-#  - Two option: thalweg is lowest point in cross-section, or thalweg is middle of cross-section
+#  - Two options: thalweg is lowest point in cross-section, or thalweg is middle of cross-section
 #  - Instead of widths, use offsets, i.e. Y relative to thalweg (positive for points to the left of the thalweg, negative for points to the right of the thalweg)
 #  - I.e., for tab. trapezium and rectangle, convert widths to offsets
-
+from enum import Enum
 from typing import Iterator, List, Union, Set, Tuple
 
 import numpy as np
@@ -14,23 +14,55 @@ from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 from shapely.ops import unary_union, nearest_points, transform
 
 
-def parse_cross_section_table(table: str, yz_output: bool = False) -> Tuple[List, List]:
-    """Returns [heights], [widths]"""
-    # TODO if there are multiple widths for one height, keep only the highest width
-    heights = []
-    widths = []
-    for row in table.split("\n"):
-        height, width = row.split(",")
-        heights.append(float(height))
-        widths.append(float(width))
-    if yz_output:
-        heights = list(reversed(heights)) + heights
-        widths_array = np.array(widths)
-        if widths[0] == 0: # do no duplicate middle y value if it is
-            widths = np.hstack([widths_array[0:-1], widths_array + np.max(widths_array)])
+WALL_DISPLACEMENT = 0.01  # tops of vertical segments are moved by this amount
+
+
+class SupportedShape(Enum):
+    TABULATED_RECTANGLE = 5
+    TABULATED_TRAPEZIUM = 6
+    YZ = 7
+
+
+def parse_cross_section_table(table: str, cross_section_shape: SupportedShape, wall_displacement: float = 0) -> Tuple[np.array, np.array]:
+    """Returns [y_ordinates], [z_ordinates]"""
+    if cross_section_shape in (SupportedShape.TABULATED_RECTANGLE, SupportedShape.TABULATED_TRAPEZIUM):
+        heights = list()
+        widths = list()
+        for row in table.split("\n"):
+            height, width = row.split(",")
+            if len(heights) == 0:
+                # first pass
+                heights.append(float(height))
+                widths.append(float(width))
+            else:
+                if height == heights[-1]:
+                    width += wall_displacement*2   # *2 because /2 when converting to YZ
+                if cross_section_shape == SupportedShape.TABULATED_RECTANGLE:
+                    # add extra height/width entry to convert tabulated rectangle to tabulated trapezium
+                    heights.append(float(height))
+                    widths.append(float(widths[-1]) + wall_displacement*2)  # *2 because /2 when converting to YZ
+                heights.append(float(height))
+                widths.append(float(width))
+        # convert to YZ
+        if widths[0] == 0:  # do no duplicate middle y value if it is 0
+            y_ordinates = np.hstack([np.flip(widths)/-2, np.array(widths)[1:]/2])
+            z_ordinates = np.hstack([np.flip(heights), np.array(heights)[1:]])
         else:
-            widths = np.hstack([widths_array, widths_array + np.max(widths_array)])
-    return heights, widths
+            y_ordinates = np.hstack([np.flip(widths)/-2, np.array(widths)/2])
+            z_ordinates = np.hstack([np.flip(heights), heights])
+        y_ordinates += np.max(widths)/2
+    elif cross_section_shape in (SupportedShape.YZ):
+        y_list = list()
+        z_list = list()
+        for row in table.split("\n"):
+            y, z = row.split(",")
+            y_list.append(float(y))
+            z_list.append(float(z))
+        y_ordinates = np.array(y_list)
+        z_ordinates = np.array(z_list)
+    else:
+        raise ValueError(f"Unsupported cross_section_shape {cross_section_shape}")
+    return y_ordinates, z_ordinates
 
 
 def reverse(geom):
@@ -100,7 +132,6 @@ class IndexedPoint:
     @property
     def z(self):
         return self.geom.z
-
 
 
 class Triangle:
@@ -177,10 +208,11 @@ class CrossSectionLocation:
     @property
     def thalweg_y(self):
         """Returns distance between the start of the cross-section at the left bank and the lowest point of the
-        cross-section"""
+        cross-section. The thalweg is located at the average y index of all points with the minimum z value"""
         self.y_ordinates
-        # - Use find_peaks algorithm to get the index of the y value
-        # - Select the y value
+        z0_indices = np.where(self.z_ordinates == np.min(self.z_ordinates))
+        thalweg_index = int(np.average(z0_indices))
+        return self.y_ordinates[thalweg_index]
 
     def bank_levels_as_list(self, add_value: float) -> List[float]:
         """Return list of the same length as the nr. of cross section table entries, of value bank_level + add_value"""
