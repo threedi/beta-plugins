@@ -5,7 +5,7 @@ from shapely import wkt
 import pytest
 
 
-from ..rasterize_channel import (
+from rasterize_channel import (
     WALL_DISPLACEMENT,
     IndexedPoint,
     Triangle,
@@ -37,6 +37,14 @@ def test_parse_cross_section_table():
     assert np.all(y == np.array([0, 1, 3, 4]))
     assert np.all(z == np.array([1, 0, 0, 1]))
 
+    # TABULATED TRAPEZIUM WITH THREE ROWS
+    y, z = parse_cross_section_table(
+        table="0, 10.0\n1.0, 20.0\n2.0, 40.0",
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+    )
+    assert np.all(y == np.array([0,     10,     15,     25,     30,     40]))
+    assert np.all(z == np.array([2,    1,     0,      0,      1,     2]))
+
     # TABULATED TRAPEZIUM WITH LOWEST WIDTH = 0
     y, z = parse_cross_section_table(
         table="0, 0\n1, 4",
@@ -54,12 +62,16 @@ def test_parse_cross_section_table():
     )
     assert np.all(y == np.array([0, 2, 4, 8]))
     assert np.all(z == np.array([3, 1, 0, 4]))
+
+    # Invalid shape
     with pytest.raises(ValueError):
         y, z = parse_cross_section_table(
             table="0, 3\n2, 1\n4, 0\n8, 4",
-            cross_section_shape=SupportedShape.YZ,
+            cross_section_shape=1,
             wall_displacement=WALL_DISPLACEMENT
         )
+
+
 
 
 def test_indexed_point():
@@ -70,7 +82,7 @@ def test_indexed_point():
     assert point.z == 48.3
 
 
-def triangle():
+def test_triangle():
     point_coords = {0: (0, 0), 1: (1, 1), 2: (2, 0)}
     indexed_points = [IndexedPoint(val, index=key) for key, val in point_coords.items()]
     tri = Triangle(indexed_points)
@@ -174,29 +186,29 @@ def test_find_wedge_channels():
     return wedge_channels
 
 
-def fill_wedge():
-    channel_1, channel_2 = test_find_wedge_channels()
-    channel_1.generate_parallel_offsets()
-    channel_2.generate_parallel_offsets()
-    channel_1.fill_wedge(channel_2)
-    # print("channel 1 triangles:")
-    # print(channel_1.as_query())
-    # print("channel 2 triangles:")
-    # print(channel_2.as_query())
-    assert len(channel_1._wedge_fill_triangles) == 3
-    assert len(channel_2._wedge_fill_triangles) == 0
-    assert (
-        channel_1._wedge_fill_triangles[0].geometry.wkt
-        == "POLYGON Z ((0 0 0, -0.9805806756909201 0.196116135138184 1, -1 0 1, 0 0 0))"
-    )
-    assert (
-        channel_1._wedge_fill_triangles[1].geometry.wkt
-        == "POLYGON Z ((-1 0 1, -0.9805806756909201 0.196116135138184 1, -1.96116135138184 0.3922322702763681 2, -1 0 1))"
-    )
-    assert (
-        channel_1._wedge_fill_triangles[2].geometry.wkt
-        == "POLYGON Z ((-1 0 1, -1.96116135138184 0.3922322702763681 2, -2 0 2, -1 0 1))"
-    )
+# def test_fill_wedge():
+#     channel_1, channel_2 = test_find_wedge_channels()
+#     channel_1.generate_parallel_offsets()
+#     channel_2.generate_parallel_offsets()
+#     print("channel 1 triangles:")
+#     print(channel_1.as_query())
+#     channel_1.fill_wedge(channel_2)
+#     # print("channel 2 triangles:")
+#     # print(channel_2.as_query())
+#     assert len(channel_1._wedge_fill_triangles) == 3
+#     assert len(channel_2._wedge_fill_triangles) == 0
+#     assert (
+#         channel_1._wedge_fill_triangles[0].geometry.wkt
+#         == "POLYGON Z ((0 0 0, -0.9805806756909201 0.196116135138184 1, -1 0 1, 0 0 0))"
+#     )
+#     assert (
+#         channel_1._wedge_fill_triangles[1].geometry.wkt
+#         == "POLYGON Z ((-1 0 1, -0.9805806756909201 0.196116135138184 1, -1.96116135138184 0.3922322702763681 2, -1 0 1))"
+#     )
+#     assert (
+#         channel_1._wedge_fill_triangles[2].geometry.wkt
+#         == "POLYGON Z ((-1 0 1, -1.96116135138184 0.3922322702763681 2, -2 0 2, -1 0 1))"
+#     )
 
 
 def channel_init():
@@ -214,25 +226,48 @@ def channel_init():
 
 
 def cross_section_location():
+    y, z = parse_cross_section_table(
+        table="0, 0\n1.0, 2.0\n2.0, 4.0",
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+    )
+
     cross_section_loc = CrossSectionLocation(
         reference_level=10.0,
         bank_level=12.0,
-        heights=[0.0, 1.0, 2.0],
-        widths=[0.0, 2.0, 4.0],
+        y_ordinates=y,
+        z_ordinates=z,
         geometry=Point(1, 1),
     )
     return cross_section_loc
 
 
-def cross_section_location_height_at(xsec):
-    assert xsec.height_at(0.0) == 10 + 0.0
-    assert xsec.height_at(1.0) == 10 + 0.5
-    assert xsec.height_at(2.0) == 10 + 1.0
-    assert xsec.height_at(3.0) == 10 + 1.5
-    assert xsec.height_at(5.0) == 10 + 2.0
+def test_cross_section_location_z_at():
+    xsec = cross_section_location()
+    assert xsec.z_at(0.0) == 10 + 2.0
+    assert xsec.z_at(1.0) == 10 + 1.0
+    assert xsec.z_at(2.0) == 10 + 0.0
+    assert xsec.z_at(3.5) == 10 + 1.5
+    assert xsec.z_at(5.0) == 10 + 2.0
 
 
-def channel_vertex_positions(channel):
+def test_cross_section_location_thalweg_y():
+    y, z = parse_cross_section_table(
+        table="0, 10.0\n1.0, 20.0\n2.0, 40.0",
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+    )
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        y_ordinates=y,
+        z_ordinates=z,
+        geometry=Point(0, 0),
+    )
+    assert cross_section_loc.thalweg_y == 20.0
+
+
+def test_channel_vertex_positions():
+    channel = channel_init()
     vp = channel.vertex_positions
     assert (vp == np.array([0, 0.5, 1]) * channel.geometry.length).all()
     assert len(vp) == 3
@@ -243,13 +278,50 @@ def channel_add_cross_section_location(channel, xsec):
     return channel
 
 
-def channel_properties(channel):
-    assert (channel.max_widths == np.array([4.0, 4.0, 4.0])).all()
-    assert (channel.unique_widths == np.array([0.0, 2.0, 4.0])).all()
-    assert (
-        channel.cross_section_location_positions
-        == np.array([0.5 * channel.geometry.length])
-    ).all()
+def test_channel_properties():
+    channel = channel_init()
+    xsec = cross_section_location()
+    print(f"xsec.thalweg_y: {xsec.thalweg_y}")
+    channel_add_cross_section_location(channel, xsec)
+    print(channel.unique_y_ordinates)
+
+    y, z = parse_cross_section_table(
+        table="0, 10.0\n1.0, 20.0\n2.0, 40.0",
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+    )
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        y_ordinates=y,
+        z_ordinates=z,
+        geometry=Point(0, 0),
+    )
+
+    channel_add_cross_section_location(channel, cross_section_loc)
+    print(channel.unique_y_ordinates)
+
+    y, z = parse_cross_section_table(
+        table="0, 0.1\n1.0, 0.2\n2.0, 0.4",
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+    )
+
+    cross_section_loc = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        y_ordinates=y,
+        z_ordinates=z,
+        geometry=Point(2, 2),
+    )
+
+    channel_add_cross_section_location(channel, cross_section_loc)
+
+    assert np.all(channel.max_widths == np.array([40.0, 4.0, 0.4]))
+    assert np.allclose(channel.unique_y_ordinates, np.array(
+            [-20.00, -10.00, -5.00, -2.00, -1.00, -0.20,  -0.10,  -0.05,  0.00, 0.05,  0.10,  0.20,  1.00, 2.00, 5.00, 10.00, 20.00]
+        )
+    )
+    assert np.all(channel.cross_section_location_positions == np.array([0.5 * channel.geometry.length]))
     print(str(channel.outline))
     assert (
         str(channel.outline)
@@ -433,14 +505,18 @@ def parallel_offset_heights_at_vertices():
 
 
 def run_tests():
-    test_parse_cross_section_table()
+    # test_parse_cross_section_table()
+    # test_cross_section_location_thalweg_y()
     # indexed_point()
     # triangle()
     # channel = channel_init()
-    # channel_vertex_positions(channel)
+    test_channel_properties()
+    # test_channel_vertex_positions()
     # xsec = cross_section_location()
-    # cross_section_location_height_at(xsec)
     # channel_add_cross_section_location(channel, xsec)
+    # test_cross_section_location_z_at()
+    # test_fill_wedge()
+
     # # channel_properties(channel)
     # channel_max_width_at(channel)
     # channel.generate_parallel_offsets()

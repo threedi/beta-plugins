@@ -16,6 +16,12 @@ from shapely.ops import unary_union, nearest_points, transform
 
 WALL_DISPLACEMENT = 0.01  # tops of vertical segments are moved by this amount
 
+# Shapely method "offset_curve" docs: The side is determined by the sign of the distance parameter
+# (negative for right side offset, positive for left side offset). Left and right are determined by following
+# the direction of the given geometric points of the LineString.
+RIGHT = -1
+LEFT = 1
+
 
 class SupportedShape(Enum):
     TABULATED_RECTANGLE = 5
@@ -114,6 +120,17 @@ class WidthsNotIncreasingError(ValueError):
 
     pass
 
+class MinYNotZeroError(ValueError):
+    """"Raised when a YZ cross-section's lowest value is not 0"""
+
+    pass
+
+
+class YNotIncreasingError(ValueError):
+    """Raised when one a Y value of a YZ cross section <= than the previous Y of that crosssection"""
+
+    pass
+
 
 class IndexedPoint:
     def __init__(self, *args, index: int):
@@ -166,15 +183,30 @@ class CrossSectionLocation:
         self,
         reference_level: float,
         bank_level: float,
-        widths: List[float],
-        heights: List[float],
+        y_ordinates: np.array,
+        z_ordinates: np.array,
         geometry: Point,
         parent=None,
     ):
+        """
+        Note: adds reference level to z_ordinates
+
+        :param reference_level:
+        :param bank_level:
+        :param y_ordinates: Use ``parse_cross_section_table`` to convert tabulated to yz
+        :param z_ordinates: Use ``parse_cross_section_table`` to convert tabulated to yz. Input has 0 as lowest z.
+        :param geometry:
+        :param parent:
+        """
+        if not np.min(y_ordinates) == 0:
+            raise MinYNotZeroError
+        if not np.all(y_ordinates[1:] > y_ordinates[0:-1]):
+            raise YNotIncreasingError
+
         self.reference_level = reference_level
         self.bank_level = bank_level
-        self.widths = np.array(widths)
-        self.heights = np.array(heights) + reference_level
+        self.y_ordinates = y_ordinates
+        self.z_ordinates = z_ordinates + reference_level
         self.geometry = geometry
         self.parent = parent
 
@@ -185,14 +217,18 @@ class CrossSectionLocation:
         shapely_geometry = wkt.loads(wkt_geometry)
         cross_section_shape = feature.attribute("cross_section_shape")
         table = feature.attribute("cross_section_table")
-        heights, widths = parse_cross_section_table(table)
+        y, z = parse_cross_section_table(
+            table=table,
+            cross_section_shape=cross_section_shape,
+            wall_displacement=WALL_DISPLACEMENT
+        )
 
         return cls(
             geometry=shapely_geometry,
             reference_level=feature.attribute("reference_level"),
             bank_level=feature.attribute("bank_level"),
-            widths=widths,
-            heights=heights,
+            y_ordinates=y,
+            z_ordinates=z,
         )
 
     @property
@@ -203,30 +239,32 @@ class CrossSectionLocation:
 
     @property
     def max_width(self):
-        return np.max(np.array(self.widths))
+        return np.max(self.y_ordinates)
 
     @property
     def thalweg_y(self):
         """Returns distance between the start of the cross-section at the left bank and the lowest point of the
         cross-section. The thalweg is located at the average y index of all points with the minimum z value"""
-        self.y_ordinates
-        z0_indices = np.where(self.z_ordinates == np.min(self.z_ordinates))
-        thalweg_index = int(np.average(z0_indices))
-        return self.y_ordinates[thalweg_index]
+        z0_indices = np.where(self.z_ordinates == np.min(self.z_ordinates))[0]
+        average_z0_index = np.average(z0_indices)
+        if int(average_z0_index) == average_z0_index:
+            return self.y_ordinates[int(average_z0_index)]
+        else:
+            # linear interpolation between y before and y after, only using y's where z=min(z)
+            z0_index_before = z0_indices[z0_indices < average_z0_index][-1]
+            z0_index_after = z0_indices[z0_indices > average_z0_index][0]
+            y_before = self.y_ordinates[z0_index_before]
+            y_after = self.y_ordinates[z0_index_after]
+            return y_before + ((average_z0_index-z0_index_before)/(z0_index_after-z0_index_before))*(y_after-y_before)
 
-    def bank_levels_as_list(self, add_value: float) -> List[float]:
-        """Return list of the same length as the nr. of cross section table entries, of value bank_level + add_value"""
-        return [self.bank_level + add_value] * len(self.heights)
+    @property
+    def y_ordinates_relative_to_thalweg(self):
+        return self.y_ordinates - self.thalweg_y
 
-    def elevations(self, add_value: float) -> List[float]:
-        """Return list of cross section heights + add_value, but absolute instead of relevant to reference level"""
-        return [height + self.reference_level + add_value for height in self.heights]
-
-    def height_at(self, width: float) -> float:
-        """Get interpolated height at given width"""
-        if np.any(np.diff(self.widths) < 0):
-            raise WidthsNotIncreasingError
-        return np.interp(width, self.widths, self.heights)
+    def z_at(self, y: float, relative_to_thalweg: bool = False) -> float:
+        """Get interpolated z at given y"""
+        y_values = self.y_ordinates_relative_to_thalweg if relative_to_thalweg else self.y_ordinates
+        return np.interp(y, y_values, self.z_ordinates)
 
 
 class Channel:
@@ -240,9 +278,9 @@ class Channel:
         self.id = id
         self.connection_node_start_id = connection_node_start_id
         self.connection_node_end_id = connection_node_end_id
-        self.cross_section_locations = []
-        self.geometry = geometry
-        self.parallel_offsets = []
+        self.cross_section_locations: List[CrossSectionLocation] = []
+        self.geometry: LineString = geometry
+        self.parallel_offsets: List[ParallelOffset] = []
         self._wedge_fill_points = []
         self._wedge_fill_triangles = []
         self._extra_outline = []
@@ -268,21 +306,11 @@ class Channel:
         return np.array([x.max_width for x in self.cross_section_locations])
 
     @property
-    def unique_widths(self) -> np.array:
-        widths_list = [x.widths for x in self.cross_section_locations]
-        widths = np.hstack(widths_list)
-        unique_widths = np.unique(widths)
-        result = np.array(unique_widths)
-        return result
-
-    @property
-    def offset_distances(self) -> np.array:
-        negatives = [-width / 2 for width in self.unique_widths if width > 0]
-        negatives.reverse()
-        positives = [width / 2 for width in self.unique_widths]
-        result = negatives + positives
-        result.reverse()
-        return np.array(result)
+    def unique_y_ordinates(self) -> np.array:
+        """Unique y ordinates relative to thalweg for entire channel"""
+        y_list = [x.y_ordinates_relative_to_thalweg for x in self.cross_section_locations]
+        all_ys_array = np.hstack(y_list)
+        return np.array(np.unique(all_ys_array))
 
     @property
     def cross_section_location_positions(self) -> np.array:
@@ -324,9 +352,9 @@ class Channel:
         Offsets are sorted from left to right
         """
         self.parallel_offsets = []
-        for offset_distance in self.offset_distances:
+        for y in self.unique_y_ordinates:
             self.parallel_offsets.append(
-                ParallelOffset(parent=self, offset_distance=offset_distance)
+                ParallelOffset(parent=self, offset_distance=y*-1)  # *-1 because negative = right for Shapely
             )
 
         last_vertex_index = (
@@ -337,11 +365,15 @@ class Channel:
             last_vertex_index = po.vertex_indices[-1]
 
     def parallel_offset_at(self, offset_distance):
-        if offset_distance not in self.offset_distances:
+        """
+        Find the ParallelOffset at given ``offset_distance``
+        To convert y ordinates relative to thalweg to offset_distances, multiply by -1
+        """
+        if offset_distance * -1 not in self.unique_y_ordinates:
             raise ValueError(
                 f"Parallel offset not found at offset distance {offset_distance}. "
                 f"Channel between nodes {self.connection_node_start_id} and "
-                f"{self.connection_node_end_id}. Available offset distances: {self.offset_distances}"
+                f"{self.connection_node_end_id}. Available offset distances: {self.unique_y_ordinates * -1}"
             )
         for po in self.parallel_offsets:
             if po.offset_distance == offset_distance:
@@ -349,7 +381,7 @@ class Channel:
         raise ValueError(
             f"Parallel offset not found at offset distance {offset_distance}. "
             f"Channel between nodes {self.connection_node_start_id} and "
-            f"{self.connection_node_end_id}. Available offset distances: {self.offset_distances}"
+            f"{self.connection_node_end_id}. Available offset distances: {self.unique_y_ordinates * -1}"
         )
 
     @property
@@ -446,131 +478,129 @@ class Channel:
         second_point = self.find_vertex(connection_node_id, 1)
         return azimuth(connection_node_geometry, second_point)
 
-    def fill_wedge(self, other):
-        """Add points and triangles to fill the wedge-shaped gap between self and other. Also updates self.outline"""
-        # Find out if and how self and other_channel are connected
-        # -->-->
-        if self.connection_node_end_id == other.connection_node_start_id:
-            channel_to_update = self
-            channel_to_update_idx = -1  # end
-            if ccw_angle(self, other) > 180:
-                channel_to_update_side = 1  # right
-                wedge_fill_points_source_side = 1  # right
-            else:
-                channel_to_update_side = -1  # left
-                wedge_fill_points_source_side = -1  # left
-            wedge_fill_points_source = other
-            wedge_fill_points_source_idx = 0  # start
-        # --><--
-        elif self.connection_node_end_id == other.connection_node_end_id:
-            channel_to_update = self
-            channel_to_update_idx = -1  # end
-            if ccw_angle(self, other) > 180:
-                channel_to_update_side = 1  # right
-                wedge_fill_points_source_side = -1  # left
-            else:
-                channel_to_update_side = -1  # left
-                wedge_fill_points_source_side = 1  # right
-            wedge_fill_points_source = other
-            wedge_fill_points_source_idx = -1  # end
-        # <---->
-        elif self.connection_node_start_id == other.connection_node_start_id:
-            channel_to_update = self
-            channel_to_update_idx = 0  # start
-            if ccw_angle(self, other) > 180:
-                channel_to_update_side = -1  # left
-                wedge_fill_points_source_side = 1  # right
-            else:
-                channel_to_update_side = 1  # right
-                wedge_fill_points_source_side = -1  # left
-            wedge_fill_points_source = other
-            wedge_fill_points_source_idx = 0  # start
-        # <--<--
-        elif self.connection_node_start_id == other.connection_node_end_id:
-            channel_to_update = other
-            channel_to_update_idx = -1  # end
-            wedge_fill_points_source = self
-            wedge_fill_points_source_idx = 0  # start
-            if ccw_angle(self, other) > 180:
-                channel_to_update_side = -1  # left
-                wedge_fill_points_source_side = -1  # left
-            else:
-                channel_to_update_side = 1  # right
-                wedge_fill_points_source_side = 1  # right
-        # -->                               -->
-        else:
-            raise ValueError("Channels are not connected")
-
-        channel_to_update_offsets = []
-        wedge_fill_points_source_offsets = [0]
-        channel_to_update_points = []
-        last_index = channel_to_update.parallel_offsets[-1].vertex_indices[-1]
-
-        # the point where the two channels meet (connection node) has to be included in the wedge fill points
-        # if any of the channels does have a width starting at 0, we use that point
-        # if neither channel has a width starting at 0, the x, y, z and index have to be calculated
-        wedge_fill_points = []
-        if 0 in channel_to_update.unique_widths:
-            po = channel_to_update.parallel_offset_at(0)
-            wedge_fill_points.append(po.points[channel_to_update_idx])
-        elif 0 in wedge_fill_points_source.unique_widths:
-            po = wedge_fill_points_source.parallel_offset_at(0)
-            wedge_fill_points.append(po.points[wedge_fill_points_source_idx])
-        else:
-            first_width = channel_to_update.unique_widths[0]
-            po_1 = channel_to_update.parallel_offset_at(first_width / 2)
-            point_1 = po_1.points[channel_to_update_idx]
-            po_2 = channel_to_update.parallel_offset_at(-1 * first_width / 2)
-            point_2 = po_2.points[channel_to_update_idx]
-            x = (point_1.x + point_2.x) / 2
-            y = (point_1.y + point_2.y) / 2
-            z = (point_1.z + point_2.z) / 2
-            point_to_add = IndexedPoint(x, y, z, index=last_index + 1)
-            wedge_fill_points.append(point_to_add)
-            last_index += 1
-
-        for i, width in enumerate(channel_to_update.unique_widths):
-            if width > 0:
-                channel_to_update_offsets.append(width / 2)
-                offset = width * channel_to_update_side / 2
-                po = channel_to_update.parallel_offset_at(offset)
-                channel_to_update_points.append(po.points[channel_to_update_idx])
-
-        # Append start or end vertices of all other_channel's parallel offsets to self._wedge_fill_points
-        # left is negative, right is positive
-
-        for width in wedge_fill_points_source.unique_widths:
-            if width > 0:
-                wedge_fill_points_source_offsets.append(width / 2)
-                offset = width * wedge_fill_points_source_side / 2
-                po = wedge_fill_points_source.parallel_offset_at(offset)
-                existing_point = po.points[wedge_fill_points_source_idx]
-                wedge_fill_point = IndexedPoint(
-                    existing_point.geom, index=existing_point.index
-                )
-                wedge_fill_point.index = last_index + 1
-                wedge_fill_points.append(wedge_fill_point)
-                last_index += 1
-
-        # Generate triangles to connect the added points to the existing points
-        for triangle in triangulate_between(
-            side_1_points=channel_to_update_points,
-            side_1_distances=channel_to_update_offsets,
-            side_2_points=wedge_fill_points,
-            side_2_distances=wedge_fill_points_source_offsets,
-        ):
-            self._wedge_fill_triangles.append(triangle)
-        channel_to_update._wedge_fill_points += wedge_fill_points
-        extra_point = Point(
-            wedge_fill_points_source.geometry.coords[wedge_fill_points_source_idx]
-        )
-        position = (
-            0
-            if wedge_fill_points_source_idx == 0
-            else wedge_fill_points_source.geometry.length
-        )
-        width_at_extra_point = wedge_fill_points_source.max_width_at(position)
-        self._extra_outline.append(extra_point.buffer(width_at_extra_point / 2))
+    # def fill_wedge(self, other):
+    #     """Add points and triangles to fill the wedge-shaped gap between self and other. Also updates self.outline"""
+    #     # Find out if and how self and other_channel are connected
+    #     # -->-->
+    #     if self.connection_node_end_id == other.connection_node_start_id:
+    #         channel_to_update = self
+    #         channel_to_update_idx = -1  # end
+    #         if ccw_angle(self, other) > 180:
+    #             channel_to_update_side = RIGHT
+    #             wedge_fill_points_source_side = RIGHT
+    #         else:
+    #             channel_to_update_side = LEFT
+    #             wedge_fill_points_source_side = LEFT
+    #         wedge_fill_points_source = other
+    #         wedge_fill_points_source_idx = 0  # start
+    #     # --><--
+    #     elif self.connection_node_end_id == other.connection_node_end_id:
+    #         channel_to_update = self
+    #         channel_to_update_idx = -1  # end
+    #         if ccw_angle(self, other) > 180:
+    #             channel_to_update_side = RIGHT
+    #             wedge_fill_points_source_side = LEFT
+    #         else:
+    #             channel_to_update_side = LEFT
+    #             wedge_fill_points_source_side = RIGHT
+    #         wedge_fill_points_source = other
+    #         wedge_fill_points_source_idx = -1  # end
+    #     # <---->
+    #     elif self.connection_node_start_id == other.connection_node_start_id:
+    #         channel_to_update = self
+    #         channel_to_update_idx = 0  # start
+    #         if ccw_angle(self, other) > 180:
+    #             channel_to_update_side = LEFT
+    #             wedge_fill_points_source_side = RIGHT
+    #         else:
+    #             channel_to_update_side = RIGHT
+    #             wedge_fill_points_source_side = LEFT
+    #         wedge_fill_points_source = other
+    #         wedge_fill_points_source_idx = 0  # start
+    #     # <--<--
+    #     elif self.connection_node_start_id == other.connection_node_end_id:
+    #         channel_to_update = other
+    #         channel_to_update_idx = -1  # end
+    #         wedge_fill_points_source = self
+    #         wedge_fill_points_source_idx = 0  # start
+    #         if ccw_angle(self, other) > 180:
+    #             channel_to_update_side = LEFT
+    #             wedge_fill_points_source_side = LEFT
+    #         else:
+    #             channel_to_update_side = RIGHT
+    #             wedge_fill_points_source_side = RIGHT
+    #     # -->                               -->
+    #     else:
+    #         raise ValueError("Channels are not connected")
+    #
+    #     channel_to_update_offsets = []
+    #     wedge_fill_points_source_offsets = [0]
+    #     channel_to_update_points = []
+    #     last_index = channel_to_update.parallel_offsets[-1].vertex_indices[-1]
+    #
+    #     # the point where the two channels meet (connection node) has to be included in the wedge fill points
+    #     # if any of the channels does have a width starting at 0, we use that point
+    #     # if neither channel has a width starting at 0, the x, y, z and index have to be calculated
+    #     wedge_fill_points = []
+    #     if 0 in channel_to_update.unique_y_ordinates:
+    #         po = channel_to_update.parallel_offset_at(0)
+    #         wedge_fill_points.append(po.points[channel_to_update_idx])
+    #     elif 0 in wedge_fill_points_source.unique_y_ordinates:
+    #         po = wedge_fill_points_source.parallel_offset_at(0)
+    #         wedge_fill_points.append(po.points[wedge_fill_points_source_idx])
+    #     else:
+    #         first_width = channel_to_update.unique_y_ordinates[0]
+    #         po_1 = channel_to_update.parallel_offset_at(first_width / 2)
+    #         point_1 = po_1.points[channel_to_update_idx]
+    #         po_2 = channel_to_update.parallel_offset_at(-1 * first_width / 2)
+    #         point_2 = po_2.points[channel_to_update_idx]
+    #         x = (point_1.x + point_2.x) / 2
+    #         y = (point_1.y + point_2.y) / 2
+    #         z = (point_1.z + point_2.z) / 2
+    #         point_to_add = IndexedPoint(x, y, z, index=last_index + 1)
+    #         wedge_fill_points.append(point_to_add)
+    #         last_index += 1
+    #
+    #     offsets_to_add = [y for y in channel_to_update.unique_y_ordinates if y * channel_to_update_side > 0]
+    #     for i, offset in enumerate(offsets_to_add):
+    #         channel_to_update_offsets.append(offset)
+    #         po = channel_to_update.parallel_offset_at(offset)
+    #         channel_to_update_points.append(po.points[channel_to_update_idx])
+    #
+    #     # Append start or end vertices of all other_channel's parallel offsets to self._wedge_fill_points
+    #     # left is positive, right is negative
+    #
+    #     offsets_to_add = [y for y in wedge_fill_points_source.unique_y_ordinates if y * wedge_fill_points_source_side > 0]
+    #     for offset in offsets_to_add:
+    #         wedge_fill_points_source_offsets.append(offset)
+    #         po = wedge_fill_points_source.parallel_offset_at(offset)
+    #         existing_point = po.points[wedge_fill_points_source_idx]
+    #         wedge_fill_point = IndexedPoint(
+    #             existing_point.geom, index=existing_point.index
+    #         )
+    #         wedge_fill_point.index = last_index + 1
+    #         wedge_fill_points.append(wedge_fill_point)
+    #         last_index += 1
+    #
+    #     # Generate triangles to connect the added points to the existing points
+    #     for triangle in triangulate_between(
+    #         side_1_points=channel_to_update_points,
+    #         side_1_distances=channel_to_update_offsets,
+    #         side_2_points=wedge_fill_points,
+    #         side_2_distances=wedge_fill_points_source_offsets,
+    #     ):
+    #         self._wedge_fill_triangles.append(triangle)
+    #     channel_to_update._wedge_fill_points += wedge_fill_points
+    #     extra_point = Point(
+    #         wedge_fill_points_source.geometry.coords[wedge_fill_points_source_idx]
+    #     )
+    #     position = (
+    #         0
+    #         if wedge_fill_points_source_idx == 0
+    #         else wedge_fill_points_source.geometry.length
+    #     )
+    #     width_at_extra_point = wedge_fill_points_source.max_width_at(position)
+    #     self._extra_outline.append(extra_point.buffer(width_at_extra_point / 2))
 
     def as_query(self):
         selects = []
@@ -605,8 +635,8 @@ class ParallelOffset:
         cross_section_location_positions = [
             self.geometry.project(point) for point in cross_section_location_points
         ]
-        heights_at_cross_sections = [
-            xsec.height_at(width) for xsec in self.parent.cross_section_locations
+        z_ordinates_at_cross_sections = [
+            xsec.z_at(self.offset_distance, relative_to_thalweg=True) for xsec in self.parent.cross_section_locations
         ]
         self.vertex_positions = [
             self.geometry.project(Point(vertex)) for vertex in self.geometry.coords
@@ -614,7 +644,7 @@ class ParallelOffset:
         self.heights_at_vertices = np.interp(
             self.vertex_positions,
             cross_section_location_positions,
-            heights_at_cross_sections,
+            z_ordinates_at_cross_sections,
         )
         self.vertex_indices = None
 
