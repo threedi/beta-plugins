@@ -2,28 +2,46 @@ import numpy as np
 from osgeo import osr
 from shapely.geometry import LineString, Point
 from shapely import wkt
+import pytest
 
-try:
-    from rasterize_channel import (
-        IndexedPoint,
-        Triangle,
-        Channel,
-        CrossSectionLocation,
-        find_wedge_channels,
-        fill_wedges,
+
+from ..rasterize_channel import (
+    WALL_DISPLACEMENT,
+    IndexedPoint,
+    Triangle,
+    Channel,
+    CrossSectionLocation,
+    SupportedShape,
+    find_wedge_channels,
+    fill_wedges,
+    parse_cross_section_table,
+)
+
+
+def test_parse_cross_section_table():
+    y, z = parse_cross_section_table(
+        table="0, 2\n1, 4",
+        cross_section_shape=SupportedShape.TABULATED_RECTANGLE,
+        wall_displacement=WALL_DISPLACEMENT
     )
-except ImportError:
-    from threedi_beta_processing.rasterize_channel import (
-        IndexedPoint,
-        Triangle,
-        Channel,
-        CrossSectionLocation,
-        find_wedge_channels,
-        fill_wedges,
-    )
+    assert np.all(y == np.array([0, 0.99, 1, 3, 3.01, 4]))
+    assert np.all(z == np.array([1, 1, 0, 0, 1, 1]))
+
+    #
+    # y, z = parse_cross_section_table(table="0, 2\n1, 4", cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM)
+    # # expected y: 0 1   3   4
+    # # expected z: 1 0   0   1
+    #
+    # y, z = parse_cross_section_table(table="0, 0\n1, 4", cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM)
+    # # expected y: 0 2   4
+    # # expected z: 1 0   1
+    #
+    # y, z = parse_cross_section_table(table="0, 3\n2, 1\n4, 0\n8, 4", cross_section_shape=SupportedShape.YZ))
+    # # expected y: 0 2   4   8
+    # # expected z: 3 1   0   4
 
 
-def indexed_point():
+def test_indexed_point():
     point = IndexedPoint(3.4, 2.4, np.float64(48.3), index=3)
     assert point.index == 3
     assert point.x == 3.4
@@ -394,32 +412,33 @@ def parallel_offset_heights_at_vertices():
 
 
 def run_tests():
-    indexed_point()
-    triangle()
-    channel = channel_init()
-    channel_vertex_positions(channel)
-    xsec = cross_section_location()
-    cross_section_location_height_at(xsec)
-    channel_add_cross_section_location(channel, xsec)
-    # channel_properties(channel)
-    channel_max_width_at(channel)
-    channel.generate_parallel_offsets()
-    two_vertex_channel()
-    wedge_on_both_sides()
-    parallel_offset_heights_at_vertices()
-    # cross_section_starting_at_0_0()
-    test_find_wedge_channels()
-    # fill_wedge()
-
-    channel_parallel_offsets(channel)
-    for tri in channel.triangles:
-        print(tri)
-    print(channel.outline)
-    selects = []
-    for i, tri in enumerate(channel.triangles):
-        selects.append(f"SELECT {i+1} as id, geom_from_wkt('{str(tri)}')")
-    print("\nUNION\n".join(selects))
-    return channel.points
+    test_parse_cross_section_table()
+    # indexed_point()
+    # triangle()
+    # channel = channel_init()
+    # channel_vertex_positions(channel)
+    # xsec = cross_section_location()
+    # cross_section_location_height_at(xsec)
+    # channel_add_cross_section_location(channel, xsec)
+    # # channel_properties(channel)
+    # channel_max_width_at(channel)
+    # channel.generate_parallel_offsets()
+    # two_vertex_channel()
+    # wedge_on_both_sides()
+    # parallel_offset_heights_at_vertices()
+    # # cross_section_starting_at_0_0()
+    # test_find_wedge_channels()
+    # # fill_wedge()
+    #
+    # channel_parallel_offsets(channel)
+    # for tri in channel.triangles:
+    #     print(tri)
+    # print(channel.outline)
+    # selects = []
+    # for i, tri in enumerate(channel.triangles):
+    #     selects.append(f"SELECT {i+1} as id, geom_from_wkt('{str(tri)}')")
+    # print("\nUNION\n".join(selects))
+    # return channel.points
 
 
 run_tests()
