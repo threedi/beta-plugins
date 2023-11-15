@@ -51,7 +51,7 @@ def parse_cross_section_table(table: str, cross_section_shape: SupportedShape, w
             y_ordinates = np.hstack([np.flip(widths)/-2, np.array(widths)/2])
             z_ordinates = np.hstack([np.flip(heights), heights])
         y_ordinates += np.max(widths)/2
-    elif cross_section_shape in (SupportedShape.YZ):
+    elif cross_section_shape == SupportedShape.YZ:
         y_list = list()
         z_list = list()
         for row in table.split("\n"):

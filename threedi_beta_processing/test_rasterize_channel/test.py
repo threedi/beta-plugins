@@ -19,6 +19,7 @@ from ..rasterize_channel import (
 
 
 def test_parse_cross_section_table():
+    # TABULATED RECTANGLE
     y, z = parse_cross_section_table(
         table="0, 2\n1, 4",
         cross_section_shape=SupportedShape.TABULATED_RECTANGLE,
@@ -27,18 +28,38 @@ def test_parse_cross_section_table():
     assert np.all(y == np.array([0, 0.99, 1, 3, 3.01, 4]))
     assert np.all(z == np.array([1, 1, 0, 0, 1, 1]))
 
-    #
-    # y, z = parse_cross_section_table(table="0, 2\n1, 4", cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM)
-    # # expected y: 0 1   3   4
-    # # expected z: 1 0   0   1
-    #
-    # y, z = parse_cross_section_table(table="0, 0\n1, 4", cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM)
-    # # expected y: 0 2   4
-    # # expected z: 1 0   1
-    #
-    # y, z = parse_cross_section_table(table="0, 3\n2, 1\n4, 0\n8, 4", cross_section_shape=SupportedShape.YZ))
-    # # expected y: 0 2   4   8
-    # # expected z: 3 1   0   4
+    # TABULATED TRAPEZIUM
+    y, z = parse_cross_section_table(
+        table="0, 2\n1, 4",
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM,
+        wall_displacement=WALL_DISPLACEMENT
+    )
+    assert np.all(y == np.array([0, 1, 3, 4]))
+    assert np.all(z == np.array([1, 0, 0, 1]))
+
+    # TABULATED TRAPEZIUM WITH LOWEST WIDTH = 0
+    y, z = parse_cross_section_table(
+        table="0, 0\n1, 4",
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM,
+        wall_displacement=WALL_DISPLACEMENT
+    )
+    assert np.all(y == np.array([0, 2, 4]))
+    assert np.all(z == np.array([1, 0, 1]))
+
+    # YZ
+    y, z = parse_cross_section_table(
+        table="0, 3\n2, 1\n4, 0\n8, 4",
+        cross_section_shape=SupportedShape.YZ,
+        wall_displacement=WALL_DISPLACEMENT
+    )
+    assert np.all(y == np.array([0, 2, 4, 8]))
+    assert np.all(z == np.array([3, 1, 0, 4]))
+    with pytest.raises(ValueError):
+        y, z = parse_cross_section_table(
+            table="0, 3\n2, 1\n4, 0\n8, 4",
+            cross_section_shape=SupportedShape.YZ,
+            wall_displacement=WALL_DISPLACEMENT
+        )
 
 
 def test_indexed_point():
