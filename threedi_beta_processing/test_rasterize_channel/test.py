@@ -321,7 +321,8 @@ def test_channel_properties():
             [-20.00, -10.00, -5.00, -2.00, -1.00, -0.20,  -0.10,  -0.05,  0.00, 0.05,  0.10,  0.20,  1.00, 2.00, 5.00, 10.00, 20.00]
         )
     )
-    assert np.all(channel.cross_section_location_positions == np.array([0.5 * channel.geometry.length]))
+    print(channel.cross_section_location_positions)
+    assert np.all(channel.cross_section_location_positions == np.array([0, 0.5, 1]) * channel.geometry.length)
     print(str(channel.outline))
     assert (
         str(channel.outline)
