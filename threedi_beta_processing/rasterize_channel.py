@@ -12,9 +12,6 @@ from shapely import wkt
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 from shapely.ops import unary_union, nearest_points, transform
 
-
-WALL_DISPLACEMENT = 0.01  # tops of vertical segments are moved by this amount
-
 # Shapely method "offset_curve" docs: The side is determined by the sign of the distance parameter
 # (negative for right side offset, positive for left side offset). Left and right are determined by following
 # the direction of the given geometric points of the LineString.
@@ -85,6 +82,11 @@ def parse_cross_section_table(
 
     else:
         raise ValueError(f"Unsupported cross_section_shape {cross_section_shape}")
+    # simplify with wall_displacement as tolerance
+    linestring = LineString(np.dstack([y_ordinates, z_ordinates])[0])
+    linestring.simplify(wall_displacement)
+    coord_array = linestring.coords.xy
+    y_ordinates, z_ordinates = np.array(coord_array)
     # apply wall displacement to vertical segments
     while not is_monotonically_increasing(y_ordinates):
         y_ordinates[1:][y_ordinates[1:] == y_ordinates[0:-1]] += wall_displacement
@@ -245,7 +247,11 @@ class CrossSectionLocation:
         self.parent = parent
 
     @classmethod
-    def from_qgs_feature(cls, feature):
+    def from_qgs_feature(cls, feature, wall_displacement: float):
+        """
+        wall_displacement is used as simplify tolerance for the cross-section. remaining vertical segments are made
+        diagonal by displacing the top or bottom by wall_displacement
+        """
         qgs_geometry = feature.geometry()
         wkt_geometry = qgs_geometry.asWkt()
         shapely_geometry = wkt.loads(wkt_geometry)
@@ -254,7 +260,7 @@ class CrossSectionLocation:
         y, z = parse_cross_section_table(
             table=table,
             cross_section_shape=cross_section_shape,
-            wall_displacement=WALL_DISPLACEMENT
+            wall_displacement=wall_displacement
         )
 
         return cls(

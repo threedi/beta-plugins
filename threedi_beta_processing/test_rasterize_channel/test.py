@@ -4,8 +4,8 @@ from shapely import wkt
 import pytest
 import matplotlib.pyplot as plt
 
+
 from ..rasterize_channel import (
-    WALL_DISPLACEMENT,
     IndexedPoint,
     Triangle,
     Channel,
@@ -15,6 +15,9 @@ from ..rasterize_channel import (
     # fill_wedges,
     parse_cross_section_table,
 )
+
+
+WALL_DISPLACEMENT = 0.01  # tops or bottoms of vertical segments are moved by this amount
 
 
 # Generate test data

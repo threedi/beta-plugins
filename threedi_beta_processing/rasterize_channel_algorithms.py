@@ -164,7 +164,8 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             ) in cross_section_location_features.getFeatures():
                 if channel_id == cross_section_location_feature.attribute("channel_id"):
                     cross_section_location = CrossSectionLocation.from_qgs_feature(
-                        cross_section_location_feature
+                        cross_section_location_feature,
+                        wall_displacement=pixel_size
                     )
                     channel.add_cross_section_location(cross_section_location)
             try:
@@ -413,8 +414,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             <li>Please run the 3Di Check Schematisation algorithm and resolve any issues relating to channels or cross section locations before running this algorithm</li>
             <li>Use the <em>3Di Schematisation Editor &gt; Load from spatialite</em> to create the required input layers for the algorithm.</li>
             <li>Some channels cannot be (fully) rasterized, e.g. wide cross section definitions on channels with sharp bends may lead to self-intersection of the described cross-section</li>
-            <li>Tabulated trapezium cross sections are fully supported</li>
-            <li>Tabulated rectangle cross sections will be processed as tabulated trapezium profiles</li>
+            <li>Tabulated trapezium, Tabulated rectangle, and YZ cross-sections are supported, as long as they always become wider when going up (vertical segments are allowed).</li>
             <li>Other cross section shapes are not supported</li>
             </ul>
             <h3>Parameters</h3>
