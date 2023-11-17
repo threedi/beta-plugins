@@ -28,6 +28,10 @@ class SupportedShape(Enum):
     YZ = 7
 
 
+def is_monotonically_increasing(a: np.array):
+    return np.all(a[1:] > a[0:-1])
+
+
 def parse_cross_section_table(
         table: str,
         cross_section_shape: int,
@@ -46,10 +50,12 @@ def parse_cross_section_table(
                 heights.append(float(height))
                 widths.append(float(width))
             else:
+                if float(width) < widths[-1]:
+                    raise WidthsNotIncreasingError
                 if cross_section_shape == SupportedShape.TABULATED_RECTANGLE.value:
                     # add extra height/width entry to convert tabulated rectangle to tabulated trapezium
                     # but only if width is different from previous width
-                    if float(width) != widths[-1]:
+                    if float(width) > widths[-1]:
                         heights.append(float(height))
                         widths.append(float(widths[-1]))
                 heights.append(float(height))
@@ -75,7 +81,8 @@ def parse_cross_section_table(
     else:
         raise ValueError(f"Unsupported cross_section_shape {cross_section_shape}")
     # apply wall displacement to vertical segments
-    y_ordinates[1:][y_ordinates[1:] == y_ordinates[0:-1]] += wall_displacement
+    while not is_monotonically_increasing(y_ordinates):
+        y_ordinates[1:][y_ordinates[1:] == y_ordinates[0:-1]] += wall_displacement
     return y_ordinates, z_ordinates
 
 
@@ -222,7 +229,7 @@ class CrossSectionLocation:
         """
         if not np.min(y_ordinates) == 0:
             raise MinYNotZeroError
-        if not np.all(y_ordinates[1:] > y_ordinates[0:-1]):
+        if not is_monotonically_increasing(y_ordinates):
             raise YNotIncreasingError
 
         self.reference_level = reference_level

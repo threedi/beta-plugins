@@ -2,6 +2,7 @@ import numpy as np
 from shapely.geometry import LineString, Point
 from shapely import wkt
 import pytest
+import matplotlib.pyplot as plt
 
 from rasterize_channel import (
     WALL_DISPLACEMENT,
@@ -108,13 +109,34 @@ def test_parse_cross_section_table():
     )
 
     # TABULATED RECTANGLE which describes a rectangle
-    # 0.0, 1.0
-    # 0.5, 1.0
     y, z = parse_cross_section_table(
         table="0.0, 1.0\n0.5, 1.0",
         cross_section_shape=SupportedShape.TABULATED_RECTANGLE.value,
         wall_displacement=WALL_DISPLACEMENT
     )
+    assert np.all(y == np.array([0, 0.01, 1, 1.01]))
+    assert np.all(z == np.array([0.5, 0, 0, 0.5]))
+
+    y, z = parse_cross_section_table(
+        table="0.0, 0.0\n"
+              "0.075, 1.309\n"
+              "0.151, 1.737\n"
+              "0.226, 2.096\n"
+              "0.302, 2.343\n"
+              "0.377, 2.59\n"
+              "0.453, 3.039\n"
+              "0.528, 3.255\n"
+              "0.604, 3.475\n"
+              "0.679, 3.694\n"
+              "0.755, 3.914",
+        cross_section_shape=SupportedShape.TABULATED_RECTANGLE.value,
+        wall_displacement=WALL_DISPLACEMENT
+    )
+    # assert np.all(y == np.array([0, 0.01, 1, 1.01]))
+    # assert np.all(z == np.array([0.5, 0, 0, 0.5]))
+
+    plt.plot(y, z)
+    plt.show()
     print(y)
     print(z)
 
