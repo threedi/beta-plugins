@@ -4,7 +4,7 @@ from shapely import wkt
 import pytest
 import matplotlib.pyplot as plt
 
-from rasterize_channel import (
+from ..rasterize_channel import (
     WALL_DISPLACEMENT,
     IndexedPoint,
     Triangle,
@@ -134,9 +134,9 @@ def test_parse_cross_section_table():
     )
     # assert np.all(y == np.array([0, 0.01, 1, 1.01]))
     # assert np.all(z == np.array([0.5, 0, 0, 0.5]))
+    # plt.plot(y, z)
+    # plt.show()
 
-    plt.plot(y, z)
-    plt.show()
     print(y)
     print(z)
 

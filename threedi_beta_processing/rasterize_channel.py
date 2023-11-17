@@ -28,7 +28,9 @@ class SupportedShape(Enum):
     YZ = 7
 
 
-def is_monotonically_increasing(a: np.array):
+def is_monotonically_increasing(a: np.array, equal_allowed=False):
+    if equal_allowed:
+        return np.all(a[1:] >= a[0:-1])
     return np.all(a[1:] > a[0:-1])
 
 
@@ -77,6 +79,9 @@ def parse_cross_section_table(
             z_list.append(float(z))
         y_ordinates = np.array(y_list)
         z_ordinates = np.array(z_list)
+        if not is_monotonically_increasing(y_ordinates, equal_allowed=True):
+            # equal Y is allowed, will be fixed with wall displacement
+            raise YNotIncreasingError
 
     else:
         raise ValueError(f"Unsupported cross_section_shape {cross_section_shape}")
