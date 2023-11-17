@@ -107,6 +107,17 @@ def test_parse_cross_section_table():
         z, [3.035, 2.601, 2.168, 1.734, 1.301, 0.867, 0.434, 0., 0.434, 0.867, 1.301, 1.734, 2.168, 2.601, 3.035]
     )
 
+    # TABULATED RECTANGLE which describes a rectangle
+    # 0.0, 1.0
+    # 0.5, 1.0
+    y, z = parse_cross_section_table(
+        table="0.0, 1.0\n0.5, 1.0",
+        cross_section_shape=SupportedShape.TABULATED_RECTANGLE.value,
+        wall_displacement=WALL_DISPLACEMENT
+    )
+    print(y)
+    print(z)
+
     # YZ
     y, z = parse_cross_section_table(
         table="0, 3\n2, 1\n4, 0\n8, 4",
@@ -734,4 +745,4 @@ def test_parallel_offset_heights_at_vertices():
 
 
 if __name__ == "__main__":
-    test_fill_wedge()
+    test_parse_cross_section_table()

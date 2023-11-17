@@ -48,12 +48,14 @@ def parse_cross_section_table(
             else:
                 if cross_section_shape == SupportedShape.TABULATED_RECTANGLE.value:
                     # add extra height/width entry to convert tabulated rectangle to tabulated trapezium
-                    heights.append(float(height))
-                    widths.append(float(widths[-1]))
+                    # but only if width is different from previous width
+                    if float(width) != widths[-1]:
+                        heights.append(float(height))
+                        widths.append(float(widths[-1]))
                 heights.append(float(height))
                 widths.append(float(width))
         # convert to YZ
-        if widths[0] == 0:  # do no duplicate middle y value if it is 0
+        if widths[0] == 0:  # do not duplicate middle y value if it is 0
             y_ordinates = np.hstack([np.flip(widths)/-2, np.array(widths)[1:]/2])
             z_ordinates = np.hstack([np.flip(heights), np.array(heights)[1:]])
         else:
