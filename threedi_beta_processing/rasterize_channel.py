@@ -46,12 +46,10 @@ def parse_cross_section_table(
                 heights.append(float(height))
                 widths.append(float(width))
             else:
-                if height == heights[-1]:
-                    width += wall_displacement*2   # *2 because /2 when converting to YZ
                 if cross_section_shape == SupportedShape.TABULATED_RECTANGLE.value:
                     # add extra height/width entry to convert tabulated rectangle to tabulated trapezium
                     heights.append(float(height))
-                    widths.append(float(widths[-1]) + wall_displacement*2)  # *2 because /2 when converting to YZ
+                    widths.append(float(widths[-1]))
                 heights.append(float(height))
                 widths.append(float(width))
         # convert to YZ
@@ -71,8 +69,11 @@ def parse_cross_section_table(
             z_list.append(float(z))
         y_ordinates = np.array(y_list)
         z_ordinates = np.array(z_list)
+
     else:
         raise ValueError(f"Unsupported cross_section_shape {cross_section_shape}")
+    # apply wall displacement to vertical segments
+    y_ordinates[1:][y_ordinates[1:] == y_ordinates[0:-1]] += wall_displacement
     return y_ordinates, z_ordinates
 
 

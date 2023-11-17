@@ -1,10 +1,9 @@
 import numpy as np
-from osgeo import osr
 from shapely.geometry import LineString, Point
 from shapely import wkt
 import pytest
 
-from ..rasterize_channel import (
+from rasterize_channel import (
     WALL_DISPLACEMENT,
     IndexedPoint,
     Triangle,
@@ -45,6 +44,7 @@ def cross_section_location():
     )
     return cross_section_loc
 
+
 # Tests
 def test_parse_cross_section_table():
     # TABULATED RECTANGLE
@@ -53,7 +53,7 @@ def test_parse_cross_section_table():
         cross_section_shape=SupportedShape.TABULATED_RECTANGLE.value,
         wall_displacement=WALL_DISPLACEMENT
     )
-    assert np.all(y == np.array([0, 0.99, 1, 3, 3.01, 4]))
+    assert np.all(y == np.array([0, 1, 1+WALL_DISPLACEMENT, 3, 3+WALL_DISPLACEMENT, 4]))
     assert np.all(z == np.array([1, 1, 0, 0, 1, 1]))
 
     # TABULATED TRAPEZIUM
@@ -81,6 +81,31 @@ def test_parse_cross_section_table():
     )
     assert np.all(y == np.array([0, 2, 4]))
     assert np.all(z == np.array([1, 0, 1]))
+
+    # TABULATED TRAPEZIUM WITH VERTICAL WALL
+    y, z = parse_cross_section_table(
+        table="0, 0\n"
+              "0.434, 6.823\n"
+              "0.867, 8.975\n"
+              "1.301, 9.995\n"
+              "1.734, 11.273\n"
+              "2.168, 11.644\n"
+              "2.601, 11.644\n"
+              "3.035, 42.656",
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value,
+        wall_displacement=WALL_DISPLACEMENT
+    )
+    assert np.allclose(
+        y,
+        [
+            0., 15.506, 15.506+WALL_DISPLACEMENT, 15.6915, 16.3305, 16.8405, 17.9165, 21.328, 24.7395, 25.8155, 26.3255,
+            26.9645, 27.15, 27.15+WALL_DISPLACEMENT, 42.656
+        ]
+    )
+    assert np.allclose(
+        z, [3.035, 2.601, 2.168, 1.734, 1.301, 0.867, 0.434, 0., 0.434, 0.867, 1.301, 1.734, 2.168, 2.601, 3.035]
+    )
+
 
     # YZ
     y, z = parse_cross_section_table(
@@ -676,7 +701,8 @@ def test_parallel_offset_heights_at_vertices():
                        )
 
 #
-# if __name__ == "__main__":
+if __name__ == "__main__":
+    test_parse_cross_section_table()
 #     test_channel_parallel_offsets()
 #     test_two_vertex_channel()
 #     test_channel_max_width_at()
