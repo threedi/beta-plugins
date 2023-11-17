@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/plugins/import_hydx" >
-        <file>icon.png</file>
-    </qresource>
-</RCC>
