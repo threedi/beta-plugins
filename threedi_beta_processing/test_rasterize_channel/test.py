@@ -12,7 +12,7 @@ from ..rasterize_channel import (
     CrossSectionLocation,
     SupportedShape,
     find_wedge_channels,
-    fill_wedges,
+    # fill_wedges,
     parse_cross_section_table,
 )
 
@@ -20,8 +20,6 @@ from ..rasterize_channel import (
 # Generate test data
 def channel_init():
     channel_geom = LineString([[0, 0], [1, 1], [2, 2]])
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(28992)
 
     channel = Channel(
         geometry=channel_geom,
@@ -35,7 +33,7 @@ def channel_init():
 def cross_section_location():
     y, z = parse_cross_section_table(
         table="0, 0\n1.0, 2.0\n2.0, 4.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -52,7 +50,7 @@ def test_parse_cross_section_table():
     # TABULATED RECTANGLE
     y, z = parse_cross_section_table(
         table="0, 2\n1, 4",
-        cross_section_shape=SupportedShape.TABULATED_RECTANGLE,
+        cross_section_shape=SupportedShape.TABULATED_RECTANGLE.value,
         wall_displacement=WALL_DISPLACEMENT
     )
     assert np.all(y == np.array([0, 0.99, 1, 3, 3.01, 4]))
@@ -61,7 +59,7 @@ def test_parse_cross_section_table():
     # TABULATED TRAPEZIUM
     y, z = parse_cross_section_table(
         table="0, 2\n1, 4",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM,
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value,
         wall_displacement=WALL_DISPLACEMENT
     )
     assert np.all(y == np.array([0, 1, 3, 4]))
@@ -70,7 +68,7 @@ def test_parse_cross_section_table():
     # TABULATED TRAPEZIUM WITH THREE ROWS
     y, z = parse_cross_section_table(
         table="0, 10.0\n1.0, 20.0\n2.0, 40.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
     assert np.all(y == np.array([0, 10, 15, 25, 30, 40]))
     assert np.all(z == np.array([2, 1, 0, 0, 1, 2]))
@@ -78,7 +76,7 @@ def test_parse_cross_section_table():
     # TABULATED TRAPEZIUM WITH LOWEST WIDTH = 0
     y, z = parse_cross_section_table(
         table="0, 0\n1, 4",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM,
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value,
         wall_displacement=WALL_DISPLACEMENT
     )
     assert np.all(y == np.array([0, 2, 4]))
@@ -87,7 +85,7 @@ def test_parse_cross_section_table():
     # YZ
     y, z = parse_cross_section_table(
         table="0, 3\n2, 1\n4, 0\n8, 4",
-        cross_section_shape=SupportedShape.YZ,
+        cross_section_shape=SupportedShape.YZ.value,
         wall_displacement=WALL_DISPLACEMENT
     )
     assert np.all(y == np.array([0, 2, 4, 8]))
@@ -250,7 +248,7 @@ def test_cross_section_location_z_at():
 def test_cross_section_location_thalweg_y():
     y, z = parse_cross_section_table(
         table="0, 10.0\n1.0, 20.0\n2.0, 40.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -277,7 +275,7 @@ def test_channel_properties():
 
     y, z = parse_cross_section_table(
         table="0, 10.0\n1.0, 20.0\n2.0, 40.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -292,7 +290,7 @@ def test_channel_properties():
 
     y, z = parse_cross_section_table(
         table="0, 0.1\n1.0, 0.2\n2.0, 0.4",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -322,11 +320,11 @@ def test_channel_outline():
 
     assert round(channel.outline.area, 10) == round(channel.geometry.buffer(2).area, 10)
 
-    # Straight channel with 1 asymmetrical YZ cross-section
+    # Straight channel with 1 asymmetrical YZ.value cross-section
     channel = channel_init()
     y, z = parse_cross_section_table(
         table="0, 3\n1.0, 2\n2.0, 0\n3.0, 3",
-        cross_section_shape=SupportedShape.YZ
+        cross_section_shape=SupportedShape.YZ.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -372,11 +370,11 @@ def test_channel_outline():
         b"\xb6YB\xca\xe1\xf1\xbfn0\xdf\xbf\x7fo\xca\xbf\xe9\x0c=\xa1B:\xf2\xbf\xca;\x7ff\x9e\xa0\xd6\xbf\r1`f\xd8W" \
         b"\xf2\xbf\xafo\x87v\xbe\x04\xe0\xbf\xe9\x0c=\xa1B:\xf2\xbf"
 
-    # Straight channel with 2 YZ cross-sections that are assymetrical in opposite directions
+    # Straight channel with 2 YZ.value cross-sections that are assymetrical in opposite directions
     channel = channel_init()
     y, z = parse_cross_section_table(
         table="0, 3\n1.0, 2\n2.0, 0\n3.0, 3",
-        cross_section_shape=SupportedShape.YZ
+        cross_section_shape=SupportedShape.YZ.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -391,7 +389,7 @@ def test_channel_outline():
 
     y, z = parse_cross_section_table(
         table="0, 3\n1.0, 0\n2.0, 1.0\n3.0, 3",
-        cross_section_shape=SupportedShape.YZ
+        cross_section_shape=SupportedShape.YZ.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -483,7 +481,7 @@ def test_two_vertex_channel():
 
     y, z = parse_cross_section_table(
         table="0, 1.2\n0.53, 2.1",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -545,7 +543,7 @@ def test_two_vertex_channel():
 #
 #         y, z = parse_cross_section_table(
 #             table="0, 1.2\n0.53, 2.1",
-#             cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+#             cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
 #         )
 #
 #         cross_section_loc = CrossSectionLocation(
@@ -575,7 +573,7 @@ def test_cross_section_starting_at_0_0():
 
     y, z = parse_cross_section_table(
         table="0, 0\n0.53, 15.13\n1.060, 16.666\n1.590, 17.413\n2.120, 24.984\n2.65, 32.00",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -600,7 +598,7 @@ def test_channel_max_width_at():
 
     y, z = parse_cross_section_table(
         table="0, 0\n1.0, 2.0\n2.0, 4.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -615,7 +613,7 @@ def test_channel_max_width_at():
 
     y, z = parse_cross_section_table(
         table="0, 0\n1.0, 2.0\n2.0, 8.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(
@@ -647,7 +645,7 @@ def test_parallel_offset_heights_at_vertices():
 
     y, z = parse_cross_section_table(
         table="0, 0\n1.0, 2.0\n2.0, 4.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
     cross_section_loc = CrossSectionLocation(
         reference_level=2.0,
@@ -660,7 +658,7 @@ def test_parallel_offset_heights_at_vertices():
 
     y, z = parse_cross_section_table(
         table="0, 0\n1.0, 2.0\n2.0, 8.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM
+        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
 
     cross_section_loc = CrossSectionLocation(

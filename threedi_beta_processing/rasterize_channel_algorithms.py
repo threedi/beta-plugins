@@ -47,7 +47,7 @@ from .rasterize_channel import (
     EmptyOffsetError,
     InvalidOffsetError,
     WidthsNotIncreasingError,
-    fill_wedges,
+    # fill_wedges,
 )
 from .rasterize_channel_utils import merge_rasters
 
@@ -190,7 +190,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 )
             multi_step_feedback.setProgress(100 * i / channel_features.featureCount())
 
-        fill_wedges(channels)
+        # fill_wedges(channels)
 
         multi_step_feedback.setCurrentStep(1)
         if len(channels) == 0:

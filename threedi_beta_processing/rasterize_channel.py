@@ -1,10 +1,5 @@
-# TODO for YZ support
-#  - For YZ, the channel geometry is not necessarily located at the (y-dimension) center of the cross-section
-#  - We can assume that the channel geometry is located at the thalweg, i.e. the lowest point in the river bed
-#  - For each cross-section, calculate thalweg location in the Y dimension
-#  - Two options: thalweg is lowest point in cross-section, or thalweg is middle of cross-section
-#  - Instead of widths, use offsets, i.e. Y relative to thalweg (positive for points to the left of the thalweg, negative for points to the right of the thalweg)
-#  - I.e., for tab. trapezium and rectangle, convert widths to offsets
+# TODO make fill_wedges work again
+# TODO support vertical segments in YZ profiles
 
 from enum import Enum
 from typing import Iterator, List, Union, Set, Sequence, Tuple
@@ -33,9 +28,15 @@ class SupportedShape(Enum):
     YZ = 7
 
 
-def parse_cross_section_table(table: str, cross_section_shape: SupportedShape, wall_displacement: float = 0) -> Tuple[np.array, np.array]:
-    """Returns [y_ordinates], [z_ordinates]"""
-    if cross_section_shape in (SupportedShape.TABULATED_RECTANGLE, SupportedShape.TABULATED_TRAPEZIUM):
+def parse_cross_section_table(
+        table: str,
+        cross_section_shape: int,
+        wall_displacement: float = 0
+) -> Tuple[np.array, np.array]:
+    """
+    Returns [y_ordinates], [z_ordinates]
+    """
+    if cross_section_shape in (SupportedShape.TABULATED_RECTANGLE.value, SupportedShape.TABULATED_TRAPEZIUM.value):
         heights = list()
         widths = list()
         for row in table.split("\n"):
@@ -47,7 +48,7 @@ def parse_cross_section_table(table: str, cross_section_shape: SupportedShape, w
             else:
                 if height == heights[-1]:
                     width += wall_displacement*2   # *2 because /2 when converting to YZ
-                if cross_section_shape == SupportedShape.TABULATED_RECTANGLE:
+                if cross_section_shape == SupportedShape.TABULATED_RECTANGLE.value:
                     # add extra height/width entry to convert tabulated rectangle to tabulated trapezium
                     heights.append(float(height))
                     widths.append(float(widths[-1]) + wall_displacement*2)  # *2 because /2 when converting to YZ
@@ -61,7 +62,7 @@ def parse_cross_section_table(table: str, cross_section_shape: SupportedShape, w
             y_ordinates = np.hstack([np.flip(widths)/-2, np.array(widths)/2])
             z_ordinates = np.hstack([np.flip(heights), heights])
         y_ordinates += np.max(widths)/2
-    elif cross_section_shape == SupportedShape.YZ:
+    elif cross_section_shape == SupportedShape.YZ.value:
         y_list = list()
         z_list = list()
         for row in table.split("\n"):
@@ -853,11 +854,11 @@ def find_wedge_channels(
     return None, None
 
 
-def fill_wedges(channels: List[Channel]):
-    connection_node_channels_dict = get_channels_per_connection_node(channels)
-    for connection_node_id, channels in connection_node_channels_dict.items():
-        channel1, channel2 = find_wedge_channels(
-            channels=channels, connection_node_id=connection_node_id
-        )
-        if channel1 and channel2:
-            channel1.fill_wedge(channel2)
+# def fill_wedges(channels: List[Channel]):
+#     connection_node_channels_dict = get_channels_per_connection_node(channels)
+#     for connection_node_id, channels in connection_node_channels_dict.items():
+#         channel1, channel2 = find_wedge_channels(
+#             channels=channels, connection_node_id=connection_node_id
+#         )
+#         if channel1 and channel2:
+#             channel1.fill_wedge(channel2)
