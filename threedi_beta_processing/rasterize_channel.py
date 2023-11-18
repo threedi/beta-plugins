@@ -82,14 +82,29 @@ def parse_cross_section_table(
 
     else:
         raise ValueError(f"Unsupported cross_section_shape {cross_section_shape}")
-    # simplify with wall_displacement as tolerance
-    linestring = LineString(np.dstack([y_ordinates, z_ordinates])[0])
-    linestring.simplify(wall_displacement)
-    coord_array = linestring.coords.xy
-    y_ordinates, z_ordinates = np.array(coord_array)
+
     # apply wall displacement to vertical segments
     while not is_monotonically_increasing(y_ordinates):
-        y_ordinates[1:][y_ordinates[1:] == y_ordinates[0:-1]] += wall_displacement
+        y_ordinates[1:][y_ordinates[1:] == y_ordinates[:-1]] += wall_displacement
+        # remove YZ coordinates that have been 'taken over' by the previous ones due to wall displacement
+        valid_ordinates = y_ordinates[1:] >= y_ordinates[:-1]
+        while np.sum(np.invert(valid_ordinates)) > 0:
+            valid_ordinates = y_ordinates[1:] >= y_ordinates[:-1]
+            valid_mask = np.hstack([np.array([True]), valid_ordinates])
+            y_ordinates = y_ordinates[valid_mask]
+            z_ordinates = z_ordinates[valid_mask]
+
+    return y_ordinates, z_ordinates
+
+
+def simplify(y_ordinates: np.array, z_ordinates: np.array, tolerance: float) -> Tuple[np.array, np.array]:
+    """
+    Simplify a YZ cross-section using shapely LineString.simplify()
+    """
+    linestring = LineString(np.stack([y_ordinates, z_ordinates], axis=1))
+    simplified_linestring = linestring.simplify(tolerance)
+    coord_array = simplified_linestring.coords.xy
+    y_ordinates, z_ordinates = np.array(coord_array)
     return y_ordinates, z_ordinates
 
 
@@ -247,7 +262,7 @@ class CrossSectionLocation:
         self.parent = parent
 
     @classmethod
-    def from_qgs_feature(cls, feature, wall_displacement: float):
+    def from_qgs_feature(cls, feature, wall_displacement: float, simplify_tolerance: float):
         """
         wall_displacement is used as simplify tolerance for the cross-section. remaining vertical segments are made
         diagonal by displacing the top or bottom by wall_displacement
@@ -262,6 +277,7 @@ class CrossSectionLocation:
             cross_section_shape=cross_section_shape,
             wall_displacement=wall_displacement
         )
+        y, z = simplify(y, z, tolerance=simplify_tolerance)
 
         return cls(
             geometry=shapely_geometry,

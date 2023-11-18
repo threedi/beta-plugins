@@ -5,7 +5,7 @@ import pytest
 import matplotlib.pyplot as plt
 
 
-from ..rasterize_channel import (
+from rasterize_channel import (
     IndexedPoint,
     Triangle,
     Channel,
@@ -120,6 +120,8 @@ def test_parse_cross_section_table():
     assert np.all(y == np.array([0, 0.01, 1, 1.01]))
     assert np.all(z == np.array([0.5, 0, 0, 0.5]))
 
+    # TABULATED RECTANGLE: wall displacement "overtakes" next segment
+    print("Real world data that gives an error")
     y, z = parse_cross_section_table(
         table="0.0, 0.0\n"
               "0.075, 1.309\n"
@@ -133,10 +135,16 @@ def test_parse_cross_section_table():
               "0.679, 3.694\n"
               "0.755, 3.914",
         cross_section_shape=SupportedShape.TABULATED_RECTANGLE.value,
-        wall_displacement=WALL_DISPLACEMENT
+        wall_displacement=0.25
     )
-    # assert np.all(y == np.array([0, 0.01, 1, 1.01]))
-    # assert np.all(z == np.array([0.5, 0, 0, 0.5]))
+    assert np.all(y == np.array([
+        0., 0.11, 0.36, 0.4695, 0.5795, 0.6875, 0.912, 1.0355, 1.159, 1.3385, 1.5525, 1.957, 2.207, 2.457, 2.6115,
+        2.8615, 3.0755, 3.255, 3.3785, 3.502, 3.7265, 3.8345, 3.9445, 4.054
+    ]))
+    assert np.all(z == np.array([
+        0.755, 0.755, 0.679, 0.604, 0.528, 0.453, 0.377, 0.302, 0.226, 0.151, 0.075, 0.075, 0., 0.075, 0.075, 0.151,
+        0.226, 0.302, 0.377, 0.453, 0.528, 0.604, 0.679, 0.755
+    ]))
     # plt.plot(y, z)
     # plt.show()
 
