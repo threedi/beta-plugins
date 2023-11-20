@@ -314,13 +314,16 @@ class CrossSectionLocation:
             return y_before + ((average_z0_index-z0_index_before)/(z0_index_after-z0_index_before))*(y_after-y_before)
 
     @property
-    def y_ordinates_relative_to_thalweg(self):
-        return self.y_ordinates - self.thalweg_y
+    def offsets(self):
+        """
+        Return array of y_ordinates, but relative to the thalweg
+        and using the shapely offset_curve logic of right = negative and left is positive
+        """
+        return self.thalweg_y - self.y_ordinates
 
-    def z_at(self, y: float, relative_to_thalweg: bool = False) -> float:
-        """Get interpolated z at given y"""
-        y_values = self.y_ordinates_relative_to_thalweg if relative_to_thalweg else self.y_ordinates
-        return np.interp(y, y_values, self.z_ordinates)
+    def z_at(self, offset: float) -> float:
+        """Get interpolated z at given offset"""
+        return np.interp(offset, self.offsets, self.z_ordinates)
 
 
 class Channel:
@@ -367,15 +370,15 @@ class Channel:
         return np.array([x.thalweg_y for x in self.cross_section_locations])
 
     @property
-    def unique_y_ordinates(self) -> np.array:
-        """Unique y ordinates relative to thalweg for entire channel"""
-        y_list = [x.y_ordinates_relative_to_thalweg for x in self.cross_section_locations]
-        all_ys_array = np.hstack(y_list)
-        return np.array(np.unique(all_ys_array))
+    def unique_offsets(self) -> np.array:
+        """Unique offsets for entire channel, see ``CrossSectionLocation.offsets`` documentation"""
+        offsets_list = [xsec.offsets for xsec in self.cross_section_locations]
+        all_offsets_array = np.hstack(offsets_list)
+        return np.array(np.unique(all_offsets_array))
 
     @property
     def cross_section_location_positions(self) -> np.array:
-        """Array of cross section location positions along the channel"""
+        """Array of cross-section location positions along the channel"""
         return np.array([x.position for x in self.cross_section_locations])
 
     @property
@@ -423,7 +426,7 @@ class Channel:
         Offsets are sorted from left to right
         """
         self.parallel_offsets = []
-        for y in self.unique_y_ordinates:
+        for y in self.unique_offsets:
             self.parallel_offsets.append(
                 ParallelOffset(parent=self, offset_distance=y*-1)  # *-1 because negative = right for Shapely
             )
@@ -440,11 +443,11 @@ class Channel:
         Find the ParallelOffset at given ``offset_distance``
         To convert y ordinates relative to thalweg to offset_distances, multiply by -1
         """
-        if offset_distance * -1 not in self.unique_y_ordinates:
+        if offset_distance * -1 not in self.unique_offsets:
             raise ValueError(
                 f"Parallel offset not found at offset distance {offset_distance}. "
                 f"Channel between nodes {self.connection_node_start_id} and "
-                f"{self.connection_node_end_id}. Available offset distances: {self.unique_y_ordinates * -1}"
+                f"{self.connection_node_end_id}. Available offset distances: {self.unique_offsets * -1}"
             )
         for po in self.parallel_offsets:
             if po.offset_distance == offset_distance:
@@ -452,7 +455,7 @@ class Channel:
         raise ValueError(
             f"Parallel offset not found at offset distance {offset_distance}. "
             f"Channel between nodes {self.connection_node_start_id} and "
-            f"{self.connection_node_end_id}. Available offset distances: {self.unique_y_ordinates * -1}"
+            f"{self.connection_node_end_id}. Available offset distances: {self.unique_offsets * -1}"
         )
 
     @property
@@ -551,8 +554,10 @@ class Channel:
 
     def fill_wedge(self, other):
         """Add points and triangles to fill the wedge-shaped gap between self and other. Also updates self.outline"""
+
         # Find out if and how self and other_channel are connected
-        # -->-->
+        # head of `self` connects to tail of `other` | -->-->
+        # wedge is added to `self`
         if self.connection_node_end_id == other.connection_node_start_id:
             channel_to_update = self
             channel_to_update_idx = -1  # end
@@ -564,7 +569,9 @@ class Channel:
                 wedge_fill_points_source_side = LEFT
             wedge_fill_points_source = other
             wedge_fill_points_source_idx = 0  # start
-        # --><--
+
+        # head of `self` connects to head of `other` | --><--
+        # wedge is added to `self`
         elif self.connection_node_end_id == other.connection_node_end_id:
             channel_to_update = self
             channel_to_update_idx = -1  # end
@@ -576,7 +583,9 @@ class Channel:
                 wedge_fill_points_source_side = RIGHT
             wedge_fill_points_source = other
             wedge_fill_points_source_idx = -1  # end
-        # <---->
+
+        # tail of `self` connects to tail of `other` | <---->
+        # wedge is added to `self`
         elif self.connection_node_start_id == other.connection_node_start_id:
             channel_to_update = self
             channel_to_update_idx = 0  # start
@@ -588,19 +597,23 @@ class Channel:
                 wedge_fill_points_source_side = LEFT
             wedge_fill_points_source = other
             wedge_fill_points_source_idx = 0  # start
-        # <--<--
+
+        # tail of `self` is connected to head of `other` | <--<--
+        # wedge is connected to `other`
         elif self.connection_node_start_id == other.connection_node_end_id:
             channel_to_update = other
             channel_to_update_idx = -1  # end
             wedge_fill_points_source = self
             wedge_fill_points_source_idx = 0  # start
-            if ccw_angle(self, other) > 180:
+            a = ccw_angle(other, self)
+            if ccw_angle(other, self) > 180:
                 channel_to_update_side = LEFT
                 wedge_fill_points_source_side = LEFT
             else:
                 channel_to_update_side = RIGHT
                 wedge_fill_points_source_side = RIGHT
-        # -->                               -->
+
+        # channels are not connected | -->          -->
         else:
             raise ValueError("Channels are not connected")
 
@@ -613,14 +626,14 @@ class Channel:
         # if any of the channels does have a width starting at 0, we use that point
         # if neither channel has a width starting at 0, the x, y, z and index have to be calculated
         wedge_fill_points = []
-        if 0 in channel_to_update.unique_y_ordinates:
+        if 0 in channel_to_update.unique_offsets:
             po = channel_to_update.parallel_offset_at(0)
             wedge_fill_points.append(po.points[channel_to_update_idx])
-        elif 0 in wedge_fill_points_source.unique_y_ordinates:
+        elif 0 in wedge_fill_points_source.unique_offsets:
             po = wedge_fill_points_source.parallel_offset_at(0)
             wedge_fill_points.append(po.points[wedge_fill_points_source_idx])
         else:
-            first_width = channel_to_update.unique_y_ordinates[0]
+            first_width = channel_to_update.unique_offsets[0]
             po_1 = channel_to_update.parallel_offset_at(first_width / 2)
             point_1 = po_1.points[channel_to_update_idx]
             po_2 = channel_to_update.parallel_offset_at(-1 * first_width / 2)
@@ -632,7 +645,8 @@ class Channel:
             wedge_fill_points.append(point_to_add)
             last_index += 1
 
-        offsets_to_add = [y for y in channel_to_update.unique_y_ordinates if y * channel_to_update_side > 0]
+        # add points from `channel_to_update`
+        offsets_to_add = [y for y in channel_to_update.unique_offsets if y * channel_to_update_side > 0]
         for i, offset in enumerate(offsets_to_add):
             channel_to_update_offsets.append(offset)
             po = channel_to_update.parallel_offset_at(offset)
@@ -641,7 +655,8 @@ class Channel:
         # Append start or end vertices of all other_channel's parallel offsets to self._wedge_fill_points
         # left is positive, right is negative
 
-        offsets_to_add = [y for y in wedge_fill_points_source.unique_y_ordinates if y * wedge_fill_points_source_side > 0]
+        # add points from the other channel (`wedge_fill_points_source`)
+        offsets_to_add = [y for y in wedge_fill_points_source.unique_offsets if y * wedge_fill_points_source_side > 0]
         for offset in offsets_to_add:
             wedge_fill_points_source_offsets.append(offset)
             po = wedge_fill_points_source.parallel_offset_at(offset)
@@ -708,7 +723,7 @@ class ParallelOffset:
             self.geometry.project(point) for point in cross_section_location_points
         ]
         z_ordinates_at_cross_sections = [
-            xsec.z_at(self.offset_distance, relative_to_thalweg=True) for xsec in self.parent.cross_section_locations
+            xsec.z_at(self.offset_distance) for xsec in self.parent.cross_section_locations
         ]
         self.vertex_positions = [
             self.geometry.project(Point(vertex)) for vertex in self.geometry.coords
