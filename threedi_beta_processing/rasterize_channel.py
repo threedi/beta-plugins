@@ -426,9 +426,9 @@ class Channel:
         Offsets are sorted from left to right
         """
         self.parallel_offsets = []
-        for y in self.unique_offsets:
+        for offset in self.unique_offsets:
             self.parallel_offsets.append(
-                ParallelOffset(parent=self, offset_distance=y*-1)  # *-1 because negative = right for Shapely
+                ParallelOffset(parent=self, offset_distance=offset)
             )
 
         last_vertex_index = (
@@ -441,13 +441,12 @@ class Channel:
     def parallel_offset_at(self, offset_distance):
         """
         Find the ParallelOffset at given ``offset_distance``
-        To convert y ordinates relative to thalweg to offset_distances, multiply by -1
         """
-        if offset_distance * -1 not in self.unique_offsets:
+        if offset_distance not in self.unique_offsets:
             raise ValueError(
                 f"Parallel offset not found at offset distance {offset_distance}. "
                 f"Channel between nodes {self.connection_node_start_id} and "
-                f"{self.connection_node_end_id}. Available offset distances: {self.unique_offsets * -1}"
+                f"{self.connection_node_end_id}. Available offset distances: {self.unique_offsets}"
             )
         for po in self.parallel_offsets:
             if po.offset_distance == offset_distance:
@@ -455,7 +454,7 @@ class Channel:
         raise ValueError(
             f"Parallel offset not found at offset distance {offset_distance}. "
             f"Channel between nodes {self.connection_node_start_id} and "
-            f"{self.connection_node_end_id}. Available offset distances: {self.unique_offsets * -1}"
+            f"{self.connection_node_end_id}. Available offset distances: {self.unique_offsets}"
         )
 
     @property
@@ -646,7 +645,10 @@ class Channel:
             last_index += 1
 
         # add points from `channel_to_update`
-        offsets_to_add = [y for y in channel_to_update.unique_offsets if y * channel_to_update_side > 0]
+        offsets_to_add = [
+            offset for offset in channel_to_update.unique_offsets
+            if offset * channel_to_update_side < 0
+        ]
         for i, offset in enumerate(offsets_to_add):
             channel_to_update_offsets.append(offset)
             po = channel_to_update.parallel_offset_at(offset)
@@ -656,7 +658,10 @@ class Channel:
         # left is positive, right is negative
 
         # add points from the other channel (`wedge_fill_points_source`)
-        offsets_to_add = [y for y in wedge_fill_points_source.unique_offsets if y * wedge_fill_points_source_side > 0]
+        offsets_to_add = [
+            offset for offset in wedge_fill_points_source.unique_offsets
+            if offset * wedge_fill_points_source_side < 0
+        ]
         for offset in offsets_to_add:
             wedge_fill_points_source_offsets.append(offset)
             po = wedge_fill_points_source.parallel_offset_at(offset)

@@ -5,7 +5,7 @@ import pytest
 import matplotlib.pyplot as plt
 
 
-from ..rasterize_channel import (
+from rasterize_channel import (
     IndexedPoint,
     Triangle,
     Channel,
