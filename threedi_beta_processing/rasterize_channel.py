@@ -323,7 +323,10 @@ class CrossSectionLocation:
 
     def z_at(self, offset: float) -> float:
         """Get interpolated z at given offset"""
-        return np.interp(offset, self.offsets, self.z_ordinates)
+
+        # offsets and z_ordinates are flipped ([::-1]) because offsets must be monotonically increasing, but is
+        # monotonically decreasing due to the shapely offset_curve right = -1 and left = +1 logic
+        return np.interp(offset, self.offsets[::-1], self.z_ordinates[::-1])
 
 
 class Channel:
@@ -409,13 +412,13 @@ class Channel:
         self.cross_section_locations.sort(key=lambda x: x.position)
 
     def max_width_at(self, position: float) -> float:
-        """Interpolated max cross-sectional width at given position"""
+        """Interpolated max cross-sectional width at given position along the channel"""
         return np.interp(
             position, self.cross_section_location_positions, self.max_widths
         )
 
     def thalweg_y_at(self, position: float) -> float:
-        """Interpolated y ordinate of thalweg at given position"""
+        """Interpolated y ordinate of thalweg at given position along the channel"""
         return np.interp(
             position, self.cross_section_location_positions, self.thalweg_ys
         )
