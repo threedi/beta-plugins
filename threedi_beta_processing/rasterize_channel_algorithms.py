@@ -176,13 +176,13 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 errors.append(channel_id)
                 feedback.reportError(
                     f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
-                    f"for some cross-sectional widths. "
+                    f"for some cross-sections. "
                 )
             except InvalidOffsetError:
                 errors.append(channel_id)
                 feedback.reportError(
                     f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
-                    f"for some cross-sectional widths. It may help to split the channel in the middle of its bends."
+                    f"for some cross-sections. It may help to split the channel in the middle of its bends."
                 )
             except WidthsNotIncreasingError:
                 errors.append(channel_id)

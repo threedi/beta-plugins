@@ -1,6 +1,6 @@
 import numpy as np
 from shapely.geometry import LineString, Point
-from shapely import wkt
+from shapely import wkt, wkb
 import pytest
 import matplotlib.pyplot as plt
 
@@ -40,7 +40,7 @@ def get_test_channel(nr: int = 0):
             connection_node_end_id=2,
             id=1,
         )
-        xsec = cross_section_location()
+        xsec = get_test_cross_section_location()
         xsec.geometry = Point(0, -50)
         channel.add_cross_section_location(xsec)
     elif nr == 2:
@@ -50,7 +50,7 @@ def get_test_channel(nr: int = 0):
             connection_node_end_id=3,
             id=2,
         )
-        xsec = cross_section_location()
+        xsec = get_test_cross_section_location()
         xsec.geometry = Point(10, 50)
         channel.add_cross_section_location(xsec)
     elif nr == 3:
@@ -60,26 +60,84 @@ def get_test_channel(nr: int = 0):
             connection_node_end_id=4,
             id=3,
         )
-        xsec = cross_section_location()
+        xsec = get_test_cross_section_location()
         xsec.geometry = Point(50, 0)
         channel.add_cross_section_location(xsec)
+    elif nr == 4:
+        wkb_geometry = b"\x01\x02\x00\x00\x00\x03\x00\x00\x00\xc6\xd2w\xb3Vo\"@\x00\xcc)C\x13S\xa1?\x13\xc9nJ\x8c\x08" \
+                       b">@\x00\xce_\xe3\x19\xa2\xb9?b\xd4\x90\x9d\xb6lI@\x00[\x95\x12UM\xc5?"
+        channel = Channel(
+            geometry=wkb.loads(wkb_geometry),
+            connection_node_start_id=5,
+            connection_node_end_id=6,
+            id=4,
+        )
+
+    elif nr == 5:
+        wkb_geometry =  b"\x01\x02\x00\x00\x00\x03\x00\x00\x00b\xd4\x90\x9d\xb6lI@\x00[\x95\x12UM\xc5?\xc7\xf5" \
+                        b"\x1a\\\xb9YN@\x15\xc0\xc1!}\x812@\x96\x8bR\r^\xa3Q@\xba*\xaf\xcc/lB@'"
+        channel = Channel(
+            geometry=wkb.loads(wkb_geometry),
+            connection_node_start_id=6,
+            connection_node_end_id=7,
+            id=5,
+        )
     return channel
 
 
-def cross_section_location():
-    y, z = parse_cross_section_table(
-        table="0, 0\n1.0, 2.0\n2.0, 4.0",
-        cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
-    )
+def get_test_cross_section_location(nr: int = 0):
+    if nr == 0:
+        y, z = parse_cross_section_table(
+            table="0, 0\n1.0, 2.0\n2.0, 4.0",
+            cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
+        )
 
-    cross_section_loc = CrossSectionLocation(
-        reference_level=10.0,
-        bank_level=12.0,
-        y_ordinates=y,
-        z_ordinates=z,
-        geometry=Point(1, 1),
-    )
-    return cross_section_loc
+        cross_section_loc = CrossSectionLocation(
+            reference_level=10.0,
+            bank_level=12.0,
+            y_ordinates=y,
+            z_ordinates=z,
+            geometry=Point(1, 1),
+        )
+        return cross_section_loc
+
+    elif nr == 4:
+        y, z = parse_cross_section_table(
+            table=  "0, 5\n"
+                    "5, 0\n"
+                    "7, 3",
+            cross_section_shape=SupportedShape.YZ.value
+        )
+
+        cross_section_loc = CrossSectionLocation(
+            reference_level=10.0,
+            bank_level=12.0,
+            y_ordinates=y,
+            z_ordinates=z,
+            geometry=Point(30.033391, 0.10013)
+        )
+        return cross_section_loc
+
+    elif nr == 5:
+        y, z = parse_cross_section_table(
+            table=  "0, 5\n"
+                    "1, 3\n"
+                    "2, 0\n"
+                    "3, 0.5\n"
+                    "4, 1\n"
+                    "5, 2.3\n"
+                    "6, 4.8",
+            cross_section_shape=SupportedShape.YZ.value
+        )
+
+        cross_section_loc = CrossSectionLocation(
+            reference_level=10.0,
+            bank_level=12.0,
+            y_ordinates=y,
+            z_ordinates=z,
+            geometry=Point(30.033391, 0.10013)
+        )
+        return cross_section_loc
 
 
 def get_wedge_channels():
@@ -229,14 +287,8 @@ def test_cross_section_location_thalweg_y():
 
 
 def test_cross_section_location_z_at():
-    xsec = cross_section_location()
-    print("y_ordinates:")
-    print(xsec.y_ordinates)
-    print("z_ordinates:")
-    print(xsec.z_ordinates)
-    print("thalweg_y:")
-    print(xsec.thalweg_y)
-    print("z_at 0.0")
+    # Symmetrical Tabulated Trapezium
+    xsec = get_test_cross_section_location()
     z = xsec.z_at(offset=0.0)
     print(z)
     assert xsec.z_at(offset=0.0) == 10
@@ -244,6 +296,26 @@ def test_cross_section_location_z_at():
     assert xsec.z_at(offset=-1.0) == 11
     assert xsec.z_at(offset=1.5) == 11.5  # Interpolation
     assert xsec.z_at(offset=3.0) == 12  # Extrapolation
+
+    # Asymmetrical YZ profile
+    y, z = parse_cross_section_table(
+        table="0, 3\n1.0, 2\n2.0, 0\n3.0, 3",
+        cross_section_shape=SupportedShape.YZ.value
+    )
+
+    xsec = CrossSectionLocation(
+        reference_level=10.0,
+        bank_level=12.0,
+        y_ordinates=y,
+        z_ordinates=z,
+        geometry=Point(0, 0),
+    )
+    assert xsec.z_at(offset=0) == 10
+    assert xsec.z_at(offset=1) == 12
+    assert xsec.z_at(offset=-1) == 13
+    assert xsec.z_at(offset=2) == 13
+    assert xsec.z_at(offset=1.5) == 12.5  # interpolate
+    assert xsec.z_at(offset=-5) == 13  # extrapolate
 
 
 def test_channel_vertex_positions():
@@ -255,7 +327,7 @@ def test_channel_vertex_positions():
 
 def test_channel_properties():
     channel = get_test_channel()
-    xsec = cross_section_location()
+    xsec = get_test_cross_section_location()
     channel.add_cross_section_location(xsec)
 
     y, z = parse_cross_section_table(
@@ -300,7 +372,7 @@ def test_channel_properties():
 def test_channel_outline():
     # Straight channel with 1 symmetrical cross-section
     channel = get_test_channel()
-    xsec = cross_section_location()
+    xsec = get_test_cross_section_location()
     channel.add_cross_section_location(xsec)
 
     assert round(channel.outline.area, 10) == round(channel.geometry.buffer(2).area, 10)
@@ -425,21 +497,22 @@ def test_channel_outline():
 
 def test_channel_parallel_offsets():
     channel = get_test_channel()
-    xsec = cross_section_location()
+    xsec = get_test_cross_section_location()
     channel.add_cross_section_location(xsec)
     channel.generate_parallel_offsets()
     assert len(channel.parallel_offsets) == 5
     offset_distances = [po.offset_distance for po in channel.parallel_offsets]
-    assert offset_distances == [2.0, 1.0, 0.0, -1.0, -2.0]
-    assert (channel.unique_offsets * -1 == offset_distances).all()
+    assert offset_distances == [-2.0, -1.0, 0.0, 1.0, 2.0]
+    assert (channel.unique_offsets == offset_distances).all()
 
-    # Parallel offset 1 is 1 m to the left of the channel geometry
+    # Parallel offset 1 is 1 m to the right of the channel geometry
     po1 = channel.parallel_offsets[1]
     heights_at_vertices = po1.heights_at_vertices
     assert (heights_at_vertices == np.array([11.0, 11.0])).all()
+    print([str(point.geom) for point in po1.points])
     assert [str(point.geom) for point in po1.points] == [
-        'POINT Z (-0.7071067811865475 0.7071067811865475 11)',
-        'POINT Z (1.2928932188134525 2.7071067811865475 11)'
+        'POINT Z (0.7071067811865475 -0.7071067811865475 11)',
+        'POINT Z (2.7071067811865475 1.2928932188134525 11)'
     ]
 
     # Parallel offset 5 is 2 m to the right of the channel geometry
@@ -448,8 +521,8 @@ def test_channel_parallel_offsets():
     assert (heights_at_vertices == np.array([12.0, 12.0])).all()
     points_str = [str(point.geom) for point in po5.points]
     assert points_str == [
-        "POINT Z (1.414213562373095 -1.414213562373095 12)",
-        "POINT Z (3.414213562373095 0.5857864376269051 12)",
+        "POINT Z (-1.414213562373095 1.414213562373095 12)",
+        "POINT Z (0.5857864376269051 3.414213562373095 12)",
     ]
 
 
@@ -684,17 +757,17 @@ def test_fill_wedge():
     channel_1.generate_parallel_offsets()
     channel_2.generate_parallel_offsets()
 
-    print("channel 1 triangles:")
-    print(channel_1.as_query())
-    print("channel 2 triangles:")
-    print(channel_2.as_query())
+    # print("channel 1 triangles:")
+    # print(channel_1.as_query())
+    # print("channel 2 triangles:")
+    # print(channel_2.as_query())
 
     channel_1.fill_wedge(channel_2)
 
-    print("Wedge:")
-    tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom" for tri in channel_1._wedge_fill_triangles]
-    print("\nUNION\n".join(tri_queries))
-    [print(tri.geometry.wkb) for tri in channel_1._wedge_fill_triangles]
+    # print("Wedge:")
+    # tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom" for tri in channel_1._wedge_fill_triangles]
+    # print("\nUNION\n".join(tri_queries))
+    # [print(tri.geometry.wkb) for tri in channel_1._wedge_fill_triangles]
     assert len(channel_1._wedge_fill_triangles) == 3
     assert len(channel_2._wedge_fill_triangles) == 0
     assert channel_1. \
@@ -748,43 +821,56 @@ def test_fill_wedge():
     channel_1.generate_parallel_offsets()
     channel_2.generate_parallel_offsets()
 
-    print("channel 1 triangles:")
-    print(channel_1.as_query())
-    print("channel 2 triangles:")
-    print(channel_2.as_query())
+    # print("channel 1 triangles:")
+    # print(channel_1.as_query())
+    # print("channel 2 triangles:")
+    # print(channel_2.as_query())
+    #
+    channel_1.fill_wedge(channel_2)
+    # print("Wedge:")
+    # tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in channel_1._wedge_fill_triangles]
+    # print("\nUNION\n".join(tri_queries))
+    # [print(tri.geometry.wkb) for tri in channel_1._wedge_fill_triangles]
+    assert len(channel_1._wedge_fill_triangles) == 3
+    assert len(channel_2._wedge_fill_triangles) == 0
+    assert channel_1. \
+           _wedge_fill_triangles[0]. \
+           geometry. \
+           wkb == b"\x01\x03\x00\x00\x80\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0\xbf\x00\x00\x00" \
+                  b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00&@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
+                  b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\xa2\xd3\xa5\xb9\xea`\xff\xbf\x1cvQaU\x1a\xd9?\x00\x00" \
+                  b"\x00\x00\x00\x00&@\x00\x00\x00\x00\x00\x00\xf0\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
+                  b"\x00\x00\x00&@"
+    assert channel_1. \
+           _wedge_fill_triangles[1]. \
+           geometry. \
+           wkb == b"\x01\x03\x00\x00\x80\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0\xbf\x00\x00\x00" \
+                  b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00&@\xa2\xd3\xa5\xb9\xea`\xff\xbf\x1cvQaU\x1a\xd9?\x00" \
+                  b"\x00\x00\x00\x00\x00&@\x00\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
+                  b"\x00\x00\x00\x00(@\x00\x00\x00\x00\x00\x00\xf0\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
+                  b"\x00\x00\x00&@"
+    assert channel_1. \
+           _wedge_fill_triangles[2]. \
+           geometry. \
+           wkb == b"\x01\x03\x00\x00\x80\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00" \
+                  b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00(" \
+                  b"@\xa2\xd3\xa5\xb9\xea`\xff\xbf\x1cvQaU\x1a\xd9?\x00\x00\x00\x00\x00\x00&@\xa2\xd3\xa5\xb9\xea" \
+                  b"`\x0f\xc0\x1cvQaU\x1a\xe9?\x00\x00\x00\x00\x00\x00*@\x00\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00" \
+                  b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00(@"
+
+    # Case drawn in QGIS that lead to errors
+    channel_1 = get_test_channel(4)
+    xsec = get_test_cross_section_location(4)
+    channel_1.add_cross_section_location(xsec)
+    channel_1.generate_parallel_offsets()
+
+    channel_2 = get_test_channel(5)
+    xsec = get_test_cross_section_location(4)
+    channel_2.add_cross_section_location(xsec)
+    channel_2.generate_parallel_offsets()
 
     channel_1.fill_wedge(channel_2)
-
-    print("Wedge:")
-    tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom" for tri in channel_1._wedge_fill_triangles]
-    print("\nUNION\n".join(tri_queries))
-    [print(tri.geometry.wkb) for tri in channel_1._wedge_fill_triangles]
-    # assert len(channel_1._wedge_fill_triangles) == 4
-    # assert len(channel_2._wedge_fill_triangles) == 0
-    # assert channel_1. \
-    #        _wedge_fill_triangles[0]. \
-    #        geometry. \
-    #        wkb == b"\x01\x03\x00\x00\x80\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0\xbf\x00\x00\x00" \
-    #               b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00&@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
-    #               b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\xa2\xd3\xa5\xb9\xea`\xef\xbf\x1cvQaU\x1a\xc9?\x00\x00" \
-    #               b"\x00\x00\x00\x00&@\x00\x00\x00\x00\x00\x00\xf0\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
-    #               b"\x00\x00\x00&@"
-    # assert channel_1. \
-    #        _wedge_fill_triangles[1]. \
-    #        geometry. \
-    #        wkb == b"\x01\x03\x00\x00\x80\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0\xbf\x00\x00\x00" \
-    #               b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00&@\xa2\xd3\xa5\xb9\xea`\xef\xbf\x1cvQaU\x1a\xc9?\x00" \
-    #               b"\x00\x00\x00\x00\x00&@\x00\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
-    #               b"\x00\x00\x00\x00(@\x00\x00\x00\x00\x00\x00\xf0\xbf\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
-    #               b"\x00\x00\x00&@"
-    # assert channel_1. \
-    #        _wedge_fill_triangles[2]. \
-    #        geometry. \
-    #        wkb == b"\x01\x03\x00\x00\x80\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00" \
-    #               b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00(" \
-    #               b"@\xa2\xd3\xa5\xb9\xea`\xef\xbf\x1cvQaU\x1a\xc9?\x00\x00\x00\x00\x00\x00&@\xa2\xd3\xa5\xb9\xea" \
-    #               b"`\xff\xbf\x1cvQaU\x1a\xd9?\x00\x00\x00\x00\x00\x00(" \
-    #               b"@\x00\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00(@"
+    channel_2.fill_wedge(channel_1)
 
 
 def test_indexed_point():
@@ -858,7 +944,11 @@ if __name__ == "__main__":
     test_channel_azimuth_at()
     test_cross_section_location_thalweg_y()
     test_cross_section_location_z_at()
+    test_channel_vertex_positions()
+    test_channel_properties()
+    test_channel_outline()
+    test_channel_parallel_offsets()
     test_indexed_point()
     test_triangle()
     test_find_wedge_channels()
-    test_fill_wedge()  # FAILS
+    test_fill_wedge()

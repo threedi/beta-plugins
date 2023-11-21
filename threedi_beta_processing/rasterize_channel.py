@@ -700,7 +700,7 @@ class Channel:
         selects = []
         for i, tri in enumerate(self.triangles):
             selects.append(
-                f"SELECT {i + 1} as id, geom_from_wkt('{str(tri.geometry.wkt)}')"
+                f"SELECT {i + 1} as id, geom_from_wkt('{str(tri.geometry.wkt)}') as geom /*:polygon:28992*/"
             )
         return "\nUNION\n".join(selects)
 
