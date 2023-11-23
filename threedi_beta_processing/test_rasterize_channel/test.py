@@ -14,6 +14,7 @@ from rasterize_channel import (
     find_wedge_channels,
     # fill_wedges,
     parse_cross_section_table,
+    triangulate_between,
 )
 
 
@@ -939,16 +940,32 @@ def test_triangle():
     assert not tri.is_between(line_1, line_2)
 
 
+def test_triangulate_between():
+    points_1 = [IndexedPoint(50.83339949639075, 5.166397139153477, 15, index=8)]
+    points_2 = [
+        IndexedPoint(50.84932298251876, 0.166422494958816, 10, index=5),
+        IndexedPoint(46.44462245723698, 2.532561392526427, 15, index=9)
+    ]
+    for triangle in triangulate_between(
+            side_1_points=points_1,
+            side_1_distances=[5.0],
+            side_2_points=points_2,
+            side_2_distances=[0, 5.0],
+    ):
+        print(triangle.geometry.wkt)
+
+
 if __name__ == "__main__":
-    test_parse_cross_section_table()
-    test_channel_azimuth_at()
-    test_cross_section_location_thalweg_y()
-    test_cross_section_location_z_at()
-    test_channel_vertex_positions()
-    test_channel_properties()
-    test_channel_outline()
-    test_channel_parallel_offsets()
-    test_indexed_point()
-    test_triangle()
-    test_find_wedge_channels()
-    test_fill_wedge()
+    # test_parse_cross_section_table()
+    # test_channel_azimuth_at()
+    # test_cross_section_location_thalweg_y()
+    # test_cross_section_location_z_at()
+    # test_channel_vertex_positions()
+    # test_channel_properties()
+    # test_channel_outline()
+    # test_channel_parallel_offsets()
+    # test_indexed_point()
+    # test_triangle()
+    test_triangulate_between()
+    # test_find_wedge_channels()
+    # test_fill_wedge()
