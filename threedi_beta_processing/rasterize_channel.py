@@ -1,6 +1,3 @@
-# TODO make fill_wedges work again
-# TODO support vertical segments in YZ profiles
-
 from enum import Enum
 from typing import Iterator, List, Union, Set, Sequence, Tuple
 
@@ -218,7 +215,9 @@ class Triangle:
             tuple(sorted([idx[2], idx[0]])),
         }
 
-    def is_between(self, line_1: LineString, line_2: LineString):
+    def is_between(self, line_1: Union[Point, LineString], line_2: Union[Point, LineString]):
+        if type(line_1) == Point or type(line_2) == Point:
+            return True
         if not (self.geometry.touches(line_1) and self.geometry.touches(line_2)):
             return False
         valid = True
@@ -789,8 +788,8 @@ def triangulate_between(
     :param side_2_points: list of points located along a line on side 2
     :param side_2_distances: distance along the line on which these points are located
     """
-    side_1_line = LineString([point.geom for point in side_1_points])
-    side_2_line = LineString([point.geom for point in side_2_points])
+    side_1_line = LineString([point.geom for point in side_1_points]) if len(side_1_points) > 1 else side_1_points[0].geom
+    side_2_line = LineString([point.geom for point in side_2_points]) if len(side_2_points) > 1 else side_2_points[0].geom
     side_1_idx = 0
     side_2_idx = 0
     side_1_last_idx = len(side_1_points) - 1

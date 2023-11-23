@@ -941,19 +941,20 @@ def test_triangle():
 
 
 def test_triangulate_between():
-    points_1 = [IndexedPoint(50.83339949639075, 5.166397139153477, 15, index=8)]
+    # Side 1 has only 1 point (corner case)
+    points_1 = [IndexedPoint(50, 5, 15, index=8)]
     points_2 = [
-        IndexedPoint(50.84932298251876, 0.166422494958816, 10, index=5),
-        IndexedPoint(46.44462245723698, 2.532561392526427, 15, index=9)
+        IndexedPoint(50, 0, 10, index=5),
+        IndexedPoint(45, 2.5, 15, index=9)
     ]
-    for triangle in triangulate_between(
+    triangles = [triangle for triangle in triangulate_between(
             side_1_points=points_1,
             side_1_distances=[5.0],
             side_2_points=points_2,
             side_2_distances=[0, 5.0],
-    ):
-        print(triangle.geometry.wkt)
-
+    )]
+    assert len(triangles) == 1
+    assert triangles[0].geometry.wkt == "POLYGON Z ((50 5 15, 50 0 10, 45 2.5 15, 50 5 15))"
 
 if __name__ == "__main__":
     # test_parse_cross_section_table()
