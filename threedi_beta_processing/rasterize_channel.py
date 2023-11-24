@@ -606,8 +606,8 @@ class Channel:
             channel_to_update_idx = -1  # end
             wedge_fill_points_source = self
             wedge_fill_points_source_idx = 0  # start
-            a = ccw_angle(other, self)
-            if ccw_angle(other, self) > 180:
+            a = ccw_angle(self, other)
+            if ccw_angle(self, other) > 180:
                 channel_to_update_side = LEFT
                 wedge_fill_points_source_side = LEFT
             else:
@@ -649,7 +649,7 @@ class Channel:
         # add points from `channel_to_update`
         offsets_to_add = [
             offset for offset in channel_to_update.unique_offsets
-            if offset * channel_to_update_side < 0
+            if offset * channel_to_update_side > 0
         ]
         for i, offset in enumerate(offsets_to_add):
             channel_to_update_offsets.append(offset)
@@ -662,7 +662,7 @@ class Channel:
         # add points from the other channel (`wedge_fill_points_source`)
         offsets_to_add = [
             offset for offset in wedge_fill_points_source.unique_offsets
-            if offset * wedge_fill_points_source_side < 0
+            if offset * wedge_fill_points_source_side > 0
         ]
         for offset in offsets_to_add:
             wedge_fill_points_source_offsets.append(offset)
@@ -914,6 +914,14 @@ def find_wedge_channels(
 
 
 def fill_wedges(channels: List[Channel]):
+    """
+    In a list of Channels, find cases where a wedge needs to be filled and fill them, i.e. add wedge triangles to
+    one of the two channels involved.
+
+    We iterate over each junction (connection node), find the two channels in the junction between which a wedge needs
+    to be filled (i.e. angle between them is > 180 degrees), and fill them once (i.e. we only call
+    ``channel1.fill_wedge(channel2)`` and not ``channel2.fill_wedge(channel1)``
+    """
     connection_node_channels_dict = get_channels_per_connection_node(channels)
     for connection_node_id, channels in connection_node_channels_dict.items():
         channel1, channel2 = find_wedge_channels(

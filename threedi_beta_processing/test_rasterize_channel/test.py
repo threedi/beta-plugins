@@ -60,7 +60,7 @@ def get_test_channel(nr: int = 0):
             connection_node_start_id=2,
             connection_node_end_id=4,
             id=3,
-        )
+            )
         xsec = get_test_cross_section_location()
         xsec.geometry = Point(50, 0)
         channel.add_cross_section_location(xsec)
@@ -753,11 +753,17 @@ def test_find_wedge_channels():
 
 
 def test_fill_wedge():
-    # Channels with same, symmetrical cross-section, connected head-to-tail (-->-->), wedge at left side
+    # Channels with same, symmetrical cross-section,
+    # tail of channel 1 is connected to head of channel 2 | <--<--
+    # wedge at right side
     channel_1, channel_2 = get_wedge_channels()
     channel_1.generate_parallel_offsets()
     channel_2.generate_parallel_offsets()
 
+    # print("channel 1 geometry:")
+    # print(f"SELECT ST_GeomFromText('{channel_1.geometry.wkt}')/*:linestring:28992*/ as geom")
+    # print("channel 2 geometry:")
+    # print(f"SELECT ST_GeomFromText('{channel_2.geometry.wkt}')/*:linestring:28992*/ as geom")
     # print("channel 1 triangles:")
     # print(channel_1.as_query())
     # print("channel 2 triangles:")
@@ -799,7 +805,6 @@ def test_fill_wedge():
     # Channels with same, asymmetrical cross-section, connected head-to-tail (-->-->), wedge at left side
     channel_1, channel_2 = get_wedge_channels()
 
-    # YZ
     y, z = parse_cross_section_table(
         table="0, 3\n2, 1\n4, 0\n5, 4",
         cross_section_shape=SupportedShape.YZ.value,
@@ -860,6 +865,7 @@ def test_fill_wedge():
                   b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00(@"
 
     # Case drawn in QGIS that lead to errors
+    # Channel 1 head connects to channel 2 tail, wedge at right side
     channel_1 = get_test_channel(4)
     xsec = get_test_cross_section_location(4)
     channel_1.add_cross_section_location(xsec)
@@ -870,8 +876,31 @@ def test_fill_wedge():
     channel_2.add_cross_section_location(xsec)
     channel_2.generate_parallel_offsets()
 
+    # print("channel 2 triangles:")
+    # print(channel_2.as_query())
+
+    # print("channel 1 triangles without wedge:")
+    # print(channel_1.as_query())
+    #
     channel_1.fill_wedge(channel_2)
-    channel_2.fill_wedge(channel_1)
+    # print("channel 1 triangles with wedge:")
+    # print(channel_1.as_query())
+    #
+    # print("Wedge:")
+    # tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in channel_1._wedge_fill_triangles]
+    # print("\nUNION\n".join(tri_queries))
+    # print(channel_1.geometry.wkt)
+    # print(channel_2.geometry.wkt)
+    # [print(tri.geometry.wkb) for tri in channel_1._wedge_fill_triangles]
+    assert len(channel_1._wedge_fill_triangles) == 1
+    assert len(channel_2._wedge_fill_triangles) == 0
+    assert channel_1. \
+           _wedge_fill_triangles[0]. \
+           geometry. \
+           wkb == b"\x01\x03\x00\x00\x80\x01\x00\x00\x00\x04\x00\x00\x00\xe1B\xebS\x87mI@\xb3B\x1e\xbbJV\xfd\xbf\x00" \
+                  b"\x00\x00\x00\x00\x00*@b\xd4\x90\x9d\xb6lI@\x00[" \
+                  b"\x95\x12UM\xc5?\x00\x00\x00\x00\x00\x00$@\x0e\xc8\xfd\xe7;NJ@H\x18\x7f\xe6\x07\xf6\xe8\xbf\x00" \
+                  b"\x00\x00\x00\x00\x00*@\xe1B\xebS\x87mI@\xb3B\x1e\xbbJV\xfd\xbf\x00\x00\x00\x00\x00\x00*@"
 
 
 def test_indexed_point():
@@ -956,6 +985,7 @@ def test_triangulate_between():
     assert len(triangles) == 1
     assert triangles[0].geometry.wkt == "POLYGON Z ((50 5 15, 50 0 10, 45 2.5 15, 50 5 15))"
 
+
 if __name__ == "__main__":
     # test_parse_cross_section_table()
     # test_channel_azimuth_at()
@@ -967,6 +997,7 @@ if __name__ == "__main__":
     # test_channel_parallel_offsets()
     # test_indexed_point()
     # test_triangle()
-    test_triangulate_between()
+    # test_triangulate_between()
     # test_find_wedge_channels()
-    # test_fill_wedge()
+    test_fill_wedge()
+    # temp_test()
