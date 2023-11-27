@@ -760,21 +760,21 @@ def test_fill_wedge():
     channel_1.generate_parallel_offsets()
     channel_2.generate_parallel_offsets()
 
-    # print("channel 1 geometry:")
-    # print(f"SELECT ST_GeomFromText('{channel_1.geometry.wkt}')/*:linestring:28992*/ as geom")
-    # print("channel 2 geometry:")
-    # print(f"SELECT ST_GeomFromText('{channel_2.geometry.wkt}')/*:linestring:28992*/ as geom")
-    # print("channel 1 triangles:")
-    # print(channel_1.as_query())
-    # print("channel 2 triangles:")
-    # print(channel_2.as_query())
+    print("channel 1 geometry:")
+    print(f"SELECT ST_GeomFromText('{channel_1.geometry.wkt}')/*:linestring:28992*/ as geom")
+    print("channel 2 geometry:")
+    print(f"SELECT ST_GeomFromText('{channel_2.geometry.wkt}')/*:linestring:28992*/ as geom")
+    print("channel 1 triangles:")
+    print(channel_1.as_query())
+    print("channel 2 triangles:")
+    print(channel_2.as_query())
 
     channel_1.fill_wedge(channel_2)
 
-    # print("Wedge:")
-    # tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom" for tri in channel_1._wedge_fill_triangles]
-    # print("\nUNION\n".join(tri_queries))
-    # [print(tri.geometry.wkb) for tri in channel_1._wedge_fill_triangles]
+    print("Wedge:")
+    tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom" for tri in channel_1._wedge_fill_triangles]
+    print("\nUNION\n".join(tri_queries))
+    [print(tri.geometry.wkb) for tri in channel_1._wedge_fill_triangles]
     assert len(channel_1._wedge_fill_triangles) == 3
     assert len(channel_2._wedge_fill_triangles) == 0
     assert channel_1. \

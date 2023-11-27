@@ -16,6 +16,7 @@ import numpy as np
 from osgeo import gdal
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (
+    Qgis,
     QgsApplication,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
@@ -154,6 +155,8 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         warnings = []
         total_missing_pixels = 0
         for i, channel_feature in enumerate(channel_features.getFeatures()):
+            if feedback.isCanceled():
+                return {}
             channel_id = channel_feature.attribute("id")
             multi_step_feedback.setProgressText(
                 f"Reading channel and cross section data for channel {channel_id}..."
@@ -193,6 +196,8 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             multi_step_feedback.setProgress(100 * i / channel_features.featureCount())
 
         fill_wedges(channels)
+        if feedback.isCanceled():
+            return {}
 
         multi_step_feedback.setCurrentStep(1)
         if len(channels) == 0:
@@ -202,6 +207,8 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException()
         else:
             for i, channel in enumerate(channels):
+                if feedback.isCanceled():
+                    return {}
                 multi_step_feedback.setProgressText(
                     f"Rasterizing channel {channel.id}..."
                 )
@@ -238,6 +245,8 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 finished = False
                 processed_triangles = []
                 while not finished:
+                    if feedback.isCanceled():
+                        return {}
                     finished = True
                     for k in processed_triangles:
                         triangles_dict.pop(k)
@@ -245,20 +254,29 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     for j, triangle in triangles_dict.items():
                         if (
                             j == 0
-                            or np.sum(
-                                np.in1d(triangle.vertex_indices, occupied_vertices)
-                            )
-                            >= 2
+                            or np.sum(np.in1d(triangle.vertex_indices, occupied_vertices)) >= 2
                         ):
                             error = editor.addFace(triangle.vertex_indices)
-                            # Error types: https://api.qgis.org/api/classQgis.html#a69496edec4c420185984d9a2a63702dc
+                            # To list error types, run [e for e in Qgis.MeshEditingErrorType]
                             if error.errorType == 0:
                                 finished = False
                                 processed_triangles.append(j)
                                 faces_added += 1
-                                occupied_vertices = np.append(
-                                    occupied_vertices, triangle.vertex_indices
+                                occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
+                            else:
+                                feedback.pushInfo(
+                                    f"Could not (yet) add triangle {j}.\n"
+                                    f"Error type {str(error.errorType)}.\n"
+                                    f"Error element index: {error.elementIndex}\n"
+                                    f"Error point: {[p.geom for p in triangle.points if p.index == error.elementIndex]}\n"
+                                    f"WKT: {triangle.geometry.wkt}\n"
+                                    f"Indices: {[p.index for p in triangle.points]}\n"
+                                    f"Points: {[pnt.geom.wkt for pnt in channel.points if pnt.index in [p.index for p in triangle.points]]}"
                                 )
+                                # if error.errorType == Qgis.MeshEditingErrorType.ManifoldFace:
+                                #     if error.elementIndex != -1 and error.elementIndex < mesh_layer.meshFaceCount():
+                                #         editor.removeFaces([error.elementIndex])
+
                 if faces_added != total_triangles:
                     missing_area = np.sum(
                         np.array([tri.geometry.area for tri in triangles_dict.values()])
