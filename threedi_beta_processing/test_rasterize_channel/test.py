@@ -970,6 +970,30 @@ def test_triangle():
 
 
 def test_triangulate_between():
+
+    # Typical wedge: Both sides have > 1 points, start from the same 0 point
+    points_1 = [
+        IndexedPoint(0, 0, 10, index=0),
+        IndexedPoint(0, 2, 20, index=1),
+        IndexedPoint(0, 4, 30, index=2),
+        IndexedPoint(0, 8, 40, index=3),
+    ]
+    points_2 = [
+        # IndexedPoint(0, 0, 10, index=4),
+        IndexedPoint(2, 2, 20, index=5),
+        IndexedPoint(4, 4, 30, index=6),
+        IndexedPoint(8, 8, 40, index=7),
+    ]
+    points_2.reverse()
+    side_2_distances = [0, 2, 4, 8]
+    side_2_distances.reverse()
+    triangles = [triangle for triangle in triangulate_between(
+            side_1_points=points_1,
+            side_2_points=points_2,
+    )]
+    tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in triangles]
+    print("\nUNION\n".join(tri_queries))
+
     # Side 1 has only 1 point (corner case)
     points_1 = [IndexedPoint(50, 5, 15, index=8)]
     points_2 = [
@@ -978,9 +1002,7 @@ def test_triangulate_between():
     ]
     triangles = [triangle for triangle in triangulate_between(
             side_1_points=points_1,
-            side_1_distances=[5.0],
             side_2_points=points_2,
-            side_2_distances=[0, 5.0],
     )]
     assert len(triangles) == 1
     assert triangles[0].geometry.wkt == "POLYGON Z ((50 5 15, 50 0 10, 45 2.5 15, 50 5 15))"
@@ -997,7 +1019,7 @@ if __name__ == "__main__":
     # test_channel_parallel_offsets()
     # test_indexed_point()
     # test_triangle()
-    # test_triangulate_between()
+    test_triangulate_between()
     # test_find_wedge_channels()
-    test_fill_wedge()
+    # test_fill_wedge()
     # temp_test()

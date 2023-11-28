@@ -202,8 +202,10 @@ class IndexedPoint:
 class Triangle:
     def __init__(self, points: List[IndexedPoint]):
         self.points: List[IndexedPoint] = points
-        self.geometry = Polygon(LineString([point.geom for point in points]))
-        self.vertex_indices = [point.index for point in points]
+
+    @property
+    def vertex_indices(self) -> List:
+        return [point.index for point in self.points]
 
     @property
     def sides(self) -> Set:
@@ -214,6 +216,10 @@ class Triangle:
             tuple(sorted(idx[1:3])),
             tuple(sorted([idx[2], idx[0]])),
         }
+
+    @property
+    def geometry(self) -> Polygon:
+        return Polygon(LineString([point.geom for point in self.points]))
 
     def is_between(self, line_1: Union[Point, LineString], line_2: Union[Point, LineString]):
         if type(line_1) == Point or type(line_2) == Point:
@@ -465,6 +471,8 @@ class Channel:
         for po in self.parallel_offsets:
             all_points += po.points
         all_points += self._wedge_fill_points
+        all_points.sort(key=lambda x: x.index)
+        assert len(all_points) -1 == all_points[-1].index
         return all_points
 
     @staticmethod
@@ -475,12 +483,10 @@ class Channel:
     ) -> bool:
         """Adds the triangle to `sorted_triangles` if at least one of its sides is already present in `processed_sides`
         Returns True if adding was successful, False if not"""
-        new_sides = triangle.sides
-        if len(
-            new_sides & processed_sides
-        ):  # at least one of the sides of the new triangle has already been processed
+        if len(triangle.sides & processed_sides):
+            # at least one of the sides of the new triangle has already been processed
             sorted_triangles.append(triangle)
-            processed_sides.update(new_sides)
+            processed_sides.update(triangle.sides)
             return True
         else:
             return False
@@ -492,14 +498,12 @@ class Channel:
         preceding triangle in the list. If this is not possible, the resulting list may contain several sections to
         which this requirement applies, but not between the sections.
         """
-        triangles = []
+        triangles = [tri for tri in self._wedge_fill_triangles]
         for i in range(len(self.parallel_offsets) - 1):
             for tri in self.parallel_offsets[i].triangulate(
                 self.parallel_offsets[i + 1]
             ):
                 triangles.append(tri)
-        for tri in self._wedge_fill_triangles:
-            triangles.append(tri)
 
         # sort
         processed_sides = triangles[0].sides
@@ -650,9 +654,7 @@ class Channel:
         # Generate triangles to connect the added points to the existing points
         for triangle in triangulate_between(
             side_1_points=channel_to_update_points,
-            side_1_distances=channel_to_update_offsets,
             side_2_points=wedge_fill_points,
-            side_2_distances=wedge_fill_points_source_offsets,
         ):
             self._wedge_fill_triangles.append(triangle)
 
@@ -756,17 +758,13 @@ class ParallelOffset:
     def triangulate(self, other):
         return triangulate_between(
             side_1_points=self.points,
-            side_1_distances=self.vertex_positions,
             side_2_points=other.points,
-            side_2_distances=other.vertex_positions,
         )
 
 
 def triangulate_between(
     side_1_points: List[IndexedPoint],
-    side_1_distances: List[float],
     side_2_points: List[IndexedPoint],
-    side_2_distances: List[float],
 ) -> Iterator[Triangle]:
     """
     Generate a set of triangles that fills the space between two lines (side 1 and side 2)
@@ -776,8 +774,29 @@ def triangulate_between(
     :param side_2_points: list of points located along a line on side 2
     :param side_2_distances: distance along the line on which these points are located
     """
-    side_1_line = LineString([point.geom for point in side_1_points]) if len(side_1_points) > 1 else side_1_points[0].geom
-    side_2_line = LineString([point.geom for point in side_2_points]) if len(side_2_points) > 1 else side_2_points[0].geom
+
+    # flip points of one side if that makes the sides more parallel
+    if side_1_points[0].geom.distance(side_2_points[0].geom) > side_1_points[0].geom.distance(side_2_points[-1].geom):
+        side_2_points.reverse()
+
+    # make lines out of the IndexedPoint lists, and calculate distances of each point along that line
+    if len(side_1_points) > 1:
+        side_1_line = LineString([point.geom for point in side_1_points])
+        side_1_distances = [side_1_line.project(point.geom) for point in side_1_points]
+    else:
+        side_1_line = side_1_points[0].geom
+        side_1_distances = [0]
+    if len(side_2_points) > 1:
+        side_2_line = LineString([point.geom for point in side_2_points])
+        side_2_distances = [side_2_line.project(point.geom) for point in side_2_points]
+    else:
+        side_2_line = side_2_points[0].geom
+        side_2_distances = [0]
+
+    # raise error if lines intersect
+    if side_1_line.intersects(side_2_line):
+        raise ValueError("Intersecting sides")
+
     side_1_idx = 0
     side_2_idx = 0
     side_1_last_idx = len(side_1_points) - 1
