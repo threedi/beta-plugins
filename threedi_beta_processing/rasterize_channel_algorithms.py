@@ -14,8 +14,9 @@ from uuid import uuid4
 
 import numpy as np
 from osgeo import gdal
-from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (
+    Qgis,
     QgsApplication,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
@@ -24,12 +25,15 @@ from qgis.core import (
     QgsMeshLayer,
     QgsProcessingMultiStepFeedback,
     QgsFeature,
+    QgsFeatureSink,
+    QgsField,
     QgsFields,
     QgsPoint,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingException,
     QgsProcessingFeedback,
+    QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
     QgsProcessingParameterNumber,
     QgsProcessingParameterRasterDestination,
@@ -38,6 +42,7 @@ from qgis.core import (
     QgsProviderRegistry,
     QgsRectangle,
     QgsVectorLayer,
+    QgsWkbTypes,
 )
 import processing
 
@@ -50,6 +55,9 @@ from .rasterize_channel import (
     fill_wedges,
 )
 from .rasterize_channel_utils import merge_rasters
+
+
+DEBUG_MODE = False
 
 
 def align_qgs_rectangle(extent: QgsRectangle, xres, yres):
@@ -73,6 +81,10 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
     INPUT_PIXEL_SIZE = "PIXEL_SIZE"
 
     OUTPUT = "OUTPUT"
+
+    if DEBUG_MODE:
+        TRIANGLE_OUTPUT = "TRIANGLE_OUTPUT"
+        POINTS_OUTPUT = "POINTS_OUTPUT"
 
     def initAlgorithm(self, config):
 
@@ -112,6 +124,21 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        if DEBUG_MODE:
+            self.addParameter(
+                QgsProcessingParameterFeatureSink(
+                    self.TRIANGLE_OUTPUT,
+                    self.tr('Triangle output')
+                )
+            )
+
+            self.addParameter(
+                QgsProcessingParameterFeatureSink(
+                    self.POINTS_OUTPUT,
+                    self.tr('Points output')
+                )
+            )
+
     def processAlgorithm(self, parameters, context, feedback):
         # Progress is reported in three steps:
         # preparation phase (10%),
@@ -127,6 +154,53 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         )
 
         output_raster = self.parameterAsOutputLayer(parameters, self.OUTPUT, context)
+
+        if DEBUG_MODE:
+
+            triangles_fields = QgsFields()
+            triangles_fields.append(
+                QgsField(
+                    name="channel_nr",
+                    type=QVariant.Int
+                )
+            )
+            triangles_fields.append(
+                QgsField(
+                    name="triangle_nr",
+                    type=QVariant.Int
+                )
+            )
+            (triangles_sink, triangles_dest_id) = self.parameterAsSink(
+                parameters,
+                self.TRIANGLE_OUTPUT,
+                context,
+                triangles_fields,
+                QgsWkbTypes.PolygonZ,
+                cross_section_location_features.sourceCrs()
+            )
+
+            points_fields = QgsFields()
+            points_fields.append(
+                QgsField(
+                    name="channel_nr",
+                    type=QVariant.Int
+                )
+            )
+            points_fields.append(
+                QgsField(
+                    name="triangle_nr",
+                    type=QVariant.Int
+                )
+            )
+            (points_sink, points_dest_id) = self.parameterAsSink(
+                parameters,
+                self.POINTS_OUTPUT,
+                context,
+                points_fields,
+                QgsWkbTypes.PointZ,
+                cross_section_location_features.sourceCrs()
+            )
+
         dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
         user_pixel_size = self.parameterAsDouble(
             parameters, self.INPUT_PIXEL_SIZE, context
@@ -154,6 +228,8 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         warnings = []
         total_missing_pixels = 0
         for i, channel_feature in enumerate(channel_features.getFeatures()):
+            if feedback.isCanceled():
+                return {}
             channel_id = channel_feature.attribute("id")
             multi_step_feedback.setProgressText(
                 f"Reading channel and cross section data for channel {channel_id}..."
@@ -164,9 +240,12 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             ) in cross_section_location_features.getFeatures():
                 if channel_id == cross_section_location_feature.attribute("channel_id"):
                     cross_section_location = CrossSectionLocation.from_qgs_feature(
-                        cross_section_location_feature
+                        cross_section_location_feature,
+                        wall_displacement=pixel_size/4.0,
+                        simplify_tolerance=pixel_size/2.0
                     )
                     channel.add_cross_section_location(cross_section_location)
+            channel.geometry = channel.geometry.simplify(pixel_size)
             try:
                 channel.generate_parallel_offsets()
                 channels.append(channel)
@@ -174,13 +253,13 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 errors.append(channel_id)
                 feedback.reportError(
                     f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
-                    f"for some cross-sectional widths. "
+                    f"for some cross-sections. "
                 )
             except InvalidOffsetError:
                 errors.append(channel_id)
                 feedback.reportError(
                     f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
-                    f"for some cross-sectional widths. It may help to split the channel in the middle of its bends."
+                    f"for some cross-sections. It may help to split the channel in the middle of its bends."
                 )
             except WidthsNotIncreasingError:
                 errors.append(channel_id)
@@ -191,6 +270,8 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             multi_step_feedback.setProgress(100 * i / channel_features.featureCount())
 
         fill_wedges(channels)
+        if feedback.isCanceled():
+            return {}
 
         multi_step_feedback.setCurrentStep(1)
         if len(channels) == 0:
@@ -200,10 +281,22 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException()
         else:
             for i, channel in enumerate(channels):
+                if feedback.isCanceled():
+                    return {}
                 multi_step_feedback.setProgressText(
                     f"Rasterizing channel {channel.id}..."
                 )
                 points = [QgsPoint(*point.geom.coords[0]) for point in channel.points]
+                if DEBUG_MODE:
+                    for (point_idx, qgs_point) in [
+                        (point.index, QgsPoint(*point.geom.coords[0])) for point in channel.points
+                    ]:
+                        point_feature = QgsFeature()
+                        point_feature.setFields(points_fields)
+                        point_feature.setAttribute(0, i)
+                        point_feature.setAttribute(1, point_idx)
+                        point_feature.setGeometry(qgs_point)
+                        points_sink.addFeature(point_feature, QgsFeatureSink.FastInsert)
 
                 # create temporary mesh file
                 provider_meta = QgsProviderRegistry.instance().providerMetadata("mdal")
@@ -214,8 +307,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 )
                 mesh_format = "Ugrid"
                 crs = QgsCoordinateReferenceSystem()
-                provider_meta.createMeshData(mesh, temp_mesh_fullpath, mesh_format, crs)
-                provider_meta.createMeshData(mesh=mesh, fileName=temp_mesh_fullpath, driverName="mdal", crs=crs)
+                provider_meta.createMeshData(mesh=mesh, fileName=temp_mesh_fullpath, driverName=mesh_format, crs=crs)
                 mesh_layer = QgsMeshLayer(temp_mesh_fullpath, "editable mesh", "mdal")
 
                 # add points to mesh
@@ -230,12 +322,24 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
 
                 # add faces to mesh
                 triangles_dict = {k: v for k, v in enumerate(channel.triangles)}
+                if DEBUG_MODE:
+                    for triangle_nr, triangle in triangles_dict.items():
+                        triangle_feature = QgsFeature()
+                        triangle_feature.setFields(triangles_fields)
+                        triangle_feature.setAttribute(0, i)
+                        triangle_feature.setAttribute(1, triangle_nr)
+                        triangle_geometry = QgsGeometry()
+                        triangle_geometry.fromWkb(triangle.geometry.wkb)
+                        triangle_feature.setGeometry(triangle_geometry)
+                        triangles_sink.addFeature(triangle_feature, QgsFeatureSink.FastInsert)
                 total_triangles = len(triangles_dict)
                 faces_added = 0
                 occupied_vertices = np.array([], dtype=int)
                 finished = False
                 processed_triangles = []
                 while not finished:
+                    if feedback.isCanceled():
+                        return {}
                     finished = True
                     for k in processed_triangles:
                         triangles_dict.pop(k)
@@ -243,24 +347,37 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     for j, triangle in triangles_dict.items():
                         if (
                             j == 0
-                            or np.sum(
-                                np.in1d(triangle.vertex_indices, occupied_vertices)
-                            )
-                            >= 2
+                            or np.sum(np.in1d(triangle.vertex_indices, occupied_vertices)) >= 2
                         ):
                             error = editor.addFace(triangle.vertex_indices)
-                            # Error types: https://api.qgis.org/api/classQgis.html#a69496edec4c420185984d9a2a63702dc
-                            if error.errorType == 0:
+                            # To list error types, run [e for e in Qgis.MeshEditingErrorType]
+                            if error.errorType == Qgis.MeshEditingErrorType.NoError:
                                 finished = False
                                 processed_triangles.append(j)
                                 faces_added += 1
-                                occupied_vertices = np.append(
-                                    occupied_vertices, triangle.vertex_indices
+                                occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
+                                if DEBUG_MODE:
+                                    feedback.pushInfo(f"Added triangle with indices {triangle.vertex_indices}")
+                            elif DEBUG_MODE:
+                                feedback.pushInfo(
+                                    f"Could not (yet) add triangle {j}.\n"
+                                    f"Error type {str(error.errorType)}.\n"
+                                    f"Error element index: {error.elementIndex}\n"
+                                    f"Error point: {[p.geom for p in triangle.points if p.index == error.elementIndex]}\n"
+                                    f"WKT: {triangle.geometry.wkt}\n"
+                                    f"Vertex indices: {triangle.vertex_indices}\n"
+                                    f"Points: {[pnt.geom.wkt for pnt in channel.points if pnt.index in [p.index for p in triangle.points]]}"
                                 )
+
                 if faces_added != total_triangles:
                     missing_area = np.sum(
                         np.array([tri.geometry.area for tri in triangles_dict.values()])
                     )
+                    if DEBUG_MODE:
+                        feedback.pushInfo(f"Missing triangles:")
+                        tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in
+                                       triangles_dict.values()]
+                        feedback.pushInfo("\nUNION\n".join(tri_queries))
                     if missing_area > (pixel_size**2):
                         warnings.append(channel.id),
                         missing_pixels = int(missing_area / (pixel_size**2))
@@ -413,8 +530,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             <li>Please run the 3Di Check Schematisation algorithm and resolve any issues relating to channels or cross section locations before running this algorithm</li>
             <li>Use the <em>3Di Schematisation Editor &gt; Load from spatialite</em> to create the required input layers for the algorithm.</li>
             <li>Some channels cannot be (fully) rasterized, e.g. wide cross section definitions on channels with sharp bends may lead to self-intersection of the described cross-section</li>
-            <li>Tabulated trapezium cross sections are fully supported</li>
-            <li>Tabulated rectangle cross sections will be processed as tabulated trapezium profiles</li>
+            <li>Tabulated trapezium, Tabulated rectangle, and YZ cross-sections are supported, as long as they always become wider when going up (vertical segments are allowed).</li>
             <li>Other cross section shapes are not supported</li>
             </ul>
             <h3>Parameters</h3>

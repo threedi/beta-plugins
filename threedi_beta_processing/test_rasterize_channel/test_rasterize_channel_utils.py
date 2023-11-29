@@ -2,10 +2,8 @@ from pathlib import Path
 
 from osgeo import gdal
 
-try:
-    from rasterize_channel_utils import merge_rasters
-except ImportError:
-    from threedi_beta_processing.rasterize_channel_utils import merge_rasters
+from ..rasterize_channel_utils import merge_rasters
+
 
 TEST_DATA_DIR = Path(__file__).parent
 
