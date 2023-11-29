@@ -293,10 +293,32 @@ class CrossSectionLocation:
         )
 
     @property
+    def parent(self):
+        return self._parent
+
+    @parent.setter
+    def parent(self, parent):
+        """
+        Set the parent (Channel) of this CrossSectionLocation
+        Also calculates the normalized position of the CrossSectionLocation along the channel
+        """
+        self._parent = parent
+        self._position_normalized = None if \
+            parent is None else \
+            self.parent.geometry.project(self.geometry, normalized=True)
+
+    @property
     def position(self):
-        if self.parent is None:
-            return
-        return self.parent.geometry.project(self.geometry)
+        """
+        Return the position along the parent Channel, in m from the start of the channel.
+
+        This position is calculated from the normalized position on the parent Channel's original geometry, i.e. the
+        geometry the Channel had when it was assigned as parent to this CrossSectionLocation.
+
+        This allows a ``simplify()`` of the Channel's geometry without messing up the intersections with its
+        CrossSectionLocations
+        """
+        return self._position_normalized * self.parent.geometry.length
 
     @property
     def max_width(self):

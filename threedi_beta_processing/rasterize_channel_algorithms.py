@@ -245,6 +245,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                         simplify_tolerance=pixel_size/2.0
                     )
                     channel.add_cross_section_location(cross_section_location)
+            channel.geometry = channel.geometry.simplify(pixel_size)
             try:
                 channel.generate_parallel_offsets()
                 channels.append(channel)
