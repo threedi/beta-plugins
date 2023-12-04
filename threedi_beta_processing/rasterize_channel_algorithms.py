@@ -73,7 +73,7 @@ def align_qgs_rectangle(extent: QgsRectangle, xres, yres):
 
 class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
     """
-    Rasterize channels using its cross sections
+    Rasterize channels using its cross-sections
     """
 
     INPUT_CHANNELS = "INPUT_CHANNELS"
@@ -252,8 +252,10 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             try:
                 if DEBUG_MODE:
                     feedback.pushInfo(f"Channel has {len(channel.cross_section_locations)} cross-section locations")
-                channel.generate_parallel_offsets()
-                channels.append(channel)
+                sub_channels = channel.make_valid()
+                for sub_channel in sub_channels:
+                    sub_channel.generate_parallel_offsets()
+                channels += sub_channels
             except EmptyOffsetError:
                 errors.append(channel_id)
                 feedback.reportError(

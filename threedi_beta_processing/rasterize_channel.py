@@ -181,7 +181,8 @@ def highest_valid_index_single_offset(line: LineString, offset: float) -> int:
     return highest_valid_idx
 
 
-def highest_valid_index(line: LineString, offsets: List[float]) -> int:
+def highest_valid_index(line: LineString, offsets: Sequence[float]) -> int:
+    offsets=list(offsets)  # allow numpy array as type of ``offsets``
     offsets.sort(key=lambda x: -1 * abs(x))  # largest offsets first, because will probably result in the lowest index
     minimum_idx = len(line.coords) - 1
     for offset in offsets:
@@ -242,11 +243,11 @@ class Triangle:
         self.points: List[IndexedPoint] = points
 
     @property
-    def vertex_indices(self) -> List:
+    def vertex_indices(self) -> List[int]:
         return [point.index for point in self.points]
 
     @property
-    def sides(self) -> Set:
+    def sides(self) -> Set[Tuple[int, ...]]:
         """Returns a set of tuples, where each tuple is a sorted pair of vertex indices describing a triangle's side"""
         idx = self.vertex_indices
         return {
@@ -275,6 +276,7 @@ class Triangle:
 class CrossSectionLocation:
     def __init__(
         self,
+        id: int,
         reference_level: float,
         bank_level: float,
         y_ordinates: np.array,
@@ -297,6 +299,7 @@ class CrossSectionLocation:
         if not is_monotonically_increasing(y_ordinates):
             raise YNotIncreasingError
 
+        self.id = id
         self.reference_level = reference_level
         self.bank_level = bank_level
         self.y_ordinates = y_ordinates
@@ -313,6 +316,7 @@ class CrossSectionLocation:
         qgs_geometry = feature.geometry()
         wkt_geometry = qgs_geometry.asWkt()
         shapely_geometry = wkt.loads(wkt_geometry)
+        id = feature.attribute("id")
         cross_section_shape = feature.attribute("cross_section_shape")
         table = feature.attribute("cross_section_table")
         y, z = parse_cross_section_table(
@@ -323,6 +327,7 @@ class CrossSectionLocation:
         y, z = simplify(y, z, tolerance=simplify_tolerance)
 
         return cls(
+            id=id,
             geometry=shapely_geometry,
             reference_level=feature.attribute("reference_level"),
             bank_level=feature.attribute("bank_level"),
@@ -335,9 +340,9 @@ class CrossSectionLocation:
         return self._parent
 
     @parent.setter
-    def parent(self, parent):
+    def parent(self, parent: 'Channel'):
         """
-        Set the parent (Channel) of this CrossSectionLocation
+        Set the parent of this CrossSectionLocation
         Also calculates the normalized position of the CrossSectionLocation along the channel
         """
         self._parent = parent
@@ -471,10 +476,23 @@ class Channel:
         return result
 
     def add_cross_section_location(self, cross_section_location: CrossSectionLocation):
-        """Become the parent of the cross section location"""
+        """
+        Become the parent of the cross-section location.
+        Inserts ``cross_section_location`` in the list of the channel's cross-section locations ordered by their
+        position
+        """
         cross_section_location.parent = self
         self.cross_section_locations.append(cross_section_location)
         self.cross_section_locations.sort(key=lambda x: x.position)
+
+    def cross_section_location_index(self, id: int):
+        """
+        Get the index of the CrossSectionLocation with given ``id``
+        Returns None if no CrossSectionLocation with that id is found
+        """
+        for i, xsec in enumerate(self.cross_section_locations):
+            if xsec.id == id:
+                return i
 
     def max_width_at(self, position: float) -> float:
         """Interpolated max cross-sectional width at given position along the channel"""
@@ -600,7 +618,7 @@ class Channel:
 
         return sorted_triangles
 
-    def find_vertex(self, connection_node_id, n: int) -> Point:
+    def find_vertex(self, connection_node_id: int, n: int) -> Point:
         """Starting from the given connection node, find the nth vertex"""
         if connection_node_id == self.connection_node_start_id:
             return Point(self.geometry.coords[n])
@@ -618,7 +636,7 @@ class Channel:
         second_point = self.find_vertex(connection_node_id, 1)
         return azimuth(connection_node_geometry, second_point)
 
-    def fill_wedge(self, other):
+    def fill_wedge(self, other: 'Channel'):
         """Add points and triangles to fill the wedge-shaped gap between self and other. Also updates self.outline"""
 
         # Find out if and how self and other_channel are connected
@@ -747,7 +765,7 @@ class Channel:
         )[0]
         self._extra_outline.append(extra_point_shifted.buffer(width_at_extra_point / 2))
 
-    def as_query(self):
+    def as_query(self) -> str:
         selects = []
         for i, tri in enumerate(self.triangles):
             selects.append(
@@ -755,16 +773,73 @@ class Channel:
             )
         return "\nUNION\n".join(selects)
 
-    def make_valid(self) -> List:
+    def split(self, vertex_index: int) -> Union[Tuple['Channel', 'Channel'], Tuple['Channel', None]]:
+        """
+        Split this Channel in two Channels at given ``vertex_index``
+        Both channels will include the first cross-section location beyond the split point
+        """
+        if vertex_index == len(self.geometry.coords) - 1:
+            return self, None
+        vertex = Point(self.geometry.coords[vertex_index])
+        vertex_index_position = self.geometry.project(vertex)
+        first_part = Channel(
+            id=self.id,
+            connection_node_start_id=self.connection_node_start_id,
+            connection_node_end_id=None,
+            geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[:vertex_index + 1]])
+        )
+        for xsec in self.cross_section_locations:
+            if xsec.position < vertex_index_position:
+                first_part.add_cross_section_location(xsec)
+            else:
+                # Add one last cross-section
+                first_part.add_cross_section_location(xsec)
+                # A bit hacky but quick way to give this cross-section location a "ghost" location on its new channel
+                self.cross_section_locations[
+                    self.cross_section_location_index(xsec.id)
+                ]._position_normalized = xsec._position_normalized
+                break
+
+        last_part = Channel(
+            id=self.id,
+            connection_node_start_id=None,
+            connection_node_end_id=self.connection_node_end_id,
+            geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[vertex_index:]])
+        )
+        for xsec in reversed(self.cross_section_locations):
+            if xsec.position > vertex_index_position:
+                last_part.add_cross_section_location(xsec)
+            else:
+                # Add one last cross-section
+                last_part.add_cross_section_location(xsec)
+                # A bit hacky but quick way to give this cross-section location a "ghost" location on its new channel
+                self.cross_section_locations[
+                    self.cross_section_location_index(xsec.id)
+                ]._position_normalized = xsec._position_normalized - first_part.geometry.length
+                break
+        return first_part, last_part
+
+    def make_valid(self) -> List['Channel']:
         """
         Return a list of Channels for which valid offsets can be generated. If needed, the input channel will be cut
         into parts. Always returns a list, even when the input channel is already valid
+
+        If ``self`` has parallel offsets, these will be generated for the resulting channels as well
         """
-        pass
+        result = []
+        possibly_invalid_channel = self
+        while possibly_invalid_channel:
+            hvi = highest_valid_index(line=possibly_invalid_channel.geometry, offsets=self.unique_offsets)
+            valid_part, possibly_invalid_channel = possibly_invalid_channel.split(vertex_index=hvi)
+            result.append(valid_part)
+        if len(self.parallel_offsets) > 0:
+            for channel in result:
+                channel.generate_parallel_offsets()
+        return result
 
 
 class ParallelOffset:
-    def __init__(self, parent: Channel, offset_distance):
+    def __init__(self, parent: Channel, offset_distance: float):
         """
         The side is determined by the sign of the distance parameter (negative for right side offset, positive for left
         side offset). Left and right are determined by following the direction of the given geometric points of the
@@ -808,12 +883,12 @@ class ParallelOffset:
             result.append(IndexedPoint(x, y, self.heights_at_vertices[i], index=self.vertex_indices[i]))
         return result
 
-    def set_vertex_indices(self, first_vertex_index):
+    def set_vertex_indices(self, first_vertex_index: int):
         self.vertex_indices = list(
             range(first_vertex_index, first_vertex_index + len(self.geometry.coords))
         )
 
-    def triangle_is_valid(self, triangle_points, other_parallel_offset):
+    def triangle_is_valid(self, triangle_points: Sequence[Point], other_parallel_offset: 'ParallelOffset'):
         """Return True if none of the sides of the triangle crosses the parallel offsets that should enclose it"""
         valid = True
         for start, end in [(0, 1), (0, 2), (1, 2)]:
