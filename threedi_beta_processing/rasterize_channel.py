@@ -715,6 +715,14 @@ class Channel:
             )
         return "\nUNION\n".join(selects)
 
+    def make_valid(self) -> List[Channel]:
+        """
+        Return a list of Channels for which valid offsets can be generated. If needed, the input channel will be cut
+        into parts. Always returns a list, even when the input channel is already valid
+        """
+
+
+
 
 class ParallelOffset:
     def __init__(self, parent: Channel, offset_distance):
