@@ -3,11 +3,17 @@ from typing import Iterator, List, Union, Set, Sequence, Tuple
 
 import numpy as np
 from shapely import __version__ as shapely_version
-if int(shapely_version.split(".")[0]) < 2:
-    raise Exception(f"Required Shapely version >= 2.0.0. Installed Shapely version: {shapely_version}")
+from shapely import geos_version
 from shapely import wkt
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 from shapely.ops import unary_union, nearest_points, transform
+
+
+if int(shapely_version.split(".")[0]) < 2:
+    raise Exception(f"Required Shapely version >= 2.0.0. Installed Shapely version: {shapely_version}")
+if not (geos_version[0] > 3 or (geos_version[0] == 3 and geos_version[1] >= 12)):
+    raise Exception(f"Required GEOS version >= 3.12.0. Installed GEOS version: {geos_version}")
+
 
 # Shapely method "offset_curve" docs: The side is determined by the sign of the distance parameter
 # (negative for right side offset, positive for left side offset). Left and right are determined by following
@@ -145,6 +151,43 @@ def variable_buffer(linestring: LineString, radii: Sequence[float], shifts: Sequ
     ]
     result = unary_union(convex_hulls)
     return result
+
+
+def is_valid_offset(line, offset):
+    po = line.offset_curve(offset)
+    if po.is_empty:
+        return False
+    if type(po) != LineString:
+        return False
+    return True
+
+
+def highest_valid_index_single_offset(line: LineString, offset: float) -> int:
+    """
+    Returns index of the vertex at which to split ``line`` in a (first) part for which a valid offset_curve can be made
+    at given ``offset`` and a (second) part, i.e. the rest of ``line``
+    """
+    vertex_positions = [line.project(Point(vertex)) for vertex in line.coords]
+    highest_valid_idx = 1
+    lowest_invalid_idx = len(vertex_positions) - 1
+    current_idx = len(vertex_positions) - 1
+    while lowest_invalid_idx - highest_valid_idx > 1:
+        test_line = LineString([(Point(vertex)) for vertex in line.coords[:current_idx + 1]])
+        if is_valid_offset(test_line, offset):
+            highest_valid_idx = current_idx
+        else:
+            lowest_invalid_idx = current_idx
+        current_idx = int(highest_valid_idx + (lowest_invalid_idx-highest_valid_idx)/2)
+    return highest_valid_idx
+
+
+def highest_valid_index(line: LineString, offsets: List[float]) -> int:
+    offsets.sort(key=lambda x: -1 * abs(x))  # largest offsets first, because will probably result in the lowest index
+    minimum_idx = len(line.coords) - 1
+    for offset in offsets:
+        line = LineString([(Point(vertex)) for vertex in line.coords[:minimum_idx + 1]])
+        minimum_idx = min(minimum_idx, highest_valid_index_single_offset(line, offset))
+    return minimum_idx
 
 
 class EmptyOffsetError(ValueError):
@@ -712,13 +755,12 @@ class Channel:
             )
         return "\nUNION\n".join(selects)
 
-    def make_valid(self) -> List[Channel]:
+    def make_valid(self) -> List:
         """
         Return a list of Channels for which valid offsets can be generated. If needed, the input channel will be cut
         into parts. Always returns a list, even when the input channel is already valid
         """
-
-
+        pass
 
 
 class ParallelOffset:
