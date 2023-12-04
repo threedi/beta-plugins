@@ -150,8 +150,6 @@ def variable_buffer(linestring: LineString, radii: Sequence[float], shifts: Sequ
 class EmptyOffsetError(ValueError):
     """Raised when the parallel offset at given offset distance results in an empty geometry"""
 
-    pass
-
 
 class InvalidOffsetError(ValueError):
     """Raised when the parallel offset at given offset distance results in a geometry that is not a LineString"""
@@ -160,24 +158,21 @@ class InvalidOffsetError(ValueError):
 class WedgeFillPointsAlreadySetError(ValueError):
     """Raised when it is attempted to set a channel's _wedge_fill_points that have already been set"""
 
-    pass
-
 
 class WidthsNotIncreasingError(ValueError):
-    """Raised when one a width of a tabular cross section < than the previous width of that crosssection"""
+    """Raised when one a width of a tabular cross-section < than the previous width of that crosssection"""
 
-    pass
 
 class MinYNotZeroError(ValueError):
     """"Raised when a YZ cross-section's lowest value is not 0"""
 
-    pass
-
 
 class YNotIncreasingError(ValueError):
-    """Raised when one a Y value of a YZ cross section <= than the previous Y of that crosssection"""
+    """Raised when one a Y value of a YZ cross-section <= than the previous Y of that crosssection"""
 
-    pass
+
+class NoCrossSectionLocationsError(ValueError):
+    """Raised when attempting to generate parallel offsets for a channel that has no cross-section locations"""
 
 
 class IndexedPoint:
@@ -458,6 +453,8 @@ class Channel:
         :param offset_0: guarantee an offset at 0, even if this does not occur in the channel's ``unique_offsets``
         """
         self.parallel_offsets = []
+        if len(self.cross_section_locations) == 0:
+            raise NoCrossSectionLocationsError("Channel has no cross-section locations")
         offsets = sorted(list(set(self.unique_offsets) | {0}), reverse=RIGHT == -1) if offset_0 else self.unique_offsets
         self.parallel_offsets = [ParallelOffset(parent=self, offset_distance=offset) for offset in offsets]
 

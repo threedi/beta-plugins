@@ -52,6 +52,7 @@ from .rasterize_channel import (
     EmptyOffsetError,
     InvalidOffsetError,
     WidthsNotIncreasingError,
+    NoCrossSectionLocationsError,
     fill_wedges,
 )
 from .rasterize_channel_utils import merge_rasters
@@ -206,9 +207,11 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             parameters, self.INPUT_PIXEL_SIZE, context
         )
         if dem:
-            if dem.rasterUnitsPerPixelX() != dem.rasterUnitsPerPixelY():
+            if np.abs(dem.rasterUnitsPerPixelX() - dem.rasterUnitsPerPixelY()) > 0.0001:  # 1/10 mm tolerance
                 multi_step_feedback.reportError(
-                    "Input Digital Elevation Model has different X and Y resolutions",
+                    f"Input Digital Elevation Model has different X and Y resolutions. "
+                    f"X resolution: {dem.rasterUnitsPerPixelX()}"
+                    f"Y resolution: {dem.rasterUnitsPerPixelY()}",
                     fatalError=True,
                 )
                 raise QgsProcessingException()
@@ -247,6 +250,8 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     channel.add_cross_section_location(cross_section_location)
             channel.geometry = channel.geometry.simplify(pixel_size)
             try:
+                if DEBUG_MODE:
+                    feedback.pushInfo(f"Channel has {len(channel.cross_section_locations)} cross-section locations")
                 channel.generate_parallel_offsets()
                 channels.append(channel)
             except EmptyOffsetError:
@@ -266,6 +271,11 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError(
                     f"ERROR: Could not read channel with id {channel.id}: the widths in the cross-section table for one "
                     f"or more cross-section locations are not all increasing with height."
+                )
+            except NoCrossSectionLocationsError:
+                errors.append(channel_id)
+                feedback.reportError(
+                    f"ERROR: Channel with id {channel.id} has no cross-section locations."
                 )
             multi_step_feedback.setProgress(100 * i / channel_features.featureCount())
 
