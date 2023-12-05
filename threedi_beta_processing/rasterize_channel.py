@@ -402,14 +402,18 @@ class CrossSectionLocation:
 class Channel:
     def __init__(
         self,
-        id: int,
-        connection_node_start_id: Union[int, None],
-        connection_node_end_id: Union[int, None],
+        id: Union[int, Tuple[int, int]],
+        connection_node_start_id: Union[int, Tuple[int, int], None],
+        connection_node_end_id: Union[int, Tuple[int, int], None],
         geometry: LineString,
     ):
-        self.id = id
-        self.connection_node_start_id = connection_node_start_id
-        self.connection_node_end_id = connection_node_end_id
+        self.id = id if type(id) == tuple else (id, 0)
+        self.connection_node_start_id = connection_node_start_id \
+            if (type(connection_node_start_id) == tuple) \
+            else (connection_node_start_id, 0)
+        self.connection_node_end_id = connection_node_end_id \
+            if (type(connection_node_end_id) == tuple) \
+            else (connection_node_end_id, 0)
         self.cross_section_locations: List[CrossSectionLocation] = []
         self.geometry: LineString = geometry
         self.parallel_offsets: List[ParallelOffset] = []
@@ -777,6 +781,10 @@ class Channel:
         """
         Split this Channel in two Channels at given ``vertex_index``
         Both channels will include the first cross-section location beyond the split point
+
+        The channel id tuple's first value will always be the original channel id; the second value will be incremented
+        by 1 for the last half. So (23, 0) becomes ((23, 0), (23, 1)); (23, 1) becomes ((23, 1), (23, 2)), etc. The same
+        logic applies to connection_node_start_id and connection_node_end_id.
         """
         if vertex_index == len(self.geometry.coords) - 1:
             return self, None
@@ -785,7 +793,7 @@ class Channel:
         first_part = Channel(
             id=self.id,
             connection_node_start_id=self.connection_node_start_id,
-            connection_node_end_id=None,
+            connection_node_end_id=(self.connection_node_start_id[0], self.connection_node_start_id[1] + 1),
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[:vertex_index + 1]])
         )
         for xsec in self.cross_section_locations:
@@ -801,8 +809,8 @@ class Channel:
                 break
 
         last_part = Channel(
-            id=self.id,
-            connection_node_start_id=None,
+            id=(self.id[0], self.id[1] + 1),
+            connection_node_start_id=(self.connection_node_start_id[0], self.connection_node_start_id[1] + 1),
             connection_node_end_id=self.connection_node_end_id,
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[vertex_index:]])
         )
