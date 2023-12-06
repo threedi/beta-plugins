@@ -797,17 +797,13 @@ class Channel:
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[:vertex_index + 1]])
         )
         for xsec in self.cross_section_locations:
-            if xsec.position < vertex_index_position:
-                # TODO: rekening houden met mogelijkheid dat xsec input channel al een "ghost" xsec is;
-                #  als je die "gewoon" toevoegt, snapt hij naar het channel
-                first_part.add_cross_section_location(xsec)
-            else:
-                # Add one last cross-section
-                first_part.add_cross_section_location(xsec)
-                # A bit hacky but quick way to give this cross-section location a "ghost" location on its new channel
-                self.cross_section_locations[
-                    self.cross_section_location_index(xsec.id)
-                ]._position_normalized = xsec._position_normalized
+            first_part.add_cross_section_location(xsec)
+
+            # A bit hacky but quick way to give cross-section location a "ghost" location on its new channel
+            self.cross_section_locations[
+                self.cross_section_location_index(xsec.id)
+            ]._position_normalized = xsec._position_normalized
+            if xsec.position >= vertex_index_position:
                 break
 
         last_part = Channel(
@@ -817,18 +813,16 @@ class Channel:
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[vertex_index:]])
         )
         for xsec in reversed(self.cross_section_locations):
-            if xsec.position > vertex_index_position:
-                # TODO: rekening houden met mogelijkheid dat xsec input channel al een "ghost" xsec is;
-                #  als je die "gewoon" toevoegt, snapt hij naar het channel
-                last_part.add_cross_section_location(xsec)
-            else:
-                # Add one last cross-section
-                last_part.add_cross_section_location(xsec)
-                # A bit hacky but quick way to give this cross-section location a "ghost" location on its new channel
-                self.cross_section_locations[
-                    self.cross_section_location_index(xsec.id)
-                ]._position_normalized = xsec._position_normalized - first_part.geometry.length
+            last_part.add_cross_section_location(xsec)
+
+            # A bit hacky but quick way to give this cross-section location a "ghost" location on its new channel
+            self.cross_section_locations[
+                self.cross_section_location_index(xsec.id)
+            ]._position_normalized = xsec._position_normalized - first_part.geometry.length
+
+            if xsec.position <= vertex_index_position:
                 break
+
         return first_part, last_part
 
     def make_valid(self) -> List['Channel']:
