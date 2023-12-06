@@ -1069,6 +1069,25 @@ def test_triangle():
 
 def test_triangulate_between():
 
+    # Base case: two parallel lines
+    points_1 = [
+        IndexedPoint(0, 0, 10, index=0),
+        IndexedPoint(0, 2, 20, index=1),
+        IndexedPoint(0, 4, 30, index=2),
+        IndexedPoint(0, 8, 40, index=3),
+    ]
+    points_2 = [
+        IndexedPoint(10, 3, 20, index=5),
+        IndexedPoint(10, 6, 30, index=6),
+        IndexedPoint(10, 9, 40, index=7),
+    ]
+    triangles = [triangle for triangle in triangulate_between(
+            side_1_points=points_1,
+            side_2_points=points_2,
+    )]
+    tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in triangles]
+    print("\nUNION\n".join(tri_queries))
+
     # Typical wedge: Both sides have > 1 points, start from the same 0 point
     points_1 = [
         IndexedPoint(0, 0, 10, index=0),
@@ -1083,8 +1102,6 @@ def test_triangulate_between():
         IndexedPoint(8, 8, 40, index=7),
     ]
     points_2.reverse()
-    side_2_distances = [0, 2, 4, 8]
-    side_2_distances.reverse()
     triangles = [triangle for triangle in triangulate_between(
             side_1_points=points_1,
             side_2_points=points_2,

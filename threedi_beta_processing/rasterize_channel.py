@@ -798,6 +798,8 @@ class Channel:
         )
         for xsec in self.cross_section_locations:
             if xsec.position < vertex_index_position:
+                # TODO: rekening houden met mogelijkheid dat xsec input channel al een "ghost" xsec is;
+                #  als je die "gewoon" toevoegt, snapt hij naar het channel
                 first_part.add_cross_section_location(xsec)
             else:
                 # Add one last cross-section
@@ -816,6 +818,8 @@ class Channel:
         )
         for xsec in reversed(self.cross_section_locations):
             if xsec.position > vertex_index_position:
+                # TODO: rekening houden met mogelijkheid dat xsec input channel al een "ghost" xsec is;
+                #  als je die "gewoon" toevoegt, snapt hij naar het channel
                 last_part.add_cross_section_location(xsec)
             else:
                 # Add one last cross-section
@@ -907,7 +911,7 @@ class ParallelOffset:
                 valid = False
         return valid
 
-    def triangulate(self, other):
+    def triangulate(self, other: 'ParallelOffset'):
         return triangulate_between(
             side_1_points=self.points,
             side_2_points=other.points,
@@ -932,18 +936,13 @@ def triangulate_between(
         side_2_points.reverse()
 
     # make lines out of the IndexedPoint lists, and calculate distances of each point along that line
-    if len(side_1_points) > 1:
-        side_1_line = LineString([point.geom for point in side_1_points])
-        side_1_distances = [side_1_line.project(point.geom) for point in side_1_points]
-    else:
-        side_1_line = side_1_points[0].geom
-        side_1_distances = [0]
-    if len(side_2_points) > 1:
-        side_2_line = LineString([point.geom for point in side_2_points])
-        side_2_distances = [side_2_line.project(point.geom) for point in side_2_points]
-    else:
-        side_2_line = side_2_points[0].geom
-        side_2_distances = [0]
+    side_1_line = LineString([point.geom for point in side_1_points]) \
+        if len(side_1_points) > 1 \
+        else side_1_points[0].geom
+
+    side_2_line = LineString([point.geom for point in side_2_points]) \
+        if len(side_2_points) > 1 \
+        else side_2_points[0].geom
 
     # raise error if lines intersect
     if side_1_line.intersects(side_2_line):
@@ -953,7 +952,6 @@ def triangulate_between(
     side_2_idx = 0
     side_1_last_idx = len(side_1_points) - 1
     side_2_last_idx = len(side_2_points) - 1
-    last_move = 1
 
     while (side_1_idx < side_1_last_idx) or (side_2_idx < side_2_last_idx):
         triangle_points = [side_1_points[side_1_idx], side_2_points[side_2_idx]]
@@ -967,14 +965,15 @@ def triangulate_between(
 
         # then we handle the 'normal' case when we are still halfway at both sides
         else:
-            next_side_1_vertex_pos = side_1_distances[side_1_idx + 1]
-            next_side_2_vertex_pos = side_2_distances[side_2_idx + 1]
-            if next_side_2_vertex_pos == next_side_1_vertex_pos:
-                move = 2 if last_move == 1 else 1
-            elif next_side_2_vertex_pos > next_side_1_vertex_pos:
-                move = 1
-            else:
-                move = 2
+            move_on_side_1_cross_line = LineString([
+                side_1_points[side_1_idx + 1].geom,
+                side_2_points[side_2_idx].geom
+            ])
+            move_on_side_2_cross_line = LineString([
+                side_1_points[side_1_idx].geom,
+                side_2_points[side_2_idx + 1].geom
+            ])
+            move = 1 if move_on_side_1_cross_line.length < move_on_side_2_cross_line.length else 2
 
             # switch move side if moving on that side results in invalid triangle
             if move == 2:
@@ -991,14 +990,11 @@ def triangulate_between(
             if move == 2:
                 side_2_idx += 1
                 triangle_points.append(side_2_points[side_2_idx])
-                last_move = 2
             else:
                 side_1_idx += 1
                 triangle_points.append(side_1_points[side_1_idx])
-                last_move = 1
 
         yield Triangle(points=triangle_points)
-
 
 def unique_connection_node_ids(channels: List[Channel]) -> Set[int]:
     result = set([channel.connection_node_start_id for channel in channels])
