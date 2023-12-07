@@ -120,7 +120,8 @@ class BaseProcessor(object):
             distance: float,
             inverse: bool = False,
             modify: bool = False,
-            average: int = None
+            average: int = None,
+            filter_value: float = None
     ):
         self.raster = raster
         self.width = width
@@ -128,6 +129,7 @@ class BaseProcessor(object):
         self.inverse = inverse
         self.modify = modify
         self.distance = distance
+        self.filter_value = filter_value
 
         self.no_data_value = raster.GetRasterBand(1).GetNoDataValue()
 
@@ -259,6 +261,14 @@ class BaseProcessor(object):
 
         # set nodatavalues to NaN
         values[values == self.no_data_value] = np.nan
+        
+        # set filter value to NaN
+        if self.filter_value is not None:
+            margin = 0.001
+            lower_bound = self.filter_value - margin
+            upper_bound = self.filter_value + margin
+        
+            values[(values >= lower_bound) & (values <= upper_bound)] = np.nan
 
         # return lines, centers, values
         if self.modify:

@@ -111,7 +111,8 @@ def add_float_field_if_not_exists(source: Union[QgsFeature, QgsProcessingFeature
 class DemSamplerQgsConnector:
     """"Interface between dem_sampler.py and the QGIS API"""
     def __init__(self, raster: QgsRasterLayer, source: QgsProcessingFeatureSource, target_fieldname: str, width: float,
-                 distance: float, overwrite: bool, inverse: bool = False, modify: bool = False, average: int = None):
+                 distance: float, overwrite: bool, inverse: bool = False, modify: bool = False, average: int = None,
+                 filter_value: float = None):
         self.source = source
         self.target_fieldname = target_fieldname
         self.target_fields, self.target_field_idx, field_added = add_float_field_if_not_exists(
@@ -132,7 +133,8 @@ class DemSamplerQgsConnector:
             distance=distance,
             inverse=inverse,
             modify=modify,
-            average=average
+            average=average,
+            filter_value=filter_value
         )
 
         src_crs = source.sourceCrs()
@@ -149,7 +151,7 @@ class DemSamplerQgsConnector:
     def results(self, return_features: bool = True, left: bool = True, right: bool = True, search_distance_field: str = None):
         self._get_features()
         for feature in self.features:
-            print(f'processing feature {feature.id()}')
+            #print(f'processing feature {feature.id()}')
             input_qgs_geometry = QgsGeometry(feature.geometry())
             if input_qgs_geometry.isEmpty():
                 raise ValueError(f'Feature {feature.id()} has an empty geometry. Please fix or remove this feature and '
@@ -514,6 +516,7 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
     MIN_CREST_WIDTH = 'MIN_CREST_WIDTH'
     MAX_SEGMENT_LENGTH = 'MAX_SEGMENT_LENGTH'
     OUTPUT = 'OUTPUT'
+    FILTER_VALUE = 'FILTER_VALUE'
 
     SEARCH_DISTANCE_FIELDNAME = 'search_distance'
     TARGET_FIELDNAME = 'bank_level'
@@ -582,6 +585,16 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         param.setMetadata({'widget_wrapper': {'decimals': 2}})
         self.addParameter(param)
 
+        param = QgsProcessingParameterNumber(
+                self.FILTER_VALUE,
+                self.tr('Filter value [m]'),
+                type=QgsProcessingParameterNumber.Double,
+                defaultValue=10,
+        )
+        param.setMetadata({'widget_wrapper': {'decimals': 2}})
+        param.toolTip = 'Do not use this DEM value to determine the bank level'
+        self.addParameter(param)
+
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
@@ -616,6 +629,7 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         extra_search_distance = self.parameterAsDouble(parameters, self.EXTRA_SEARCH_DISTANCE, context)
         min_crest_width = self.parameterAsDouble(parameters, self.MIN_CREST_WIDTH, context)
         max_segment_length = self.parameterAsDouble(parameters, self.MAX_SEGMENT_LENGTH, context)
+        filter_value = self.parameterAsDouble(parameters, self.FILTER_VALUE, context)
 
         target_fields, target_field_idx, field_added = add_float_field_if_not_exists(
             source=cross_section_locations_source,
@@ -756,7 +770,7 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
 
         dem_sampler = DemSamplerQgsConnector(raster=dem_layer, source=bank_level_sample_layer,
                                              target_fieldname=self.TARGET_FIELDNAME, width=min_crest_width,
-                                             distance=extra_search_distance, overwrite=overwrite)
+                                             distance=extra_search_distance, overwrite=overwrite, filter_value=filter_value)
 
         total = 100.0 / cross_section_locations_source.featureCount() if cross_section_locations_source.featureCount() else 0
 
@@ -783,8 +797,21 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         )):
             if feedback.isCanceled():
                 break
-            crest_level_right = np.nan if feature[dem_sampler.target_field_idx] is None else feature[dem_sampler.target_field_idx]
-            crest_level_left = np.nan if crest_levels_left[i] is None else crest_levels_left[i]
+            crest_level_right = np.nan \
+                if feature[dem_sampler.target_field_idx] is None \
+                    or feature[dem_sampler.target_field_idx] == NULL \
+                else feature[dem_sampler.target_field_idx]
+            crest_level_left = np.nan \
+                if crest_levels_left[i] is None \
+                    or crest_levels_left[i] == NULL \
+                else crest_levels_left[i]
+            try:
+                crest_level_right = float(crest_level_right)
+                crest_level_left = float(crest_level_left)  # hier gaat ie error geven
+            except TypeError:
+                feedback.pushInfo(f"crest_levels_left[i]: {crest_levels_left[i]} | type: {type(crest_levels_left[i])}")
+                feedback.pushInfo(f"feature[dem_sampler.target_field_idx]: {feature[dem_sampler.target_field_idx]} | type: {type(feature[dem_sampler.target_field_idx])}")
+                raise
             crest_level_fid_dict[feature[0]] = float(np.nanmin([crest_level_right, crest_level_left]))
             feedback.setProgress(50 + int(i/2 * total))
 
