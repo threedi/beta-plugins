@@ -47,7 +47,6 @@ def read_from_geopackage(
 
         cross_section_location_layer = data_source.GetLayerByName("cross_section_location")
         field_indices = {field_defn.name: i for i, field_defn in enumerate(cross_section_location_layer.schema)}
-        print(field_indices)
         cross_section_locations = dict()
         for feature in cross_section_location_layer:
             if channel_ids:
@@ -77,15 +76,16 @@ def read_from_geopackage(
         return channels, cross_section_locations
 
 
-gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\MKDC\Mekong operational model.gpkg"
+gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\Olof Geul\geul_oost.gpkg"
+pixel_size = 0.25
+
 input_channels, input_cross_section_locations = read_from_geopackage(
     path=gpkg_path,
-    channel_ids=[135]
+    channel_ids=[2000414, 2000415],
+    wall_displacement=pixel_size/4.0
 )
-print(input_channels, input_cross_section_locations)
-pixel_size = 30
+
 channels = []
-input_channels[135].generate_parallel_offsets()
 for input_channel in input_channels.values():
     input_channel.geometry = input_channel.geometry.simplify(pixel_size)
     sub_channels = input_channel.make_valid()
@@ -96,6 +96,7 @@ fill_wedges(channels)
 
 # plot the triangles
 for channel in channels:
+    print(channel.id)
     random_color = random.choice(list(mcolors.CSS4_COLORS.keys()))
     for triangle in channel.triangles:
         x, y = triangle.geometry.exterior.xy

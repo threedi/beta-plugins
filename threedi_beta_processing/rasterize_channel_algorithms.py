@@ -58,7 +58,7 @@ from .rasterize_channel import (
 from .rasterize_channel_utils import merge_rasters
 
 
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 
 def align_qgs_rectangle(extent: QgsRectangle, xres, yres):
@@ -189,7 +189,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             )
             points_fields.append(
                 QgsField(
-                    name="triangle_nr",
+                    name="index",
                     type=QVariant.Int
                 )
             )

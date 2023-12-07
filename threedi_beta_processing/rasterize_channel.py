@@ -87,16 +87,18 @@ def parse_cross_section_table(
         raise ValueError(f"Unsupported cross_section_shape {cross_section_shape}")
 
     # apply wall displacement to vertical segments
-    while not is_monotonically_increasing(y_ordinates):
-        y_ordinates[1:][y_ordinates[1:] == y_ordinates[:-1]] += wall_displacement
-        # remove YZ coordinates that have been 'taken over' by the previous ones due to wall displacement
-        valid_ordinates = y_ordinates[1:] >= y_ordinates[:-1]
-        while np.sum(np.invert(valid_ordinates)) > 0:
+    if wall_displacement > 0:
+        while not is_monotonically_increasing(y_ordinates):
+            y_ordinates[1:][y_ordinates[1:] == y_ordinates[:-1]] += wall_displacement
+            # remove YZ coordinates that have been 'taken over' by the previous ones due to wall displacement
             valid_ordinates = y_ordinates[1:] >= y_ordinates[:-1]
-            valid_mask = np.hstack([np.array([True]), valid_ordinates])
-            y_ordinates = y_ordinates[valid_mask]
-            z_ordinates = z_ordinates[valid_mask]
-
+            while np.sum(np.invert(valid_ordinates)) > 0:
+                valid_ordinates = y_ordinates[1:] >= y_ordinates[:-1]
+                valid_mask = np.hstack([np.array([True]), valid_ordinates])
+                y_ordinates = y_ordinates[valid_mask]
+                z_ordinates = z_ordinates[valid_mask]
+    elif not is_monotonically_increasing(y_ordinates):
+        raise YNotIncreasingError("Could not make this cross-section valid. Use a wall_displacement > 0")
     return y_ordinates, z_ordinates
 
 
@@ -582,12 +584,13 @@ class Channel:
         preceding triangle in the list. If this is not possible, the resulting list may contain several sections to
         which this requirement applies, but not between the sections.
         """
-        triangles = [tri for tri in self._wedge_fill_triangles]
+        triangles = []
         for i in range(len(self.parallel_offsets) - 1):
             for tri in self.parallel_offsets[i].triangulate(
                 self.parallel_offsets[i + 1]
             ):
                 triangles.append(tri)
+        triangles += self._wedge_fill_triangles
 
         # sort
         processed_sides = triangles[0].sides
