@@ -283,25 +283,25 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             except EmptyOffsetError:
                 errors.append(channel_id)
                 feedback.reportError(
-                    f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
+                    f"ERROR: Could not read channel with id {channel.id[0]}: no valid parallel offset can be generated "
                     f"for some cross-sections. "
                 )
             except InvalidOffsetError:
                 errors.append(channel_id)
                 feedback.reportError(
-                    f"ERROR: Could not read channel with id {channel.id}: no valid parallel offset can be generated "
+                    f"ERROR: Could not read channel with id {channel.id[0]}: no valid parallel offset can be generated "
                     f"for some cross-sections. It may help to split the channel in the middle of its bends."
                 )
             except WidthsNotIncreasingError:
                 errors.append(channel_id)
                 feedback.reportError(
-                    f"ERROR: Could not read channel with id {channel.id}: the widths in the cross-section table for one "
+                    f"ERROR: Could not read channel with id {channel.id[0]}: the widths in the cross-section table for one "
                     f"or more cross-section locations are not all increasing with height."
                 )
             except NoCrossSectionLocationsError:
                 errors.append(channel_id)
                 feedback.reportError(
-                    f"ERROR: Channel with id {channel.id} has no cross-section locations."
+                    f"ERROR: Channel with id {channel.id[0]} has no cross-section locations."
                 )
             multi_step_feedback.setProgress(100 * i / channel_features.featureCount())
 
@@ -319,9 +319,12 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             for i, channel in enumerate(channels):
                 if feedback.isCanceled():
                     return {}
-                multi_step_feedback.setProgressText(
-                    f"Rasterizing channel {channel.id}..."
-                )
+                if channel.id[1] == 0:
+                    multi_step_feedback.setProgressText(f"Rasterizing channel {channel.id[0]}...")
+                else:
+                    multi_step_feedback.setProgressText(
+                        f"Rasterizing part {channel.id[1] + 1} of channel {channel.id[0]}..."
+                    )
                 points = [QgsPoint(*point.geom.coords[0]) for point in channel.points]
                 if DEBUG_MODE:
                     for (point_idx, qgs_point) in [
@@ -426,10 +429,11 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                         warnings.append(channel.id),
                         missing_pixels = int(missing_area / (pixel_size**2))
                         total_missing_pixels += missing_pixels
-                        feedback.pushWarning(
-                            f"Warning: Up to {missing_pixels} pixel(s) may be missing from the "
-                            f"raster for channel {channel.id} !"
-                        )
+                        warning_msg = (f"Up to {missing_pixels} pixel(s) may be missing from the raster for "
+                                       f"channel {channel.id[0]}")
+                        if channel.id[1] > 0:
+                            warning_msg += f", part {channel.id[1] + 1}"
+                        feedback.pushWarning(f"Warning: {warning_msg}!")
 
                 mesh_layer.commitFrameEditing(transform, continueEditing=False)
                 context.temporaryLayerStore().addMapLayer(
