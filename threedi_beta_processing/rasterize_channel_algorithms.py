@@ -58,7 +58,7 @@ from .rasterize_channel import (
 from .rasterize_channel_utils import merge_rasters
 
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def align_qgs_rectangle(extent: QgsRectangle, xres, yres):
