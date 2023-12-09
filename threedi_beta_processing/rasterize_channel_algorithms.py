@@ -85,6 +85,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
 
     if DEBUG_MODE:
         TRIANGLE_OUTPUT = "TRIANGLE_OUTPUT"
+        OUTLINE_OUTPUT = "OUTLINE_OUTPUT"
         POINTS_OUTPUT = "POINTS_OUTPUT"
 
     def initAlgorithm(self, config):
@@ -98,7 +99,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT_CROSS_SECTION_LOCATIONS,
-                self.tr("Cross section locations"),
+                self.tr("Cross-section locations"),
                 [QgsProcessing.TypeVectorPoint],
             )
         )
@@ -135,6 +136,13 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
 
             self.addParameter(
                 QgsProcessingParameterFeatureSink(
+                    self.OUTLINE_OUTPUT,
+                    self.tr('Outline output')
+                )
+            )
+
+            self.addParameter(
+                QgsProcessingParameterFeatureSink(
                     self.POINTS_OUTPUT,
                     self.tr('Points output')
                 )
@@ -157,6 +165,22 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         output_raster = self.parameterAsOutputLayer(parameters, self.OUTPUT, context)
 
         if DEBUG_MODE:
+
+            outline_fields = QgsFields()
+            outline_fields.append(
+                QgsField(
+                    name="channel_nr",
+                    type=QVariant.Int
+                )
+            )
+            (outline_sink, outline_dest_id) = self.parameterAsSink(
+                parameters,
+                self.OUTLINE_OUTPUT,
+                context,
+                outline_fields,
+                QgsWkbTypes.PolygonZ,
+                cross_section_location_features.sourceCrs()
+            )
 
             triangles_fields = QgsFields()
             triangles_fields.append(
@@ -344,6 +368,14 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                         triangle_geometry.fromWkb(triangle.geometry.wkb)
                         triangle_feature.setGeometry(triangle_geometry)
                         triangles_sink.addFeature(triangle_feature, QgsFeatureSink.FastInsert)
+                    outline_feature = QgsFeature()
+                    outline_feature.setFields(outline_fields)
+                    outline_feature.setAttribute(0, i)
+                    outline_geometry = QgsGeometry()
+                    outline_geometry.fromWkb(channel.outline.wkb)
+                    outline_feature.setGeometry(outline_geometry)
+                    outline_sink.addFeature(outline_feature, QgsFeatureSink.FastInsert)
+
                 total_triangles = len(triangles_dict)
                 faces_added = 0
                 occupied_vertices = np.array([], dtype=int)

@@ -81,12 +81,15 @@ pixel_size = 0.25
 
 input_channels, input_cross_section_locations = read_from_geopackage(
     path=gpkg_path,
-    channel_ids=[2000414, 2000415],
+    channel_ids=[2000168],
+    # channel_ids=[2000414, 2000415],
     wall_displacement=pixel_size/4.0
 )
 
 channels = []
 for input_channel in input_channels.values():
+    print(input_channel.id)
+    print(input_channel.max_width_at(0))
     input_channel.geometry = input_channel.geometry.simplify(pixel_size)
     sub_channels = input_channel.make_valid()
     for sub_channel in sub_channels:
@@ -94,14 +97,19 @@ for input_channel in input_channels.values():
     channels += sub_channels
 fill_wedges(channels)
 
-# plot the triangles
 for channel in channels:
     print(channel.id)
+    print(channel.max_width_at(0))
     random_color = random.choice(list(mcolors.CSS4_COLORS.keys()))
+    # plot the triangles
     for triangle in channel.triangles:
         x, y = triangle.geometry.exterior.xy
         plt.plot(x, y, color=random_color)
         plt.fill(x, y, color=random_color, alpha=0.5)
+
+    #plot outline
+    x, y = channel.outline.exterior.xy
+    plt.plot(x, y, color=random_color, lw=5)
 
 plt.xlabel('X-axis')
 plt.ylabel('Y-axis')
