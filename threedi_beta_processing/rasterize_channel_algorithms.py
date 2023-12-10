@@ -53,7 +53,7 @@ from .rasterize_channel import (
     InvalidOffsetError,
     WidthsNotIncreasingError,
     NoCrossSectionLocationsError,
-    fill_wedges,
+    fill_wedges, IntersectingSidesError,
 )
 from .rasterize_channel_utils import merge_rasters
 
@@ -245,7 +245,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             pixel_size = user_pixel_size
         else:
             multi_step_feedback.reportError(
-                "Either 'Digital Elevation Model' or 'Pixel size' has to be specified, fatalError=True)"
+                f"Either 'Digital Elevation Model' or 'Pixel size' has to be specified", fatalError=True
             )
             raise QgsProcessingException()
 
@@ -360,157 +360,174 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     )
 
                 # add faces to mesh
-                triangles_dict = {k: v for k, v in enumerate(channel.triangles)}
-                if DEBUG_MODE:
-                    for triangle_nr, triangle in triangles_dict.items():
-                        triangle_feature = QgsFeature()
-                        triangle_feature.setFields(triangles_fields)
-                        triangle_feature.setAttribute(0, i)
-                        triangle_feature.setAttribute(1, triangle_nr)
-                        triangle_geometry = QgsGeometry()
-                        triangle_geometry.fromWkb(triangle.geometry.wkb)
-                        triangle_feature.setGeometry(triangle_geometry)
-                        triangles_sink.addFeature(triangle_feature, QgsFeatureSink.FastInsert)
-                    outline_feature = QgsFeature()
-                    outline_feature.setFields(outline_fields)
-                    outline_feature.setAttribute(0, i)
-                    outline_geometry = QgsGeometry()
-                    outline_geometry.fromWkb(channel.outline.wkb)
-                    outline_feature.setGeometry(outline_geometry)
-                    outline_sink.addFeature(outline_feature, QgsFeatureSink.FastInsert)
-
-                total_triangles = len(triangles_dict)
-                faces_added = 0
-                occupied_vertices = np.array([], dtype=int)
-                finished = False
-                processed_triangles = []
-                while not finished:
-                    if feedback.isCanceled():
-                        return {}
-                    finished = True
-                    for k in processed_triangles:
-                        triangles_dict.pop(k)
-                    processed_triangles = []
-                    for j, triangle in triangles_dict.items():
-                        if (
-                            j == 0
-                            or np.sum(np.in1d(triangle.vertex_indices, occupied_vertices)) >= 2
-                        ):
-                            error = editor.addFace(triangle.vertex_indices)
-                            # To list error types, run [e for e in Qgis.MeshEditingErrorType]
-                            if error.errorType == Qgis.MeshEditingErrorType.NoError:
-                                finished = False
-                                processed_triangles.append(j)
-                                faces_added += 1
-                                occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
-                                if DEBUG_MODE:
-                                    feedback.pushInfo(f"Added triangle with indices {triangle.vertex_indices}")
-                            elif DEBUG_MODE:
-                                feedback.pushInfo(
-                                    f"Could not (yet) add triangle {j}.\n"
-                                    f"Error type {str(error.errorType)}.\n"
-                                    f"Error element index: {error.elementIndex}\n"
-                                    f"Error point: {[p.geom for p in triangle.points if p.index == error.elementIndex]}\n"
-                                    f"WKT: {triangle.geometry.wkt}\n"
-                                    f"Vertex indices: {triangle.vertex_indices}\n"
-                                    f"Points: {[pnt.geom.wkt for pnt in channel.points if pnt.index in [p.index for p in triangle.points]]}"
-                                )
-
-                if faces_added != total_triangles:
-                    missing_area = np.sum(
-                        np.array([tri.geometry.area for tri in triangles_dict.values()])
-                    )
+                try:
+                    triangles_dict = {k: v for k, v in enumerate(channel.triangles)}
                     if DEBUG_MODE:
-                        feedback.pushInfo(f"Missing triangles:")
-                        tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in
-                                       triangles_dict.values()]
-                        feedback.pushInfo("\nUNION\n".join(tri_queries))
-                    if missing_area > (pixel_size**2):
-                        warnings.append(channel.id),
-                        missing_pixels = int(missing_area / (pixel_size**2))
-                        total_missing_pixels += missing_pixels
-                        warning_msg = (f"Up to {missing_pixels} pixel(s) may be missing from the raster for "
-                                       f"channel {channel.id[0]}")
-                        if channel.id[1] > 0:
-                            warning_msg += f", part {channel.id[1] + 1}"
-                        feedback.pushWarning(f"Warning: {warning_msg}!")
+                        for triangle_nr, triangle in triangles_dict.items():
+                            triangle_feature = QgsFeature()
+                            triangle_feature.setFields(triangles_fields)
+                            triangle_feature.setAttribute(0, i)
+                            triangle_feature.setAttribute(1, triangle_nr)
+                            triangle_geometry = QgsGeometry()
+                            triangle_geometry.fromWkb(triangle.geometry.wkb)
+                            triangle_feature.setGeometry(triangle_geometry)
+                            triangles_sink.addFeature(triangle_feature, QgsFeatureSink.FastInsert)
+                        outline_feature = QgsFeature()
+                        outline_feature.setFields(outline_fields)
+                        outline_feature.setAttribute(0, i)
+                        outline_geometry = QgsGeometry()
+                        outline_geometry.fromWkb(channel.outline.wkb)
+                        outline_feature.setGeometry(outline_geometry)
+                        outline_sink.addFeature(outline_feature, QgsFeatureSink.FastInsert)
 
-                mesh_layer.commitFrameEditing(transform, continueEditing=False)
-                context.temporaryLayerStore().addMapLayer(
-                    mesh_layer
-                )  # otherwise it cannot be used in processing alg
+                    total_triangles = len(triangles_dict)
+                    faces_added = 0
+                    occupied_vertices = np.array([], dtype=int)
+                    finished = False
+                    processed_triangles = []
+                    while not finished:
+                        if feedback.isCanceled():
+                            return {}
+                        finished = True
+                        for k in processed_triangles:
+                            triangles_dict.pop(k)
+                        processed_triangles = []
+                        for j, triangle in triangles_dict.items():
+                            if (
+                                j == 0
+                                or np.sum(np.in1d(triangle.vertex_indices, occupied_vertices)) >= 2
+                            ):
+                                error = editor.addFace(triangle.vertex_indices)
+                                # To list error types, run [e for e in Qgis.MeshEditingErrorType]
+                                if error.errorType == Qgis.MeshEditingErrorType.NoError:
+                                    finished = False
+                                    processed_triangles.append(j)
+                                    faces_added += 1
+                                    occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
+                                    if DEBUG_MODE:
+                                        feedback.pushInfo(f"Added triangle with indices {triangle.vertex_indices}")
+                                elif DEBUG_MODE:
+                                    feedback.pushInfo(
+                                        f"Could not (yet) add triangle {j}.\n"
+                                        f"Error type {str(error.errorType)}.\n"
+                                        f"Error element index: {error.elementIndex}\n"
+                                        f"Error point: {[p.geom for p in triangle.points if p.index == error.elementIndex]}\n"
+                                        f"WKT: {triangle.geometry.wkt}\n"
+                                        f"Vertex indices: {triangle.vertex_indices}\n"
+                                        f"Points: {[pnt.geom.wkt for pnt in channel.points if pnt.index in [p.index for p in triangle.points]]}"
+                                    )
 
-                extent = align_qgs_rectangle(
-                    mesh_layer.extent(), xres=pixel_size, yres=pixel_size
-                )
-                rasterize_mesh_params = {
-                    "INPUT": mesh_layer.id(),
-                    "DATASET_GROUPS": [0],
-                    "DATASET_TIME": {"type": "static"},
-                    "EXTENT": extent,
-                    "PIXEL_SIZE": pixel_size,
-                    "CRS_OUTPUT": channel_features.sourceCrs(),
-                    "OUTPUT": "TEMPORARY_OUTPUT",
-                }
+                    if faces_added != total_triangles:
+                        missing_area = np.sum(
+                            np.array([tri.geometry.area for tri in triangles_dict.values()])
+                        )
+                        if DEBUG_MODE:
+                            feedback.pushInfo(f"Missing triangles:")
+                            tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in
+                                           triangles_dict.values()]
+                            feedback.pushInfo("\nUNION\n".join(tri_queries))
+                        if missing_area > (pixel_size**2):
+                            warnings.append(channel.id),
+                            missing_pixels = int(missing_area / (pixel_size**2))
+                            total_missing_pixels += missing_pixels
+                            warning_msg = (f"Up to {missing_pixels} pixel(s) may be missing from the raster for "
+                                           f"channel {channel.id[0]}")
+                            if channel.id[1] > 0:
+                                warning_msg += f", part {channel.id[1] + 1}"
+                            feedback.pushWarning(f"Warning: {warning_msg}!")
 
-                # Do not pass feedback to child algorithm to keep the logging clean
-                rasterized = processing.run(
-                    "native:meshrasterize", rasterize_mesh_params, context=context
-                )["OUTPUT"]
+                    mesh_layer.commitFrameEditing(transform, continueEditing=False)
+                    context.temporaryLayerStore().addMapLayer(
+                        mesh_layer
+                    )  # otherwise it cannot be used in processing alg
 
-                channels_crs_auth_id = channel_features.sourceCrs().authid()
-                uri = f"polygon?crs={channels_crs_auth_id}"
-                clip_extent_layer = QgsVectorLayer(uri, "Clip extent", "memory")
-                clip_feature = QgsFeature(QgsFields())
-                outline_geometry = QgsGeometry.fromWkt(channel.outline.wkt)
-                clip_feature.setGeometry(outline_geometry)
-                clip_extent_layer.dataProvider().addFeatures([clip_feature])
-
-                clip_parameters = {
-                    "INPUT": rasterized,
-                    "MASK": clip_extent_layer,
-                    "SOURCE_CRS": None,
-                    "TARGET_CRS": None,
-                    "NODATA": -9999,
-                    "ALPHA_BAND": False,
-                    "CROP_TO_CUTLINE": False,
-                    "KEEP_RESOLUTION": True,
-                    "SET_RESOLUTION": False,
-                    "X_RESOLUTION": None,
-                    "Y_RESOLUTION": None,
-                    "MULTITHREADING": False,
-                    "OPTIONS": "COMPRESS=DEFLATE|PREDICTOR=2|ZLEVEL=9",
-                    "DATA_TYPE": 6,  # Float32
-                    "EXTRA": "-tap",
-                    "OUTPUT": "TEMPORARY_OUTPUT",
-                }
-
-                # use QgsProcessingAlgorithm.run() instead of processing.run() to be able to hide feedback but still be
-                # able to check if algorithm ran succesfully (ok == True)
-                alg_cliprasterbymasklayer = reg.algorithmById(
-                    "gdal:cliprasterbymasklayer"
-                )
-                results, ok = alg_cliprasterbymasklayer.run(
-                    clip_parameters, context=context, feedback=QgsProcessingFeedback()
-                )
-                if not ok:
-                    multi_step_feedback.reportError(
-                        f"Error when clipping channel raster by outline for channel {channel.id}",
-                        fatalError=False,
+                    extent = align_qgs_rectangle(
+                        mesh_layer.extent(), xres=pixel_size, yres=pixel_size
                     )
-                    continue
-                rasters.append(results["OUTPUT"])
+                    rasterize_mesh_params = {
+                        "INPUT": mesh_layer.id(),
+                        "DATASET_GROUPS": [0],
+                        "DATASET_TIME": {"type": "static"},
+                        "EXTENT": extent,
+                        "PIXEL_SIZE": pixel_size,
+                        "CRS_OUTPUT": channel_features.sourceCrs(),
+                        "OUTPUT": "TEMPORARY_OUTPUT",
+                    }
+
+                    # Do not pass feedback to child algorithm to keep the logging clean
+                    rasterized = processing.run(
+                        "native:meshrasterize", rasterize_mesh_params, context=context
+                    )["OUTPUT"]
+
+                    channels_crs_auth_id = channel_features.sourceCrs().authid()
+                    uri = f"polygon?crs={channels_crs_auth_id}"
+                    clip_extent_layer = QgsVectorLayer(uri, "Clip extent", "memory")
+                    clip_feature = QgsFeature(QgsFields())
+                    outline_geometry = QgsGeometry.fromWkt(channel.outline.wkt)
+                    clip_feature.setGeometry(outline_geometry)
+                    clip_extent_layer.dataProvider().addFeatures([clip_feature])
+
+                    clip_parameters = {
+                        "INPUT": rasterized,
+                        "MASK": clip_extent_layer,
+                        "SOURCE_CRS": None,
+                        "TARGET_CRS": None,
+                        "NODATA": -9999,
+                        "ALPHA_BAND": False,
+                        "CROP_TO_CUTLINE": False,
+                        "KEEP_RESOLUTION": True,
+                        "SET_RESOLUTION": False,
+                        "X_RESOLUTION": None,
+                        "Y_RESOLUTION": None,
+                        "MULTITHREADING": False,
+                        "OPTIONS": "COMPRESS=DEFLATE|PREDICTOR=2|ZLEVEL=9",
+                        "DATA_TYPE": 6,  # Float32
+                        "EXTRA": "-tap",
+                        "OUTPUT": "TEMPORARY_OUTPUT",
+                    }
+
+                    # use QgsProcessingAlgorithm.run() instead of processing.run() to be able to hide feedback but still be
+                    # able to check if algorithm ran succesfully (ok == True)
+                    alg_cliprasterbymasklayer = reg.algorithmById(
+                        "gdal:cliprasterbymasklayer"
+                    )
+                    results, ok = alg_cliprasterbymasklayer.run(
+                        clip_parameters, context=context, feedback=QgsProcessingFeedback()
+                    )
+                    if not ok:
+                        multi_step_feedback.reportError(
+                            f"Error when clipping channel raster by outline for channel {channel.id}",
+                            fatalError=False,
+                        )
+                        continue
+                    rasters.append(results["OUTPUT"])
+
+                except IntersectingSidesError as e:
+                    errors.append(channel.id)
+                    feedback.reportError(
+                        f"Error: could not rasterize channel {channel.id} (IntersectingSidesError)",
+                        fatalError=False
+                    )
+                    feedback.reportError(
+                        str(e)
+                    )
 
                 multi_step_feedback.setProgress(100 * i / len(channels))
 
+
             multi_step_feedback.setCurrentStep(2)
             multi_step_feedback.setProgressText("Merging rasters...")
-
+            if len(rasters) == 0:
+                multi_step_feedback.reportError(
+                    "No valid channels to process", fatalError=True
+                )
+                raise QgsProcessingException()
             rasters_datasets = [gdal.Open(raster) for raster in rasters]
             if dem:
                 uri = dem.dataProvider().dataSourceUri()
                 dem_gdal_datasource = gdal.Open(uri)
                 rasters_datasets.append(dem_gdal_datasource)
+            # TODO make this less memory-hungry
             merge_rasters(
                 rasters_datasets,
                 tile_size=1000,

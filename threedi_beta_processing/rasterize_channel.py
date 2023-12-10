@@ -196,11 +196,11 @@ def highest_valid_index(line: LineString, offsets: Sequence[float]) -> int:
 
 class EmptyOffsetError(ValueError):
     """Raised when the parallel offset at given offset distance results in an empty geometry"""
-
+    # TODO Remove
 
 class InvalidOffsetError(ValueError):
     """Raised when the parallel offset at given offset distance results in a geometry that is not a LineString"""
-
+    # TODO Remove
 
 class WedgeFillPointsAlreadySetError(ValueError):
     """Raised when it is attempted to set a channel's _wedge_fill_points that have already been set"""
@@ -208,7 +208,7 @@ class WedgeFillPointsAlreadySetError(ValueError):
 
 class WidthsNotIncreasingError(ValueError):
     """Raised when one a width of a tabular cross-section < than the previous width of that crosssection"""
-
+    # TODO Check if this can be removed
 
 class MinYNotZeroError(ValueError):
     """"Raised when a YZ cross-section's lowest value is not 0"""
@@ -220,6 +220,10 @@ class YNotIncreasingError(ValueError):
 
 class NoCrossSectionLocationsError(ValueError):
     """Raised when attempting to generate parallel offsets for a channel that has no cross-section locations"""
+
+
+class IntersectingSidesError(ValueError):
+    """"Raised when the two lines between which triangulate_between() tries to triangulate"""
 
 
 class IndexedPoint:
@@ -957,7 +961,10 @@ def triangulate_between(
 
     # raise error if lines intersect
     if side_1_line.intersects(side_2_line):
-        raise ValueError("Intersecting sides")
+        raise IntersectingSidesError(
+            f"side 1: {side_1_line.wkt} \n"
+            f"side 2: {side_2_line.wkt}"
+        )
 
     side_1_idx = 0
     side_2_idx = 0
