@@ -1,3 +1,6 @@
+# TODO error when channels (in .fill_wedge()) or
+#  cross-section locations (in .split() or .make_valid()) do not have id.
+
 from copy import deepcopy
 from enum import Enum
 from typing import Iterator, List, Union, Set, Sequence, Tuple
@@ -6,8 +9,8 @@ import numpy as np
 from shapely import __version__ as shapely_version
 from shapely import geos_version
 from shapely import wkt
-from shapely.geometry import LineString, MultiPolygon, Point, Polygon
-from shapely.ops import unary_union, nearest_points, transform
+from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
+from shapely.ops import unary_union, linemerge, nearest_points, transform
 
 
 if int(shapely_version.split(".")[0]) < 2:
@@ -114,6 +117,15 @@ def simplify(y_ordinates: np.array, z_ordinates: np.array, tolerance: float) -> 
     return y_ordinates, z_ordinates
 
 
+def offset_curve_fixed(line: LineString, distance: float):
+    """
+    Shapely offset_curve, but with a fix. With Shapely 2.0.2 and GEOS 3.12.0, some offset curves are
+    MultiLineStrings even though they can be linemerged into a LineString
+    """
+    result = line if distance == 0 else line.offset_curve(distance=distance)
+    result = linemerge(result) if isinstance(result, MultiLineString) else result
+    return result
+
 def reverse(geom):
     """Source: https://gis.stackexchange.com/questions/415864/how-do-you-flip-invert-reverse-the-order-of-the-
     coordinates-of-shapely-geometrie
@@ -142,7 +154,7 @@ def variable_buffer(linestring: LineString, radii: Sequence[float], shifts: Sequ
     if shifts is not None:
         # shift each vertex onto the offset_curve with given shift
         vertices = [
-            nearest_points(linestring if shifts[i] == 0 else linestring.offset_curve(shifts[i]), vertices[i])[0]
+            nearest_points(offset_curve_fixed(linestring, shifts[i]), vertices[i])[0]
             for i, coord in enumerate(linestring.coords)
         ]
     buffered_points = [
@@ -157,7 +169,7 @@ def variable_buffer(linestring: LineString, radii: Sequence[float], shifts: Sequ
 
 
 def is_valid_offset(line, offset):
-    po = line.offset_curve(offset)
+    po = offset_curve_fixed(line, offset)
     if po.is_empty:
         return False
     if type(po) != LineString:
@@ -185,7 +197,7 @@ def highest_valid_index_single_offset(line: LineString, offset: float) -> int:
 
 
 def highest_valid_index(line: LineString, offsets: Sequence[float]) -> int:
-    offsets=list(offsets)  # allow numpy array as type of ``offsets``
+    offsets = list(offsets)  # allow numpy array as type of ``offsets``
     offsets.sort(key=lambda x: -1 * abs(x))  # largest offsets first, because will probably result in the lowest index
     minimum_idx = len(line.coords) - 1
     for offset in offsets:
@@ -455,10 +467,16 @@ class Channel:
 
     @property
     def unique_offsets(self) -> np.array:
-        """Unique offsets for entire channel, see ``CrossSectionLocation.offsets`` documentation"""
+        """
+        Unique offsets for entire channel, see ``CrossSectionLocation.offsets`` documentation
+        Offsets are rounded to mm before selecting unique values
+        """
+        if len(self.cross_section_locations) == 0:
+            raise NoCrossSectionLocationsError("Channel has no cross-section locations")
         offsets_list = [xsec.offsets for xsec in self.cross_section_locations]
         all_offsets_array = np.hstack(offsets_list)
-        return np.array(np.unique(all_offsets_array))
+        result = np.unique((1000*all_offsets_array).astype(int))/1000
+        return result
 
     @property
     def cross_section_location_positions(self) -> np.array:
@@ -517,6 +535,20 @@ class Channel:
             position, self.cross_section_location_positions, self.thalweg_ys
         )
 
+    def simplify(self, tolerance):
+        """Simplify the Channel's geometry, without removing the vertices a cross-section locations"""
+        simplified_geometry = self.geometry.simplify(tolerance)
+        vertices = [Point(x, y) for x, y in simplified_geometry.coords]
+        positions = [simplified_geometry.project(vertex) for vertex in vertices]
+        cross_section_points = [
+            simplified_geometry.interpolate(xsec_pos) for xsec_pos in self.cross_section_location_positions
+        ]
+        pos_vertex_dict = dict(zip(positions, vertices))
+        pos_cross_section_dict = dict(zip(self.cross_section_location_positions, cross_section_points))
+        pos_vertex_dict.update(pos_cross_section_dict)
+        self.geometry = LineString([vertex for pos, vertex in sorted(pos_vertex_dict.items())])
+
+
     def generate_parallel_offsets(self, offset_0: bool = False):
         """
         Generate a set of lines parallel to the input linestring, at both sides of the line
@@ -525,8 +557,6 @@ class Channel:
         :param offset_0: guarantee an offset at 0, even if this does not occur in the channel's ``unique_offsets``
         """
         self.parallel_offsets = []
-        if len(self.cross_section_locations) == 0:
-            raise NoCrossSectionLocationsError("Channel has no cross-section locations")
         offsets = sorted(list(set(self.unique_offsets) | {0}), reverse=RIGHT == -1) if offset_0 else self.unique_offsets
         self.parallel_offsets = [ParallelOffset(parent=self, offset_distance=offset) for offset in offsets]
 
@@ -772,9 +802,7 @@ class Channel:
         thalweg_y_at_extra_point = wedge_fill_points_source.thalweg_y_at(position)
         shift = (width_at_extra_point/2) - thalweg_y_at_extra_point
         extra_point_shifted = nearest_points(
-            wedge_fill_points_source.geometry
-                if shift == 0
-                else wedge_fill_points_source.geometry.offset_curve(shift),
+            offset_curve_fixed(wedge_fill_points_source.geometry, shift),
             extra_point
         )[0]
         channel_to_update._extra_outline.append(extra_point_shifted.buffer(width_at_extra_point / 2))
@@ -868,9 +896,7 @@ class ParallelOffset:
         LineString.
         """
         self.parent = parent
-        self.geometry = parent.geometry \
-            if offset_distance == 0 \
-            else parent.geometry.offset_curve(distance=offset_distance)
+        self.geometry = offset_curve_fixed(parent.geometry, offset_distance)
         if self.geometry.is_empty:
             raise EmptyOffsetError
         if type(self.geometry) != LineString:
