@@ -269,7 +269,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
                     cross_section_location = CrossSectionLocation.from_qgs_feature(
                         cross_section_location_feature,
                         wall_displacement=pixel_size/4.0,
-                        simplify_tolerance=pixel_size/2.0
+                        simplify_tolerance=0.01
                     )
                     channel.add_cross_section_location(cross_section_location)
             channel.geometry = channel.geometry.simplify(pixel_size)
