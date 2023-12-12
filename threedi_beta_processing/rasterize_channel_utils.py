@@ -1,4 +1,5 @@
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Union, List, Tuple
 
 from osgeo import gdal, osr
@@ -100,6 +101,13 @@ def write_raster(
     return
 
 
+def build_vrt(output_filepath, raster_filepaths, **vrt_options):
+    """Build VRT for the list of rasters."""
+    options = gdal.BuildVRTOptions(**vrt_options)
+    vrt_ds = gdal.BuildVRT(output_filepath, raster_filepaths, options=options)
+    vrt_ds = None
+
+
 def bounding_box(raster: gdal.Dataset) -> Polygon:
     ulx, xres, xskew, uly, yskew, yres = raster.GetGeoTransform()
     lrx = ulx + (raster.RasterXSize * xres)
@@ -141,6 +149,9 @@ def merge_rasters(
 
     tile_size in pixels
     """
+    temp_dir = TemporaryDirectory()
+    temp_dir_path = Path(temp_dir.name)
+
     # resample rasters if their pixel size is different from output_pixel_size (tiny difference is allowed)
     resampled_rasters = []
     for i, raster in enumerate(rasters):
@@ -149,7 +160,7 @@ def merge_rasters(
         if abs(abs(xres) - abs(output_pixel_size)) > 1/(1000*tile_size) or \
                 abs(abs(yres) - abs(output_pixel_size)) > 1/(1000*tile_size):
             print("Resampling...")
-            resampled_raster_file_name = f"/vsimem/resampled_raster_{i}.tif"
+            resampled_raster_file_name = str(temp_dir_path / f"resampled_raster_{i}.tif")
             options = gdal.WarpOptions(xRes=output_pixel_size, yRes=output_pixel_size, resampleAlg="near")
             resampled_raster = gdal.Warp(resampled_raster_file_name, raster, options=options)
             resampled_rasters.append(resampled_raster)
@@ -162,10 +173,15 @@ def merge_rasters(
     ntiles = ncols * nrows
     geo_tile_size_x = tile_size * abs(output_pixel_size)
     geo_tile_size_y = tile_size * abs(output_pixel_size)
+
+    # GeoTransform: (ulx, xres, xskew, uly, yskew, yres/)
+    _, _, xskew, _, yskew, _ = resampled_rasters[0].GetGeoTransform()
+    geotransform = (minx, output_pixel_size, xskew, maxy, yskew, -1*output_pixel_size)
+    srs = resampled_rasters[0].GetProjection()
+    tiles = []
     rows = []
     for tile_row in range(nrows):
         # print(f"tile_row: {tile_row}")
-        tiles = []
         tile_maxy = maxy - tile_row * geo_tile_size_y
         for tile_col in range(ncols):
             # print(f"    tile_col: {tile_col}")
@@ -191,29 +207,20 @@ def merge_rasters(
                     aggregation_method=aggregation_method,
                     output_nodatavalue=output_nodatavalue,
                 )
-            tiles.append(tile)
-            # print(f"    tile.shape: {tile.shape}")
+            tile_path = temp_dir_path / f"tile_row_{tile_row}_col_{tile_col}.tif"
+            write_raster(
+                output_filename=tile_path,
+                geotransform=geotransform,
+                srs=srs,
+                data=tile,
+            )
+            tiles.append(str(tile_path))
             if feedback:
                 feedback.setProgress((tile_row * ncols + tile_col + 1) / ntiles * 100)
-        row = np.hstack(tiles)
-        rows.append(row)
-    result_array = np.vstack(rows)
-
-    # GeoTransform: (ulx, xres, xskew, uly, yskew, yres)
-    _, _, xskew, _, yskew, _ = resampled_rasters[0].GetGeoTransform()
-    geotransform = (minx, output_pixel_size, xskew, maxy, yskew, -1*output_pixel_size)
-    srs = resampled_rasters[0].GetProjection()
     if feedback:
         feedback.setProgressText("Writing output raster to disk...")
-    write_raster(
-        output_filename=output_filename,
-        geotransform=geotransform,
-        srs=srs,
-        data=result_array,
-    )
-    for i, raster in enumerate(rasters):
-        try:
-            gdal.Unlink(f"/vsimem/resampled_raster_{i}.tif")
-        except RuntimeError:
-            # VSI file does not exist
-            continue
+    vrt_path = temp_dir_path / "result.vrt"
+    vrt_options = {}
+    build_vrt(output_filepath=str(vrt_path), raster_filepaths=tiles, **vrt_options)
+    vrt = gdal.Open(vrt_path)
+    gdal.Translate(destName=output_filename, srcDS=vrt)
