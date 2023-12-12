@@ -60,7 +60,7 @@ from .rasterize_channel import (
 from .rasterize_channel_utils import merge_rasters
 
 
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 
 def align_qgs_rectangle(extent: QgsRectangle, xres, yres):
@@ -237,8 +237,6 @@ def rasterize(
                             processed_triangles.append(j)
                             faces_added += 1
                             occupied_vertices = np.append(occupied_vertices, triangle.vertex_indices)
-                            if DEBUG_MODE:
-                                feedback.pushInfo(f"Added triangle with indices {triangle.vertex_indices}")
                         elif DEBUG_MODE:
                             feedback.pushInfo(
                                 f"Could not (yet) add triangle {j}.\n"
@@ -555,7 +553,13 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             errors=errors,
             warnings=warnings,
             feedback=multi_step_feedback,
-            context=context
+            context=context,
+            points_sink=points_sink if DEBUG_MODE else None,
+            points_fields=points_fields if DEBUG_MODE else None,
+            triangles_sink=triangles_sink if DEBUG_MODE else None,
+            triangles_fields=triangles_fields if DEBUG_MODE else None,
+            outline_sink=outline_sink if DEBUG_MODE else None,
+            outline_fields=outline_fields if DEBUG_MODE else None,
         )
         multi_step_feedback.setCurrentStep(2)
         multi_step_feedback.setProgressText("Merging rasters...")
