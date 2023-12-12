@@ -2,7 +2,6 @@ import numpy as np
 from shapely.geometry import LineString, Point
 from shapely import wkt, wkb
 import pytest
-import matplotlib.pyplot as plt
 
 
 from rasterize_channel import (
@@ -14,7 +13,7 @@ from rasterize_channel import (
     find_wedge_channels,
     # fill_wedges,
     parse_cross_section_table,
-    triangulate_between,
+    triangulate_between, highest_valid_index_single_offset, highest_valid_index, is_valid_offset,
 )
 
 
@@ -94,6 +93,7 @@ def get_test_cross_section_location(nr: int = 0):
         )
 
         cross_section_loc = CrossSectionLocation(
+            id=1,
             reference_level=10.0,
             bank_level=12.0,
             y_ordinates=y,
@@ -132,6 +132,7 @@ def get_test_cross_section_location(nr: int = 0):
         )
 
         cross_section_loc = CrossSectionLocation(
+            id=1,
             reference_level=10.0,
             bank_level=12.0,
             y_ordinates=y,
@@ -265,6 +266,88 @@ def test_parse_cross_section_table():
         )
 
 
+def test_is_valid_offset():
+    # VALID
+    assert is_valid_offset(LineString([[0, 0], [0, 1], [0, 2], [0, 3], [1, 1]]), -.5) is True
+
+    # EMPTY OFFSETS
+    assert is_valid_offset(LineString([[-4, 4], [-4, 0], [0, 0], [0, 4]]), 2) is False
+    assert is_valid_offset(LineString([[0, 0], [0, 1], [0, 2], [0, 3], [1, 1], [1, 0]]), -.5) is False
+
+    # MULTILINESTRING
+    line_coords = np.array(
+        [[0, 0], [10, 10], [10, 20], [0, 30], [0, 40], [10, 50], [20, 50], [30, 40], [30, 30], [20, 20], [20, 10],
+         [30, 0], [37, 0], [38, 1], [38, 2], [37, 3], [37, 4], [38, 5], [39, 5], [40, 4], [40, 3], [39, 2], [39, 1],
+         [40, 0]]
+    )
+    line = LineString(line_coords)
+    assert is_valid_offset(line, -0.5) is False
+    assert is_valid_offset(line, -0.4) is True
+
+
+def test_highest_valid_index_single_offset(plot: bool = False):
+    line = LineString([[0, 0], [0, 1], [0, 2], [0, 3], [2, 3], [2, 2], [1, 1], [1, 0]])
+    offset = -2
+    if plot:
+        import matplotlib.pyplot as plt
+        offset_line = line.offset_curve(offset)
+        plt.plot(line.xy[0], line.xy[1], 'b-')  # 'b-' for blue line
+        if type(offset_line) == LineString:
+            plt.plot(offset_line.xy[0], offset_line.xy[1], 'g-')
+        else:  # Probably MultiLineString
+            for offset_line_geom in offset_line.geoms:
+                plt.plot(offset_line_geom.xy[0], offset_line_geom.xy[1], 'g-')
+        hvi = highest_valid_index_single_offset(line, offset)
+        point_x, point_y = line.coords[hvi]
+        plt.plot(point_x, point_y, 'ro', label=f"HVI: {hvi}")
+        plt.xlabel('X-axis')
+        plt.ylabel('Y-axis')
+        plt.axis('equal')  # Set equal scaling
+        plt.legend()
+        plt.show()
+
+    assert highest_valid_index_single_offset(line, -2) == 4
+
+    line = LineString([[0, 0], [0, 1], [0, 2], [0, 3], [2, 3], [4, 3], [8, 3], [10, 3]])
+    assert highest_valid_index_single_offset(line, -2) == 7
+
+
+def test_highest_valid_index(plot: bool = False):
+    line_coords = np.array(
+        [[0, 0], [10, 10], [10, 20], [0, 30], [0, 40], [10, 50], [20, 50], [30, 40], [30, 30], [20, 20], [20, 10],
+         [30, 0], [37, 0], [38, 1], [38, 2], [37, 3], [37, 4], [38, 5], [39, 5], [40, 4], [40, 3], [39, 2], [39, 1],
+         [40, 0]]
+    )
+    line = LineString(line_coords)
+    offset_small = -0.5
+    offset_large = -5
+
+    if plot:
+        import matplotlib.pyplot as plt
+        offset_line_0_5 = line.offset_curve(offset_small)
+        offset_line_5 = line.offset_curve(offset_large)
+        plt.plot(line.xy[0], line.xy[1], 'b-')  # 'b-' for blue line
+        for offset_line_geom in offset_line_0_5.geoms:
+            plt.plot(offset_line_geom.xy[0], offset_line_geom.xy[1], 'g-')
+        for offset_line_geom in offset_line_5.geoms:
+            plt.plot(offset_line_geom.xy[0], offset_line_geom.xy[1], 'r-')
+        hvi_small_offset = highest_valid_index(line, [offset_small])
+        point_x, point_y = line.coords[hvi_small_offset]
+        plt.plot(point_x, point_y, 'ro', label=f"HVI for small offset: {hvi_small_offset}")
+        hvi_large_offset = highest_valid_index(line, [offset_large])
+        point_x, point_y = line.coords[hvi_large_offset]
+        plt.plot(point_x, point_y, 'ko', label=f"HVI for large offset: {hvi_large_offset}")
+        plt.xlabel('X-axis')
+        plt.ylabel('Y-axis')
+        plt.axis('equal')  # Set equal scaling
+        plt.legend()
+        plt.show()
+
+    assert highest_valid_index(line, [offset_small, offset_large]) == 8
+    assert highest_valid_index(line, [offset_small, offset_large]) == highest_valid_index(line, [offset_large])
+    assert highest_valid_index(line, [offset_small]) == 20
+
+
 def test_channel_azimuth_at():
     assert get_test_channel(1).azimuth_at(connection_node_id=2) == 180
     assert round(get_test_channel(2).azimuth_at(connection_node_id=2), 2) == 11.31
@@ -278,6 +361,7 @@ def test_cross_section_location_thalweg_y():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -305,6 +389,7 @@ def test_cross_section_location_z_at():
     )
 
     xsec = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -337,6 +422,7 @@ def test_channel_properties():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -352,6 +438,7 @@ def test_channel_properties():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -386,6 +473,7 @@ def test_channel_outline():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -436,6 +524,7 @@ def test_channel_outline():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -451,6 +540,7 @@ def test_channel_outline():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -544,6 +634,7 @@ def test_two_vertex_channel():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -606,6 +697,7 @@ def test_two_vertex_channel():
 #         )
 #
 #         cross_section_loc = CrossSectionLocation(
+#             id=1,
 #             reference_level=10.0,
 #             bank_level=12.0,
 #             y_ordinates=y,
@@ -636,6 +728,7 @@ def test_cross_section_starting_at_0_0():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -661,6 +754,7 @@ def test_channel_max_width_at():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -676,6 +770,7 @@ def test_channel_max_width_at():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -707,6 +802,7 @@ def test_parallel_offset_heights_at_vertices():
         cross_section_shape=SupportedShape.TABULATED_TRAPEZIUM.value
     )
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=2.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -721,6 +817,7 @@ def test_parallel_offset_heights_at_vertices():
     )
 
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=4.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -811,6 +908,7 @@ def test_fill_wedge():
         wall_displacement=WALL_DISPLACEMENT
     )
     cross_section_loc = CrossSectionLocation(
+        id=1,
         reference_level=10.0,
         bank_level=12.0,
         y_ordinates=y,
@@ -971,6 +1069,25 @@ def test_triangle():
 
 def test_triangulate_between():
 
+    # Base case: two parallel lines
+    points_1 = [
+        IndexedPoint(0, 0, 10, index=0),
+        IndexedPoint(0, 2, 20, index=1),
+        IndexedPoint(0, 4, 30, index=2),
+        IndexedPoint(0, 8, 40, index=3),
+    ]
+    points_2 = [
+        IndexedPoint(10, 3, 20, index=5),
+        IndexedPoint(10, 6, 30, index=6),
+        IndexedPoint(10, 9, 40, index=7),
+    ]
+    triangles = [triangle for triangle in triangulate_between(
+            side_1_points=points_1,
+            side_2_points=points_2,
+    )]
+    tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in triangles]
+    print("\nUNION\n".join(tri_queries))
+
     # Typical wedge: Both sides have > 1 points, start from the same 0 point
     points_1 = [
         IndexedPoint(0, 0, 10, index=0),
@@ -985,8 +1102,6 @@ def test_triangulate_between():
         IndexedPoint(8, 8, 40, index=7),
     ]
     points_2.reverse()
-    side_2_distances = [0, 2, 4, 8]
-    side_2_distances.reverse()
     triangles = [triangle for triangle in triangulate_between(
             side_1_points=points_1,
             side_2_points=points_2,

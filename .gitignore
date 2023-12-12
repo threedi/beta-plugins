@@ -5,3 +5,4 @@ __pycache__
 .idea/
 *.ipynb
 *.zip
+threedi_beta_processing/environment.yml
