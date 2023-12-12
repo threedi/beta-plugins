@@ -176,7 +176,6 @@ def merge_rasters(
 
     # GeoTransform: (ulx, xres, xskew, uly, yskew, yres/)
     _, _, xskew, _, yskew, _ = resampled_rasters[0].GetGeoTransform()
-    geotransform = (minx, output_pixel_size, xskew, maxy, yskew, -1*output_pixel_size)
     srs = resampled_rasters[0].GetProjection()
     tiles = []
     rows = []
@@ -208,6 +207,7 @@ def merge_rasters(
                     output_nodatavalue=output_nodatavalue,
                 )
             tile_path = temp_dir_path / f"tile_row_{tile_row}_col_{tile_col}.tif"
+            geotransform = (tile_minx, output_pixel_size, xskew, tile_maxy, yskew, -1 * output_pixel_size)
             write_raster(
                 output_filename=tile_path,
                 geotransform=geotransform,
