@@ -126,6 +126,7 @@ def offset_curve_fixed(line: LineString, distance: float):
     result = linemerge(result) if isinstance(result, MultiLineString) else result
     return result
 
+
 def reverse(geom):
     """Source: https://gis.stackexchange.com/questions/415864/how-do-you-flip-invert-reverse-the-order-of-the-
     coordinates-of-shapely-geometrie
@@ -153,6 +154,8 @@ def variable_buffer(linestring: LineString, radii: Sequence[float], shifts: Sequ
     vertices = [Point(coord) for coord in linestring.coords]
     if shifts is not None:
         # shift each vertex onto the offset_curve with given shift
+        shifts = np.array(shifts)
+        shifts[shifts < 0.001] = 0
         vertices = [
             nearest_points(offset_curve_fixed(linestring, shifts[i]), vertices[i])[0]
             for i, coord in enumerate(linestring.coords)
