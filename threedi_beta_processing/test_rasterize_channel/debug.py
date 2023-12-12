@@ -7,6 +7,7 @@ from rasterize_channel import (
     CrossSectionLocation,
     parse_cross_section_table,
     fill_wedges,
+    simplify,
 )
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -18,7 +19,8 @@ ogr.UseExceptions()
 def read_from_geopackage(
         path: Union[Path, str],
         channel_ids: List = None,
-        wall_displacement: float = 0
+        wall_displacement: float = 0,
+        simplify_tolerance: float = 0
 ) -> Tuple[Dict[int, Channel], Dict[int, CrossSectionLocation]]:
     path = str(path)
 
@@ -59,6 +61,7 @@ def read_from_geopackage(
                 cross_section_shape=feature[field_indices["cross_section_shape"]],
                 wall_displacement=wall_displacement
             )
+            y, z = simplify(y, z, tolerance=simplify_tolerance)
             cross_section_location = CrossSectionLocation(
                 id=feature[field_indices["id"]],
                 reference_level=feature[field_indices["reference_level"]],
@@ -76,14 +79,16 @@ def read_from_geopackage(
         return channels, cross_section_locations
 
 
-gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\Olof Geul\geul_oost.gpkg"
-pixel_size = 0.25
+# gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\Olof Geul\geul_oost.gpkg"
+gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\MKDC\Mekong operational model.gpkg"
+pixel_size = 30
 
 input_channels, input_cross_section_locations = read_from_geopackage(
     path=gpkg_path,
-    channel_ids=[796],
+    channel_ids=[221, 527, 721, 729, 825, 907, 917, 1080],
     # channel_ids=[2000414, 2000415],
-    wall_displacement=pixel_size/4.0
+    wall_displacement=pixel_size/4.0,
+    simplify_tolerance=0.01
 )
 
 channels = []
@@ -91,9 +96,13 @@ for input_channel in input_channels.values():
     print(input_channel.id)
     print(input_channel.max_width_at(0))
     input_channel.simplify(pixel_size)
+    print("Simplified")
     sub_channels = input_channel.make_valid()
+    print(f"Made valid, nr. of sub channels: {len(sub_channels)}")
     for sub_channel in sub_channels:
+        print(f"Processing sub_channel {sub_channel.id}")
         sub_channel.generate_parallel_offsets()
+        print(f"Generated parallel offsets for sub channel {sub_channel.id}")
     channels += sub_channels
 fill_wedges(channels)
 
@@ -102,14 +111,15 @@ for channel in channels:
     print(channel.unique_offsets)
     random_color = random.choice(list(mcolors.CSS4_COLORS.keys()))
     # plot the triangles
-    for triangle in channel.triangles:
+    for i, triangle in enumerate(channel.triangles):
+        print(f"triangle {i}")
         x, y = triangle.geometry.exterior.xy
         plt.plot(x, y, color=random_color)
         plt.fill(x, y, color=random_color, alpha=0.5)
 
     #plot outline
-    x, y = channel.outline.exterior.xy
-    plt.plot(x, y, color=random_color, lw=5)
+    # x, y = channel.outline.exterior.xy
+    # plt.plot(x, y, color=random_color, lw=5)
 
 plt.xlabel('X-axis')
 plt.ylabel('Y-axis')

@@ -493,6 +493,17 @@ class Channel:
         return result_array
 
     @property
+    def last_index(self) -> int:
+        """
+        Return the highest index of the channel's ``IndexedPoint``s
+        """
+        po_points_last_index = self.parallel_offsets[-1].vertex_indices[-1] if self.parallel_offsets else -1
+        wedge_fill_points_last_index = self._wedge_fill_points[-1].index if self._wedge_fill_points else -1
+        result = np.max([po_points_last_index, wedge_fill_points_last_index])
+        return result
+
+
+    @property
     def outline(self) -> Polygon:
         radii = [self.max_width_at(position) / 2 for position in self.vertex_positions]
         thalweg_ys = [self.thalweg_y_at(position) for position in self.vertex_positions]
@@ -557,6 +568,9 @@ class Channel:
         :param offset_0: guarantee an offset at 0, even if this does not occur in the channel's ``unique_offsets``
         """
         self.parallel_offsets = []
+        self._wedge_fill_points = []
+        self._wedge_fill_triangles = []
+        self._extra_outline = []
         offsets = sorted(list(set(self.unique_offsets) | {0}), reverse=RIGHT == -1) if offset_0 else self.unique_offsets
         self.parallel_offsets = [ParallelOffset(parent=self, offset_distance=offset) for offset in offsets]
 
@@ -762,7 +776,7 @@ class Channel:
         # add points from the other channel (`wedge_fill_points_source`)
         wedge_fill_points = []
         wedge_fill_points_source_offsets = []
-        last_index = channel_to_update.parallel_offsets[-1].vertex_indices[-1]
+        last_index = channel_to_update.last_index
         # sort on abs(offset_distance) to make sure we always go from the middle to the outside
         for po in sorted(wedge_fill_points_source.parallel_offsets, key=lambda x: np.abs(x.offset_distance)):
             if po.offset_distance * wedge_fill_points_source_side > 0:
@@ -788,7 +802,6 @@ class Channel:
         # test that point indices are unique
         point_indices = [point.index for point in channel_to_update.points]
         assert len(set(point_indices)) == len(point_indices)
-
         # Create extra outline buffer for the wedge
         extra_point = Point(
             wedge_fill_points_source.geometry.coords[wedge_fill_points_source_idx]
@@ -971,6 +984,11 @@ def triangulate_between(
     :param side_2_points: list of points located along a line on side 2
     :param side_2_distances: distance along the line on which these points are located
     """
+    if len(side_1_points) == 0:
+        raise ValueError("side_1_points is empty")
+
+    if len(side_2_points) == 0:
+        raise ValueError("side_2_points is empty")
 
     # flip points of one side if that makes the sides more parallel
     if side_1_points[0].geom.distance(side_2_points[0].geom) > side_1_points[0].geom.distance(side_2_points[-1].geom):
