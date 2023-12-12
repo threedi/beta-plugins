@@ -534,7 +534,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         if multi_step_feedback.isCanceled():
             return {}
 
-        fill_wedges(channels)
+        fill_wedges(channels, feedback=multi_step_feedback)
         if multi_step_feedback.isCanceled():
             return {}
 

@@ -1082,8 +1082,8 @@ def test_triangulate_between():
         IndexedPoint(10, 9, 40, index=7),
     ]
     triangles = [triangle for triangle in triangulate_between(
-            side_1_points=points_1,
-            side_2_points=points_2,
+            left_side_points=points_1,
+            right_side_points=points_2,
     )]
     tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in triangles]
     print("\nUNION\n".join(tri_queries))
@@ -1103,8 +1103,8 @@ def test_triangulate_between():
     ]
     points_2.reverse()
     triangles = [triangle for triangle in triangulate_between(
-            side_1_points=points_1,
-            side_2_points=points_2,
+            left_side_points=points_1,
+            right_side_points=points_2,
     )]
     tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in triangles]
     print("\nUNION\n".join(tri_queries))
@@ -1116,8 +1116,8 @@ def test_triangulate_between():
         IndexedPoint(45, 2.5, 15, index=9)
     ]
     triangles = [triangle for triangle in triangulate_between(
-            side_1_points=points_1,
-            side_2_points=points_2,
+            left_side_points=points_1,
+            right_side_points=points_2,
     )]
     assert len(triangles) == 1
     assert triangles[0].geometry.wkt == "POLYGON Z ((50 5 15, 50 0 10, 45 2.5 15, 50 5 15))"
