@@ -60,7 +60,7 @@ from .rasterize_channel import (
 from .rasterize_channel_utils import merge_rasters
 
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def align_qgs_rectangle(extent: QgsRectangle, xres, yres):
@@ -101,10 +101,7 @@ def read_channels(
         try:
             if DEBUG_MODE:
                 feedback.pushInfo(f"Channel has {len(channel.cross_section_locations)} cross-section locations")
-            sub_channels = channel.make_valid()
-            for sub_channel in sub_channels:
-                sub_channel.generate_parallel_offsets()
-            channels += sub_channels
+            channels += channel.make_valid()
         except EmptyOffsetError:
             errors.append(channel_id)
             feedback.reportError(

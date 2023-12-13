@@ -6,11 +6,9 @@ from enum import Enum
 from typing import Iterator, List, Union, Set, Sequence, Tuple
 
 import numpy as np
-from shapely import __version__ as shapely_version
-from shapely import geos_version
-from shapely import wkt
+from shapely import __version__ as shapely_version, force_2d, wkt, geos_version
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
-from shapely.ops import unary_union, linemerge, nearest_points, transform
+from shapely.ops import unary_union, linemerge, nearest_points, snap, transform
 
 
 if int(shapely_version.split(".")[0]) < 2:
@@ -33,6 +31,11 @@ class SupportedShape(Enum):
     TABULATED_TRAPEZIUM = 6
     YZ = 7
 
+
+def index_of_vertex(line: LineString, vertex: Point):
+    for i, vertex_coords in enumerate(line.coords):
+        if Point(vertex_coords).intersects(vertex):
+            return i
 
 def is_monotonically_increasing(a: np.array, equal_allowed=False):
     if equal_allowed:
@@ -179,7 +182,8 @@ def variable_buffer(linestring: LineString, radii: Sequence[float], shifts: Sequ
     if shifts is not None:
         # shift each vertex onto the offset_curve with given shift
         shifts = np.array(shifts)
-        shifts[np.logical_and(-0.001 < shifts, shifts < 0.001)] = 0
+        shifts[np.logical_and(-0.001 < shifts, shifts < 0.001)] = 0  # if shift is too close to 0, offset_curve()
+                                                                     # produces a GEOSException in some cases
         vertices = [
             nearest_points(offset_curve_fixed(linestring, shifts[i]), vertices[i])[0]
             for i, coord in enumerate(linestring.coords)
@@ -265,10 +269,22 @@ class IntersectingSidesError(ValueError):
     """"Raised when the two lines between which triangulate_between() tries to triangulate"""
 
 
+class TriangulationError(ValueError):
+    """
+    Raised when triangulation fails
+
+    The attribute ``locations`` is a list of points located at the last position where valid triangulation was still
+    possible
+    """
+    def __init__(self, *args, locations: List['IndexedPoint']):
+        super().__init__(*args)
+        self.locations: List['IndexedPoint'] = locations
+
+
 class IndexedPoint:
     def __init__(self, *args, index: int):
-        self.geom = Point(*args)  # since shapely 2.0, it is no longer possible to add any custom attributes to a Point,
-                                  # so it is impossible to inherit all from Point and add index
+        self.geom: Point = Point(*args)  # since shapely 2.0, it is no longer possible to add any custom attributes
+                                         # to a Point, so it is impossible to inherit all from Point and add index
         self.index = index
 
     @property
@@ -496,6 +512,7 @@ class Channel:
         self.cross_section_locations: List[CrossSectionLocation] = []
         self.geometry: LineString = geometry
         self.parallel_offsets: List[ParallelOffset] = []
+        self._parallel_offset_triangles = []
         self._wedge_fill_points = []
         self._wedge_fill_triangles = []
         self._extra_outline = []
@@ -619,7 +636,6 @@ class Channel:
         pos_vertex_dict.update(pos_cross_section_dict)
         self.geometry = LineString([vertex for pos, vertex in sorted(pos_vertex_dict.items())])
 
-
     def generate_parallel_offsets(self, offset_0: bool = False):
         """
         Generate a set of lines parallel to the input linestring, at both sides of the line
@@ -627,6 +643,7 @@ class Channel:
 
         :param offset_0: guarantee an offset at 0, even if this does not occur in the channel's ``unique_offsets``
         """
+        self._parallel_offset_triangles = []
         self._wedge_fill_points = []
         self._wedge_fill_triangles = []
         self._extra_outline = []
@@ -692,14 +709,10 @@ class Channel:
         Returns a list of Triangles, sorted in such a way that each triangle shares at least one side with a
         preceding triangle in the list. If this is not possible, the resulting list may contain several sections to
         which this requirement applies, but not between the sections.
+
+        Will only return triangles if ``fill_parallel_offsets`` and/or ``fill_wedge()`` have been called first.
         """
-        triangles = []
-        for i in range(len(self.parallel_offsets) - 1):
-            for tri in self.parallel_offsets[i].triangulate(
-                self.parallel_offsets[i + 1]
-            ):
-                triangles.append(tri)
-        triangles += self._wedge_fill_triangles
+        triangles = self._parallel_offset_triangles + self._wedge_fill_triangles
 
         # sort
         processed_sides = triangles[0].sides
@@ -751,6 +764,13 @@ class Channel:
         connection_node_geometry = self.find_vertex(connection_node_id, 0)
         second_point = self.find_vertex(connection_node_id, 1)
         return azimuth(connection_node_geometry, second_point)
+
+    def fill_parallel_offsets(self):
+        """Triangulate between all parallel offsets"""
+        self._parallel_offset_triangles = []
+        for i in range(len(self.parallel_offsets) - 1):
+            for tri in self.parallel_offsets[i].triangulate(self.parallel_offsets[i + 1]):
+                self._parallel_offset_triangles.append(tri)
 
     def fill_wedge(self, other: 'Channel'):
         """Add points and triangles to fill the wedge-shaped gap between self and other. Also updates self.outline"""
@@ -942,8 +962,10 @@ class Channel:
 
         return first_part, last_part
 
-    def make_valid(self) -> List['Channel']:
+    def make_valid_parallel_offsets(self) -> List['Channel']:
         """
+        Make Channel valid enough to generate parallel offsets (and generate them in the process)
+
         Return a list of Channels for which valid offsets can be generated. If needed, the input channel will be cut
         into parts. Always returns a list, even when the input channel is already valid
 
@@ -955,11 +977,46 @@ class Channel:
             hvi = highest_valid_index(line=possibly_invalid_channel.geometry, offsets=self.unique_offsets)
             valid_part, possibly_invalid_channel = possibly_invalid_channel.split(vertex_index=hvi)
             result.append(valid_part)
-        if len(self.parallel_offsets) > 0:
-            for channel in result:
-                channel.generate_parallel_offsets()
+        for channel in result:
+            channel.generate_parallel_offsets()
         return result
 
+    def make_valid_triangulate(self):
+        """
+        Make Channel valid enough to generate fill parallel offsets (and do this in the process)
+        """
+        result = []
+        possibly_invalid_channel = self
+        while possibly_invalid_channel:
+            try:
+                if not possibly_invalid_channel.parallel_offsets:
+                    possibly_invalid_channel.generate_parallel_offsets()
+                possibly_invalid_channel.fill_parallel_offsets()
+            except TriangulationError as e:
+                tolerance = np.max(np.abs(possibly_invalid_channel.unique_offsets))
+                min_pos = 2
+                for point in e.locations:
+                    snapped_point = snap(g1=point.geom, g2=possibly_invalid_channel.geometry, tolerance=tolerance)
+                    pos = possibly_invalid_channel.geometry.project(snapped_point, normalized=True)
+                    if pos < min_pos:
+                        split_point = snapped_point
+                        min_pos = pos
+                index = index_of_vertex(possibly_invalid_channel.geometry, split_point)
+                valid_part, possibly_invalid_channel = possibly_invalid_channel.split(vertex_index=index)
+                valid_part.generate_parallel_offsets()
+                valid_part.fill_parallel_offsets()  # fingers crossed that it doesn't error
+                result.append(valid_part)
+            else:
+                result.append(possibly_invalid_channel)
+                return result
+        return result
+
+    def make_valid(self) -> List['Channel']:
+        made_valid_po = self.make_valid_parallel_offsets()
+        made_valid_triangulate = []
+        for channel in made_valid_po:
+            made_valid_triangulate += channel.make_valid_triangulate()
+        return made_valid_triangulate
 
 class ParallelOffset:
     def __init__(self, parent: Channel, offset_distance: float):
@@ -1044,10 +1101,10 @@ def triangulate_between(
     :param right_side_points: list of points located along a line to the right of ``left_side_points``
     """
     if len(left_side_points) == 0:
-        raise ValueError("side_1_points is empty")
+        raise ValueError("left_side_points is empty")
 
     if len(right_side_points) == 0:
-        raise ValueError("side_2_points is empty")
+        raise ValueError("right_side_points is empty")
 
     # flip points of one side if that makes the sides more parallel
     if left_side_points[0].geom.distance(right_side_points[0].geom) > \
@@ -1154,11 +1211,7 @@ def triangulate_between(
                     #  catch that error and use the Point to split the channel and try again
                     #  perhaps include triangulation in Channel.make_valid()? If so, we would need to store the
                     #  triangles instead of always generating them dynamically
-                    if move_on_left_side_cross_line.length < move_on_right_side_cross_line.length:
-                        left_side_idx += 1
-                    else:
-                        right_side_idx += 1
-                    continue
+                    raise TriangulationError("No valid triangle found, cannot continue", locations=triangle_points)
 
         yield Triangle(points=triangle_points)
 
@@ -1255,8 +1308,9 @@ def fill_wedges(channels: List[Channel], feedback=None):
         if channel1 and channel2:
             try:
                 channel1.fill_wedge(channel2)
-            except IntersectingSidesError:
+            except (IntersectingSidesError, ValueError) as e:
                 if feedback:
                     feedback.pushWarning(
-                        f"Warning: Could not fill wedge-shaped gap between channel {channel1.id} and {channel2.id}"
+                        f"Warning: Could not fill wedge-shaped gap between channel {channel1.id} and {channel2.id}."
+                        f"Error: {repr(e)}"
                     )
