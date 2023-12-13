@@ -87,7 +87,7 @@ pixel_size = 0.5
 input_channels, input_cross_section_locations = read_from_geopackage(
     path=gpkg_path,
     # channel_ids=[181],
-    channel_ids=[2000286],
+    channel_ids=[2000412],
     wall_displacement=pixel_size/4.0,
     simplify_tolerance=0.01
 )
@@ -96,6 +96,7 @@ channels = []
 for input_channel in input_channels.values():
     print(input_channel.id)
     print(input_channel.max_width_at(0))
+    print(input_channel.thalweg_y_at(0))
     input_channel.simplify(pixel_size)
     print("Simplified")
     sub_channels = input_channel.make_valid()
@@ -119,16 +120,16 @@ for channel in channels:
         plt.fill(x, y, color=random_color, alpha=0.5)
 
     # plot outline
-    # x, y = channel.outline.exterior.xy
-    # plt.plot(x, y, color=random_color, lw=5)
+    x, y = channel.outline.exterior.xy
+    plt.plot(x, y, color=random_color, lw=5)
 
-    # plot the parallel offsets
-    for po in channel.parallel_offsets:
-        x, y = po.geometry.xy
-        x = np.array(x)
-        y = np.array(y)
-        plt.plot(x, y, color=random_color)
-        plt.quiver(x[:-1], y[:-1], x[1:] - x[:-1], y[1:] - y[:-1], scale_units='xy', angles='xy', scale=1, color=random_color)
+    # # plot the parallel offsets
+    # for po in channel.parallel_offsets:
+    #     x, y = po.geometry.xy
+    #     x = np.array(x)
+    #     y = np.array(y)
+    #     plt.plot(x, y, color=random_color)
+    #     plt.quiver(x[:-1], y[:-1], x[1:] - x[:-1], y[1:] - y[:-1], scale_units='xy', angles='xy', scale=1, color=random_color)
 
 plt.xlabel('X-axis')
 plt.ylabel('Y-axis')
