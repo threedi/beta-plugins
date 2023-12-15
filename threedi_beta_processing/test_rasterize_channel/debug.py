@@ -82,12 +82,12 @@ def read_from_geopackage(
 
 gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\Olof Geul\geul_oost.gpkg"
 # gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\MKDC\Mekong operational model.gpkg"
-pixel_size = 0.5
+pixel_size = 1.0
 
 input_channels, input_cross_section_locations = read_from_geopackage(
     path=gpkg_path,
-    # channel_ids=[181],
-    channel_ids=[2000286],
+    # channel_ids=[2000286],
+    channel_ids=[784],
     wall_displacement=pixel_size/4.0,
     simplify_tolerance=0.01
 )
@@ -95,18 +95,23 @@ input_channels, input_cross_section_locations = read_from_geopackage(
 channels = []
 for input_channel in input_channels.values():
     print(input_channel.id)
+    # input_channel.generate_parallel_offsets()
+    # num_points = np.sum([len(po.geometry.coords) for po in input_channel.parallel_offsets])
+    # print(num_points)
+
     print(input_channel.max_width_at(0))
     print(input_channel.thalweg_y_at(0))
     input_channel.simplify(pixel_size)
     print("Simplified")
     channels += input_channel.make_valid()
-# fill_wedges(channels)
+fill_wedges(channels)
 
 for channel in channels:
     print(channel.id)
     print(channel.unique_offsets)
     random_color = random.choice(list(mcolors.CSS4_COLORS.keys()))
     # plot the triangles
+    print(len(channel.triangles))
     for i, triangle in enumerate(channel.triangles):
         # print(f"triangle {i}")
         x, y = triangle.geometry.exterior.xy

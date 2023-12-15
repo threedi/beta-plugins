@@ -22,8 +22,11 @@ if not (geos_version[0] > 3 or (geos_version[0] == 3 and geos_version[1] >= 12))
 # the direction of the given geometric points of the LineString.
 RIGHT = -1
 LEFT = 1
+
 LEFT_LEFT = 2
 RIGHT_RIGHT = -2
+
+VERTEX_LIMIT = 50000
 
 
 class SupportedShape(Enum):
@@ -981,6 +984,24 @@ class Channel:
             channel.generate_parallel_offsets()
         return result
 
+    def make_valid_vertex_count(self):
+        """
+        Split channel in parts for which the total number of vertices in the parallel offsets does not exceed the
+        ``VERTEX_LIMIT``
+        """
+        result = []
+        possibly_invalid_channel = self
+        while possibly_invalid_channel:
+            possibly_invalid_channel.generate_parallel_offsets()
+            num_po_vertices = np.sum([len(po.geometry.coords) for po in possibly_invalid_channel.parallel_offsets])
+            num_channel_vertices = len(possibly_invalid_channel.geometry.coords)
+            hvi = int(min(VERTEX_LIMIT / num_po_vertices, 1) * num_channel_vertices) - 1  # highest valid index
+            print(f"hvi in make_valid_vertex_count: {hvi}")
+            valid_part, possibly_invalid_channel = possibly_invalid_channel.split(vertex_index=hvi)
+            valid_part.generate_parallel_offsets()
+            result.append(valid_part)
+        return result
+
     def make_valid_triangulate(self):
         """
         Make Channel valid enough to generate fill parallel offsets (and do this in the process)
@@ -1013,8 +1034,12 @@ class Channel:
 
     def make_valid(self) -> List['Channel']:
         made_valid_po = self.make_valid_parallel_offsets()
-        made_valid_triangulate = []
+        made_valid_vertex_count = []
         for channel in made_valid_po:
+            made_valid_vertex_count += channel.make_valid_vertex_count()
+        made_valid_triangulate = []
+        for channel in made_valid_vertex_count:
+            print(f"make_valid_triangulate for {channel.id}")
             made_valid_triangulate += channel.make_valid_triangulate()
         return made_valid_triangulate
 
