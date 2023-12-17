@@ -1,7 +1,7 @@
 import numpy as np
 from shapely.geometry import LineString, Point
 from shapely import wkt, wkb
-import pytest
+# import pytest
 
 
 from rasterize_channel import (
@@ -617,8 +617,15 @@ def test_channel_parallel_offsets():
     ]
 
 
+def test_channel_split():
+    channel = get_test_channel(2)
+    # split_channel = channel.split(0)
+    split_channel = channel.split(1)
+    split_channel = channel.split(2)
+
+
 def test_two_vertex_channel():
-    "Test the edge case where all parallel offsets are only two vertices long"
+    """Test the edge case where all parallel offsets are only two vertices long"""
     wkt_geometry = "LineString (0 0, 10 10)"
     channel_geom = wkt.loads(wkt_geometry)
     channel = Channel(
@@ -1082,8 +1089,8 @@ def test_triangulate_between():
         IndexedPoint(10, 9, 40, index=7),
     ]
     triangles = [triangle for triangle in triangulate_between(
-            side_1_points=points_1,
-            side_2_points=points_2,
+            left_side_points=points_1,
+            right_side_points=points_2,
     )]
     tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in triangles]
     print("\nUNION\n".join(tri_queries))
@@ -1103,8 +1110,8 @@ def test_triangulate_between():
     ]
     points_2.reverse()
     triangles = [triangle for triangle in triangulate_between(
-            side_1_points=points_1,
-            side_2_points=points_2,
+            left_side_points=points_1,
+            right_side_points=points_2,
     )]
     tri_queries = [f"SELECT ST_GeomFromText('{tri.geometry.wkt}') as geom /*:polygon:28992*/" for tri in triangles]
     print("\nUNION\n".join(tri_queries))
@@ -1116,8 +1123,8 @@ def test_triangulate_between():
         IndexedPoint(45, 2.5, 15, index=9)
     ]
     triangles = [triangle for triangle in triangulate_between(
-            side_1_points=points_1,
-            side_2_points=points_2,
+            left_side_points=points_1,
+            right_side_points=points_2,
     )]
     assert len(triangles) == 1
     assert triangles[0].geometry.wkt == "POLYGON Z ((50 5 15, 50 0 10, 45 2.5 15, 50 5 15))"
@@ -1134,7 +1141,8 @@ if __name__ == "__main__":
     # test_channel_parallel_offsets()
     # test_indexed_point()
     # test_triangle()
-    test_triangulate_between()
+    # test_triangulate_between()
+    test_channel_split()
     # test_find_wedge_channels()
     # test_fill_wedge()
     # temp_test()

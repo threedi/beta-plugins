@@ -1,3 +1,4 @@
+# TODO ignore rasters that are 100% nodata
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Union, List, Tuple
@@ -135,6 +136,9 @@ def tile_aggregate(
     return result
 
 
+def progress_gdal_to_qgis(complete, message, qgs_feedback):
+    qgs_feedback.setProgress(complete*100)
+
 def merge_rasters(
     rasters: List[gdal.Dataset],
     tile_size: int,
@@ -198,7 +202,7 @@ def merge_rasters(
                 if tile_polygon.intersects(bboxes[i])
             ]
             if len(intersecting_rasters) == 0:
-                tile = np.full((tile_size, tile_size), output_nodatavalue)
+                continue
             else:
                 tile = tile_aggregate(
                     rasters=intersecting_rasters,
@@ -218,9 +222,17 @@ def merge_rasters(
             if feedback:
                 feedback.setProgress((tile_row * ncols + tile_col + 1) / ntiles * 100)
     if feedback:
-        feedback.setProgressText("Writing output raster to disk...")
+        feedback.setProgressText("Step 4/4: Writing output raster to disk...")
     vrt_path = temp_dir_path / "result.vrt"
     vrt_options = {}
     build_vrt(output_filepath=str(vrt_path), raster_filepaths=tiles, **vrt_options)
     vrt = gdal.Open(vrt_path)
-    gdal.Translate(destName=output_filename, srcDS=vrt)
+    callback = progress_gdal_to_qgis if feedback else None
+    callback_data = feedback if feedback else None
+    gdal.Translate(
+        destName=output_filename,
+        srcDS=vrt,
+        creationOptions=["COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"],
+        callback=callback,
+        callback_data=callback_data
+    )

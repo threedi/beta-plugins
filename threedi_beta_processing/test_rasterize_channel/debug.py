@@ -12,6 +12,7 @@ from rasterize_channel import (
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import random
+import numpy as np
 
 ogr.UseExceptions()
 
@@ -81,12 +82,12 @@ def read_from_geopackage(
 
 # gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\Olof Geul\geul_oost.gpkg"
 gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\MKDC\Mekong operational model.gpkg"
-pixel_size = 30
+pixel_size = 5.0
 
 input_channels, input_cross_section_locations = read_from_geopackage(
     path=gpkg_path,
-    channel_ids=[181],
-    # channel_ids=[2000414, 2000415],
+    channel_ids=[1070],
+    # channel_ids=[784],
     wall_displacement=pixel_size/4.0,
     simplify_tolerance=0.01
 )
@@ -94,36 +95,42 @@ input_channels, input_cross_section_locations = read_from_geopackage(
 channels = []
 for input_channel in input_channels.values():
     print(input_channel.id)
-    print(input_channel.max_width_at(0))
     input_channel.simplify(pixel_size)
     print("Simplified")
-    sub_channels = input_channel.make_valid()
-    print(f"Made valid, nr. of sub channels: {len(sub_channels)}")
-    for sub_channel in sub_channels:
-        print(f"Processing sub_channel {sub_channel.id}")
-        sub_channel.generate_parallel_offsets()
-        print(f"Generated parallel offsets for sub channel {sub_channel.id}")
-    channels += sub_channels
-fill_wedges(channels)
+    print(len(input_channel.geometry.coords))
+    print(len(input_channel.unique_offsets))
+    # input_channel.generate_parallel_offsets()
+    # num_points = np.sum([len(po.geometry.coords) for po in input_channel.parallel_offsets])
+    # print(num_points)
 
-for channel in channels:
-    print(channel.id)
-    print(channel.unique_offsets)
-    random_color = random.choice(list(mcolors.CSS4_COLORS.keys()))
-    # triangles = [triangle for triangle in channel.triangles]
-    outline = channel.outline
-    # plot the triangles
-    for i, triangle in enumerate(channel.triangles):
-        # print(f"triangle {i}")
-        x, y = triangle.geometry.exterior.xy
-        plt.plot(x, y, color=random_color)
-        plt.fill(x, y, color=random_color, alpha=0.5)
-
-    # plot outline
-    x, y = channel.outline.exterior.xy
-    plt.plot(x, y, color=random_color, lw=5)
-
-plt.xlabel('X-axis')
-plt.ylabel('Y-axis')
-plt.axis('equal')  # Set equal scaling
-plt.show()
+    channels += input_channel.make_valid()
+# # fill_wedges(channels)
+# #
+# for channel in channels:
+#     print(channel.id)
+#     print(channel.unique_offsets)
+#     random_color = random.choice(list(mcolors.CSS4_COLORS.keys()))
+#     # plot the triangles
+#     print(len(channel.triangles))
+#     for i, triangle in enumerate(channel.triangles):
+#         # print(f"triangle {i}")
+#         x, y = triangle.geometry.exterior.xy
+#         plt.plot(x, y, color=random_color)
+#         plt.fill(x, y, color=random_color, alpha=0.5)
+#
+#     # # plot outline
+#     # x, y = channel.outline.exterior.xy
+#     # plt.plot(x, y, color=random_color, lw=5)
+#
+#     # plot the parallel offsets
+#     for po in channel.parallel_offsets:
+#         x, y = po.geometry.xy
+#         x = np.array(x)
+#         y = np.array(y)
+#         plt.plot(x, y, color=random_color)
+#         plt.quiver(x[:-1], y[:-1], x[1:] - x[:-1], y[1:] - y[:-1], scale_units='xy', angles='xy', scale=1, color=random_color)
+#
+# plt.xlabel('X-axis')
+# plt.ylabel('Y-axis')
+# plt.axis('equal')  # Set equal scaling
+# plt.show()
