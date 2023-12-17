@@ -86,7 +86,7 @@ def read_channels(
             return []
         channel_id = channel_feature.attribute("id")
         feedback.setProgressText(
-            f"Reading channel and cross section data for channel {channel_id}..."
+            f"Reading channel and cross-section data for channel {channel_id}..."
         )
         channel = Channel.from_qgs_feature(channel_feature)
         for cross_section_location_feature in cross_section_location_features.getFeatures():
@@ -125,6 +125,9 @@ def read_channels(
             feedback.reportError(
                 f"ERROR: Channel with id {channel.id[0]} has no cross-section locations."
             )
+        except Exception as e:
+            errors.append(channel_id)
+            feedback.reportError(f"ERROR: Channel with id {channel_id} could not be read. Error details: {repr(e)}")
         feedback.setProgress(100 * i / channel_features.featureCount())
     return channels, errors
 
@@ -340,6 +343,11 @@ def rasterize(
             feedback.reportError(
                 str(e)
             )
+        except Exception as e:
+            errors.append(channel.id)
+            feedback.reportError(
+                f"ERROR: Channel with id {channel.id} could not be rasterized. Error details: {repr(e)}"
+            )
 
         feedback.setProgress(100 * i / len(channels))
     return rasters, total_missing_pixels
@@ -423,11 +431,6 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             )
 
     def processAlgorithm(self, parameters, context, feedback):
-        # Progress is reported in three steps:
-        # preparation phase (10%),
-        # loop through the channels (60%)
-        # merging the output rasters (30%)
-        multi_step_feedback = QgsProcessingMultiStepFeedback(3, feedback)
         channel_features = self.parameterAsSource(
             parameters, self.INPUT_CHANNELS, context
         )
@@ -505,7 +508,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         )
         if dem:
             if np.abs(dem.rasterUnitsPerPixelX() - dem.rasterUnitsPerPixelY()) > 0.0001:  # 1/10 mm tolerance
-                multi_step_feedback.reportError(
+                feedback.reportError(
                     f"Input Digital Elevation Model has different X and Y resolutions. "
                     f"X resolution: {dem.rasterUnitsPerPixelX()}"
                     f"Y resolution: {dem.rasterUnitsPerPixelY()}",
@@ -517,31 +520,33 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
         elif user_pixel_size:
             pixel_size = user_pixel_size
         else:
-            multi_step_feedback.reportError(
+            feedback.reportError(
                 f"Either 'Digital Elevation Model' or 'Pixel size' has to be specified", fatalError=True
             )
             raise QgsProcessingException()
+
+        feedback.pushInfo("Step 1/4: Read channel and cross-section data")
 
         channels, errors = read_channels(
             channel_features=channel_features,
             cross_section_location_features=cross_section_location_features,
             pixel_size=pixel_size,
-            feedback=multi_step_feedback
+            feedback=feedback
         )
-        if multi_step_feedback.isCanceled():
+        if feedback.isCanceled():
             return {}
 
-        fill_wedges(channels, feedback=multi_step_feedback)
-        if multi_step_feedback.isCanceled():
+        fill_wedges(channels, feedback=feedback)
+        if feedback.isCanceled():
             return {}
 
-        multi_step_feedback.setCurrentStep(1)
         if len(channels) == 0:
-            multi_step_feedback.reportError(
+            feedback.reportError(
                 "No valid channels to process", fatalError=True
             )
             raise QgsProcessingException()
 
+        feedback.pushInfo("Step 2/4: Rasterize channels")
         warnings = []
         rasters, total_missing_pixels = rasterize(
             channels=channels,
@@ -549,7 +554,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             crs=channel_features.sourceCrs(),
             errors=errors,
             warnings=warnings,
-            feedback=multi_step_feedback,
+            feedback=feedback,
             context=context,
             points_sink=points_sink if DEBUG_MODE else None,
             points_fields=points_fields if DEBUG_MODE else None,
@@ -558,10 +563,9 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             outline_sink=outline_sink if DEBUG_MODE else None,
             outline_fields=outline_fields if DEBUG_MODE else None,
         )
-        multi_step_feedback.setCurrentStep(2)
-        multi_step_feedback.setProgressText("Merging rasters...")
+        feedback.setProgressText("Step 3/4: Merge rasters...")
         if len(rasters) == 0:
-            multi_step_feedback.reportError(
+            feedback.reportError(
                 "No valid channels to process", fatalError=True
             )
             raise QgsProcessingException()
@@ -577,7 +581,7 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             output_filename=output_raster,
             output_nodatavalue=-9999,
             output_pixel_size=pixel_size,
-            feedback=multi_step_feedback,
+            feedback=feedback,
         )
 
         if errors:
@@ -634,17 +638,17 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             """
             <h3>Please note</h3>
             <ul>
-            <li>Please run the 3Di Check Schematisation algorithm and resolve any issues relating to channels or cross section locations before running this algorithm</li>
+            <li>Please run the 3Di Check Schematisation algorithm and resolve any issues relating to channels or cross-section locations before running this algorithm</li>
             <li>Use the <em>3Di Schematisation Editor &gt; Load from spatialite</em> to create the required input layers for the algorithm.</li>
-            <li>Some channels cannot be (fully) rasterized, e.g. wide cross section definitions on channels with sharp bends may lead to self-intersection of the described cross-section</li>
+            <li>Some channels cannot be (fully) rasterized, e.g. wide cross-section definitions on channels with sharp bends may lead to self-intersection of the described cross-section</li>
             <li>Tabulated trapezium, Tabulated rectangle, and YZ cross-sections are supported, as long as they always become wider when going up (vertical segments are allowed).</li>
-            <li>Other cross section shapes are not supported</li>
+            <li>Other cross-section shapes are not supported</li>
             </ul>
             <h3>Parameters</h3>
             <h4>Channels</h4>
             <p>Channel layer as generated by the 3Di Schematisation Editor. You may limit processing to a selection of the input features.</p>
-            <h4>Cross section locations</h4>
-            <p>Cross section location layer as generated by the 3Di Schematisation Editor. You may limit processing to a selection of the input features. This may be useful if the channel has one or several cross section locations with non-tabulated cross section shapes.</p>
+            <h4>Cross-section locations</h4>
+            <p>Cross-section location layer as generated by the 3Di Schematisation Editor. You may limit processing to a selection of the input features. This may be useful if the channel has one or several cross-section locations with non-tabulated cross-section shapes.</p>
             <h4>Digital elevation model</h4>
             <p>Optional input. If used, the pixel size will be taken from the DEM. The rasterized channels will be carved into the DEM using a 'deepen-only' approach: pixel values will only be changed where the rasterized channels are lower than the DEM. This is evaluated pixel by pixel.</p>
             <p>If not used, <em>Pixel size&nbsp;</em>has to be filled in.</p>

@@ -6,9 +6,9 @@ from enum import Enum
 from typing import Iterator, List, Union, Set, Sequence, Tuple
 
 import numpy as np
-from shapely import __version__ as shapely_version, force_2d, wkt, geos_version
+from shapely import __version__ as shapely_version, force_2d, wkt, geos_version, set_precision, MultiPoint
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
-from shapely.ops import unary_union, linemerge, nearest_points, snap, transform
+from shapely.ops import unary_union, linemerge, nearest_points, transform
 
 
 if int(shapely_version.split(".")[0]) < 2:
@@ -35,10 +35,13 @@ class SupportedShape(Enum):
     YZ = 7
 
 
-def index_of_vertex(line: LineString, vertex: Point):
+def index_of_vertex(line: LineString, vertex: Point, grid_size: float = 0.000001):
     for i, vertex_coords in enumerate(line.coords):
-        if Point(vertex_coords).intersects(vertex):
+        line_vertex = set_precision(Point(vertex_coords), grid_size=grid_size)
+        vertex = set_precision(vertex, grid_size=grid_size)
+        if line_vertex.intersects(vertex):
             return i
+
 
 def is_monotonically_increasing(a: np.array, equal_allowed=False):
     if equal_allowed:
@@ -923,6 +926,7 @@ class Channel:
         if vertex_index == len(self.geometry.coords) - 1:
             # entire input channel is valid
             return self, None
+
         vertex = Point(self.geometry.coords[vertex_index])
         vertex_index_position = self.geometry.project(vertex)
         first_part = Channel(
@@ -978,6 +982,7 @@ class Channel:
         possibly_invalid_channel = self
         while possibly_invalid_channel:
             hvi = highest_valid_index(line=possibly_invalid_channel.geometry, offsets=self.unique_offsets)
+            hvi = 1 if hvi == 0 else hvi
             valid_part, possibly_invalid_channel = possibly_invalid_channel.split(vertex_index=hvi)
             result.append(valid_part)
         for channel in result:
@@ -988,18 +993,21 @@ class Channel:
         """
         Split channel in parts for which the total number of vertices in the parallel offsets does not exceed the
         ``VERTEX_LIMIT``
+
+        Also runs ``make_valid_triangulate()`` on the output channels
         """
         result = []
-        possibly_invalid_channel = self
-        while possibly_invalid_channel:
-            possibly_invalid_channel.generate_parallel_offsets()
-            num_po_vertices = np.sum([len(po.geometry.coords) for po in possibly_invalid_channel.parallel_offsets])
-            num_channel_vertices = len(possibly_invalid_channel.geometry.coords)
-            hvi = int(min(VERTEX_LIMIT / num_po_vertices, 1) * num_channel_vertices) - 1  # highest valid index
-            print(f"hvi in make_valid_vertex_count: {hvi}")
-            valid_part, possibly_invalid_channel = possibly_invalid_channel.split(vertex_index=hvi)
-            valid_part.generate_parallel_offsets()
-            result.append(valid_part)
+        num_po_vertices = np.sum([len(po.geometry.coords) for po in self.parallel_offsets])
+        if num_po_vertices > VERTEX_LIMIT:
+            channel_vertex_limit = int(min(VERTEX_LIMIT / num_po_vertices, 1) * len(self.geometry.coords)) - 1
+            possibly_invalid_channel = self
+            while possibly_invalid_channel:
+                vertex_index = min(len(possibly_invalid_channel.geometry.coords) - 1, channel_vertex_limit)
+                valid_part, possibly_invalid_channel = possibly_invalid_channel.split(vertex_index=vertex_index)
+                valid_part.generate_parallel_offsets()
+                result.append(valid_part)
+        else:
+            result.append(self)
         return result
 
     def make_valid_triangulate(self):
@@ -1008,28 +1016,57 @@ class Channel:
         """
         result = []
         possibly_invalid_channel = self
+        first_iteration = True
         while possibly_invalid_channel:
-            try:
-                if not possibly_invalid_channel.parallel_offsets:
-                    possibly_invalid_channel.generate_parallel_offsets()
-                possibly_invalid_channel.fill_parallel_offsets()
-            except TriangulationError as e:
-                tolerance = np.max(np.abs(possibly_invalid_channel.unique_offsets))
-                min_pos = 2
-                for point in e.locations:
-                    snapped_point = snap(g1=point.geom, g2=possibly_invalid_channel.geometry, tolerance=tolerance)
-                    pos = possibly_invalid_channel.geometry.project(snapped_point, normalized=True)
-                    if pos < min_pos:
-                        split_point = snapped_point
-                        min_pos = pos
-                index = index_of_vertex(possibly_invalid_channel.geometry, split_point)
-                valid_part, possibly_invalid_channel = possibly_invalid_channel.split(vertex_index=index)
-                valid_part.generate_parallel_offsets()
-                valid_part.fill_parallel_offsets()  # fingers crossed that it doesn't error
-                result.append(valid_part)
-            else:
-                result.append(possibly_invalid_channel)
-                return result
+            index = len(possibly_invalid_channel.geometry.coords) - 1
+            valid_part_found = False
+            while not valid_part_found:
+                index = 1 if index == 0 else index
+                first_part, last_part = possibly_invalid_channel.split(vertex_index=index)
+                try:
+                    first_part.generate_parallel_offsets()
+                    first_part.fill_parallel_offsets()
+                    result.append(first_part)
+                    possibly_invalid_channel = last_part
+                    valid_part_found = True
+                except TriangulationError as first_part_error:
+                    # let's see if last_part is valid, so we can get rid of that
+                    if last_part:
+                        try:
+                            last_part.generate_parallel_offsets()
+                            last_part.fill_parallel_offsets()
+                        except TriangulationError as last_part_error:
+                            pass
+                        else:
+                            result.append(last_part)
+                            possibly_invalid_channel = first_part
+                            valid_part_found = True
+                            continue
+
+                    if first_iteration:
+                        # Make a first guess for the index
+                        min_pos = 2
+                        for point in first_part_error.locations:
+                            channel_vertices = MultiPoint(
+                                [Point(coord) for coord in possibly_invalid_channel.geometry.coords]
+                            )
+                            snapped_point = nearest_points(channel_vertices, point.geom)[0]
+                            # Why not use shapely.snap() here, you ask?
+                            # I tried, but it gave really weird results in some cases
+                            pos = possibly_invalid_channel.geometry.project(snapped_point, normalized=True)
+                            if pos < min_pos:
+                                split_point = snapped_point
+                                min_pos = pos
+                        index = index_of_vertex(possibly_invalid_channel.geometry, split_point)
+                        first_iteration = False
+                    else:
+                        index = int(np.ceil(index / 2))
+                except EmptyOffsetError:
+                    if first_iteration:
+                        # Make a first guess for the index
+                        index = int(np.ceil((len(possibly_invalid_channel.geometry.coords)) / 2))
+                    else:
+                        index -= 1
         return result
 
     def make_valid(self) -> List['Channel']:
@@ -1039,9 +1076,9 @@ class Channel:
             made_valid_vertex_count += channel.make_valid_vertex_count()
         made_valid_triangulate = []
         for channel in made_valid_vertex_count:
-            print(f"make_valid_triangulate for {channel.id}")
             made_valid_triangulate += channel.make_valid_triangulate()
         return made_valid_triangulate
+
 
 class ParallelOffset:
     def __init__(self, parent: Channel, offset_distance: float):
@@ -1229,13 +1266,6 @@ def triangulate_between(
                     else:
                         solution_possible = False
                 if not solution_possible:
-                    # if no solution has been found, move ahead without yielding a triangle
-                    # move the shortest leg
-                    # TODO: let's see if we can split the channel at the failure location and try again?
-                    #  e.g. raise a specific kind of error that returns a failure Point
-                    #  catch that error and use the Point to split the channel and try again
-                    #  perhaps include triangulation in Channel.make_valid()? If so, we would need to store the
-                    #  triangles instead of always generating them dynamically
                     raise TriangulationError("No valid triangle found, cannot continue", locations=triangle_points)
 
         yield Triangle(points=triangle_points)
