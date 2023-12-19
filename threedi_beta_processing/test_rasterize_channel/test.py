@@ -1,6 +1,7 @@
 import numpy as np
 from shapely.geometry import LineString, Point
 from shapely import wkt, wkb
+from shapely import __version__ as shapely_version, geos_version
 # import pytest
 
 
@@ -18,6 +19,11 @@ from rasterize_channel import (
 
 
 WALL_DISPLACEMENT = 0.01  # tops or bottoms of vertical segments are moved by this amount
+
+if int(shapely_version.split(".")[0]) < 2:
+    raise Exception(f"Required Shapely version >= 2.0.0. Installed Shapely version: {shapely_version}")
+if not (geos_version[0] > 3 or (geos_version[0] == 3 and geos_version[1] >= 12)):
+    raise Exception(f"Required GEOS version >= 3.12.0. Installed GEOS version: {geos_version}")
 
 
 # Generate test data

@@ -47,6 +47,7 @@ from qgis.core import (
     QgsWkbTypes,
 )
 import processing
+from shapely import __version__ as shapely_version, geos_version
 
 from .rasterize_channel import (
     Channel,
@@ -431,6 +432,17 @@ class RasterizeChannelsAlgorithm(QgsProcessingAlgorithm):
             )
 
     def processAlgorithm(self, parameters, context, feedback):
+        if int(shapely_version.split(".")[0]) < 2:
+            feedback.reportError(
+                f"Required Shapely version >= 2.0.0. Installed Shapely version: {shapely_version}",
+                fatalError=True
+            )
+        if not (geos_version[0] > 3 or (geos_version[0] == 3 and geos_version[1] >= 12)):
+            feedback.reportError(
+                f"Required GEOS version >= 3.12.0. Installed GEOS version: {'.'.join(geos_version)}. "
+                f"Please use QGIS 3.28.13 or higher, which is shipped with the correct GEOS version.",
+                fatalError=True
+            )
         channel_features = self.parameterAsSource(
             parameters, self.INPUT_CHANNELS, context
         )

@@ -6,15 +6,9 @@ from enum import Enum
 from typing import Iterator, List, Union, Set, Sequence, Tuple
 
 import numpy as np
-from shapely import __version__ as shapely_version, force_2d, wkt, geos_version, set_precision, MultiPoint
+from shapely import wkt, set_precision, MultiPoint
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
 from shapely.ops import unary_union, linemerge, nearest_points, transform
-
-
-if int(shapely_version.split(".")[0]) < 2:
-    raise Exception(f"Required Shapely version >= 2.0.0. Installed Shapely version: {shapely_version}")
-if not (geos_version[0] > 3 or (geos_version[0] == 3 and geos_version[1] >= 12)):
-    raise Exception(f"Required GEOS version >= 3.12.0. Installed GEOS version: {geos_version}")
 
 
 # Shapely method "offset_curve" docs: The side is determined by the sign of the distance parameter

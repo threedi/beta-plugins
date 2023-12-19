@@ -1,6 +1,7 @@
 from osgeo import ogr
-from shapely import wkt
 from pathlib import Path
+from shapely import wkt
+from shapely import __version__ as shapely_version, geos_version
 from typing import Dict, Tuple, List, Union
 from rasterize_channel import (
     Channel,
@@ -15,6 +16,12 @@ import random
 import numpy as np
 
 ogr.UseExceptions()
+
+
+if int(shapely_version.split(".")[0]) < 2:
+    raise Exception(f"Required Shapely version >= 2.0.0. Installed Shapely version: {shapely_version}")
+if not (geos_version[0] > 3 or (geos_version[0] == 3 and geos_version[1] >= 12)):
+    raise Exception(f"Required GEOS version >= 3.12.0. Installed GEOS version: {geos_version}")
 
 
 def read_from_geopackage(
