@@ -851,6 +851,7 @@ class Channel:
         # Regenerate parallel offsets if offset 0 is not included
         if 0 not in channel_to_update.unique_offsets:
             channel_to_update.generate_parallel_offsets(offset_0=True)
+            channel_to_update.fill_parallel_offsets()
 
         channel_to_update_offsets = []
         channel_to_update_points = []
