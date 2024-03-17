@@ -88,12 +88,12 @@ def read_from_geopackage(
 
 
 # gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\Olof Geul\geul_oost.gpkg"
-gpkg_path = r"C:\Users\leendert.vanwolfswin\Documents\rasterize_channel test data\MKDC\Mekong operational model.gpkg"
-pixel_size = 5.0
+gpkg_path = r"C:\Users\leendert.vanwolfswin\Downloads\Eibergen en Neede.gpkg"
+pixel_size = 0.5
 
 input_channels, input_cross_section_locations = read_from_geopackage(
     path=gpkg_path,
-    channel_ids=[1070],
+    channel_ids=[2],
     # channel_ids=[784],
     wall_displacement=pixel_size/4.0,
     simplify_tolerance=0.01
@@ -109,8 +109,9 @@ for input_channel in input_channels.values():
     # input_channel.generate_parallel_offsets()
     # num_points = np.sum([len(po.geometry.coords) for po in input_channel.parallel_offsets])
     # print(num_points)
-
-    channels += input_channel.make_valid()
+    valid = input_channel.make_valid()
+    channels += valid
+    print(f"Done with channel {input_channel.id}")
 # # fill_wedges(channels)
 # #
 # for channel in channels:
