@@ -429,17 +429,18 @@ class CrossSectionLocation:
             z_ordinates=z,
         )
 
-    def clone(self) -> 'CrossSectionLocation':
-        clone = self.__init__(
-            id=self.id,
-            reference_level=self.reference_level,
-            bank_level=self.bank_level,
-            y_ordinates=self.y_ordinates,
-            z_ordinates=self.z_ordinates - self.reference_level,
-            geometry=self.geometry,
-            parent=self.parent,
+    @classmethod
+    def clone(cls, source: 'CrossSectionLocation') -> 'CrossSectionLocation':
+        clone = cls(
+            id=source.id,
+            reference_level=source.reference_level,
+            bank_level=source.bank_level,
+            y_ordinates=source.y_ordinates,
+            z_ordinates=source.z_ordinates - source.reference_level,
+            geometry=source.geometry,
+            parent=source.parent,
         )
-        clone._position_normalized = self._position_normalized
+        clone._position_normalized = source._position_normalized
         return clone
 
     @property
@@ -941,7 +942,7 @@ class Channel:
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[:vertex_index + 1]])
         )
         for xsec in self.cross_section_locations:
-            xsec_copy = xsec.clone()
+            xsec_copy = CrossSectionLocation.clone(xsec)
             first_part.add_cross_section_location(xsec_copy)
             # A bit hacky but quick way to give cross-section location a "ghost" location on its new channel
             xsec_copy_idx = first_part.cross_section_location_index(xsec.id)
@@ -960,7 +961,7 @@ class Channel:
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[vertex_index:]])
         )
         for xsec in reversed(self.cross_section_locations):
-            xsec_copy = deepcopy(xsec)
+            xsec_copy = CrossSectionLocation.clone(xsec)
             last_part.add_cross_section_location(xsec_copy)
 
             # A bit hacky but quick way to give this cross-section location a "ghost" location on its new channel
