@@ -1,7 +1,6 @@
 # TODO error when channels (in .fill_wedge()) or
 #  cross-section locations (in .split() or .make_valid()) do not have id.
 
-from copy import deepcopy
 from enum import Enum
 from typing import Iterator, List, Union, Set, Sequence, Tuple
 
@@ -430,6 +429,20 @@ class CrossSectionLocation:
             z_ordinates=z,
         )
 
+    @classmethod
+    def clone(cls, source: 'CrossSectionLocation') -> 'CrossSectionLocation':
+        clone = cls(
+            id=source.id,
+            reference_level=source.reference_level,
+            bank_level=source.bank_level,
+            y_ordinates=source.y_ordinates,
+            z_ordinates=source.z_ordinates - source.reference_level,
+            geometry=source.geometry,
+            parent=source.parent,
+        )
+        clone._position_normalized = source._position_normalized
+        return clone
+
     @property
     def parent(self):
         return self._parent
@@ -441,8 +454,7 @@ class CrossSectionLocation:
         Also calculates the normalized position of the CrossSectionLocation along the channel
         """
         self._parent = parent
-        self._position_normalized = None if \
-            parent is None else \
+        self._position_normalized = None if parent is None else \
             self.parent.geometry.project(self.geometry, normalized=True)
 
     @property
@@ -839,6 +851,7 @@ class Channel:
         # Regenerate parallel offsets if offset 0 is not included
         if 0 not in channel_to_update.unique_offsets:
             channel_to_update.generate_parallel_offsets(offset_0=True)
+            channel_to_update.fill_parallel_offsets()
 
         channel_to_update_offsets = []
         channel_to_update_points = []
@@ -930,7 +943,7 @@ class Channel:
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[:vertex_index + 1]])
         )
         for xsec in self.cross_section_locations:
-            xsec_copy = deepcopy(xsec)
+            xsec_copy = CrossSectionLocation.clone(xsec)
             first_part.add_cross_section_location(xsec_copy)
             # A bit hacky but quick way to give cross-section location a "ghost" location on its new channel
             xsec_copy_idx = first_part.cross_section_location_index(xsec.id)
@@ -949,7 +962,7 @@ class Channel:
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[vertex_index:]])
         )
         for xsec in reversed(self.cross_section_locations):
-            xsec_copy = deepcopy(xsec)
+            xsec_copy = CrossSectionLocation.clone(xsec)
             last_part.add_cross_section_location(xsec_copy)
 
             # A bit hacky but quick way to give this cross-section location a "ghost" location on its new channel
