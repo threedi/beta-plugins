@@ -148,7 +148,7 @@ def offset_curve_fixed(line: LineString, distance: float):
     Shapely offset_curve, but with a fix. With Shapely 2.0.2 and GEOS 3.12.0, some offset curves are
     MultiLineStrings even though they can be linemerged into a LineString
     """
-    result = line if distance == 0 else line.offset_curve(distance=distance)
+    result = line if -0.001 < distance < 0.001 else line.offset_curve(distance=distance)
     result = linemerge(result) if isinstance(result, MultiLineString) else result
     return result
 
@@ -510,17 +510,17 @@ class Channel:
     def __init__(
         self,
         id: Union[int, Tuple[int, int]],
-        connection_node_start_id: Union[int, Tuple[int, int], None],
-        connection_node_end_id: Union[int, Tuple[int, int], None],
+        connection_node_id_start: Union[int, Tuple[int, int], None],
+        connection_node_id_end: Union[int, Tuple[int, int], None],
         geometry: LineString,
     ):
         self.id = id if type(id) == tuple else (id, 0)
-        self.connection_node_start_id = connection_node_start_id \
-            if (type(connection_node_start_id) == tuple) \
-            else (connection_node_start_id, 0)
-        self.connection_node_end_id = connection_node_end_id \
-            if (type(connection_node_end_id) == tuple) \
-            else (connection_node_end_id, 0)
+        self.connection_node_id_start = connection_node_id_start \
+            if (type(connection_node_id_start) == tuple) \
+            else (connection_node_id_start, 0)
+        self.connection_node_id_end = connection_node_id_end \
+            if (type(connection_node_id_end) == tuple) \
+            else (connection_node_id_end, 0)
         self.cross_section_locations: List[CrossSectionLocation] = []
         self.geometry: LineString = geometry
         self.parallel_offsets: List[ParallelOffset] = []
@@ -534,13 +534,13 @@ class Channel:
         qgs_geometry = feature.geometry()
         wkt_geometry = qgs_geometry.asWkt()
         shapely_geometry = wkt.loads(wkt_geometry)
-        start_id = feature.attribute("connection_node_start_id")
-        end_id = feature.attribute("connection_node_end_id")
+        start_id = feature.attribute("connection_node_id_start")
+        end_id = feature.attribute("connection_node_id_end")
         id = feature.attribute("id")
         return cls(
             geometry=shapely_geometry,
-            connection_node_start_id=start_id,
-            connection_node_end_id=end_id,
+            connection_node_id_start=start_id,
+            connection_node_id_end=end_id,
             id=id,
         )
 
@@ -676,16 +676,16 @@ class Channel:
         if offset_distance not in self.unique_offsets:
             raise ValueError(
                 f"Parallel offset not found at offset distance {offset_distance}. "
-                f"Channel between nodes {self.connection_node_start_id} and "
-                f"{self.connection_node_end_id}. Available offset distances: {self.unique_offsets}"
+                f"Channel between nodes {self.connection_node_id_start} and "
+                f"{self.connection_node_id_end}. Available offset distances: {self.unique_offsets}"
             )
         for po in self.parallel_offsets:
             if po.offset_distance == offset_distance:
                 return po
         raise ValueError(
             f"Parallel offset not found at offset distance {offset_distance}. "
-            f"Channel between nodes {self.connection_node_start_id} and "
-            f"{self.connection_node_end_id}. Available offset distances: {self.unique_offsets}"
+            f"Channel between nodes {self.connection_node_id_start} and "
+            f"{self.connection_node_id_end}. Available offset distances: {self.unique_offsets}"
         )
 
     @property
@@ -761,9 +761,9 @@ class Channel:
 
     def find_vertex(self, connection_node_id: int, n: int) -> Point:
         """Starting from the given connection node, find the nth vertex"""
-        if connection_node_id == self.connection_node_start_id:
+        if connection_node_id == self.connection_node_id_start:
             return Point(self.geometry.coords[n])
-        elif connection_node_id == self.connection_node_end_id:
+        elif connection_node_id == self.connection_node_id_end:
             return Point(self.geometry.coords[-(n + 1)])
         else:
             raise ValueError(
@@ -790,7 +790,7 @@ class Channel:
         # Find out if and how self and other_channel are connected
         # head of `self` connects to tail of `other` | -->-->
         # wedge is added to `self`
-        if self.connection_node_end_id == other.connection_node_start_id:
+        if self.connection_node_id_end == other.connection_node_id_start:
             channel_to_update = self
             channel_to_update_idx = -1  # end
             if ccw_angle(self, other) > 180:
@@ -804,7 +804,7 @@ class Channel:
 
         # head of `self` connects to head of `other` | --><--
         # wedge is added to `self`
-        elif self.connection_node_end_id == other.connection_node_end_id:
+        elif self.connection_node_id_end == other.connection_node_id_end:
             channel_to_update = self
             channel_to_update_idx = -1  # end
             if ccw_angle(self, other) > 180:
@@ -818,7 +818,7 @@ class Channel:
 
         # tail of `self` connects to tail of `other` | <---->
         # wedge is added to `self`
-        elif self.connection_node_start_id == other.connection_node_start_id:
+        elif self.connection_node_id_start == other.connection_node_id_start:
             channel_to_update = self
             channel_to_update_idx = 0  # start
             if ccw_angle(self, other) > 180:
@@ -832,7 +832,7 @@ class Channel:
 
         # tail of `self` is connected to head of `other` | <--<--
         # wedge is connected to `other`
-        elif self.connection_node_start_id == other.connection_node_end_id:
+        elif self.connection_node_id_start == other.connection_node_id_end:
             channel_to_update = other
             channel_to_update_idx = -1  # end
             wedge_fill_points_source = self
@@ -928,7 +928,7 @@ class Channel:
 
         The channel id tuple's first value will always be the original channel id; the second value will be incremented
         by 1 for the last half. So (23, 0) becomes ((23, 0), (23, 1)); (23, 1) becomes ((23, 1), (23, 2)), etc. The same
-        logic applies to connection_node_start_id and connection_node_end_id.
+        logic applies to connection_node_id_start and connection_node_id_end.
         """
         if vertex_index == len(self.geometry.coords) - 1:
             # entire input channel is valid
@@ -938,8 +938,8 @@ class Channel:
         vertex_index_position = self.geometry.project(vertex)
         first_part = Channel(
             id=self.id,
-            connection_node_start_id=self.connection_node_start_id,
-            connection_node_end_id=(self.connection_node_start_id[0], self.connection_node_start_id[1] + 1),
+            connection_node_id_start=self.connection_node_id_start,
+            connection_node_id_end=(self.connection_node_id_start[0], self.connection_node_id_start[1] + 1),
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[:vertex_index + 1]])
         )
         for xsec in self.cross_section_locations:
@@ -957,8 +957,8 @@ class Channel:
 
         last_part = Channel(
             id=(self.id[0], self.id[1] + 1),
-            connection_node_start_id=(self.connection_node_start_id[0], self.connection_node_start_id[1] + 1),
-            connection_node_end_id=self.connection_node_end_id,
+            connection_node_id_start=(self.connection_node_id_start[0], self.connection_node_id_start[1] + 1),
+            connection_node_id_end=self.connection_node_id_end,
             geometry=LineString([(Point(vertex)) for vertex in self.geometry.coords[vertex_index:]])
         )
         for xsec in reversed(self.cross_section_locations):
@@ -1279,8 +1279,8 @@ def triangulate_between(
 
 
 def unique_connection_node_ids(channels: List[Channel]) -> Set[int]:
-    result = set([channel.connection_node_start_id for channel in channels])
-    result |= set([channel.connection_node_end_id for channel in channels])
+    result = set([channel.connection_node_id_start for channel in channels])
+    result |= set([channel.connection_node_id_end for channel in channels])
     return result
 
 
@@ -1291,8 +1291,8 @@ def get_channels_per_connection_node(channels: List[Channel]) -> dict:
         current_node_channels = []
         for channel in channels:
             if connection_node_id in [
-                channel.connection_node_start_id,
-                channel.connection_node_end_id,
+                channel.connection_node_id_start,
+                channel.connection_node_id_end,
             ]:
                 current_node_channels.append(channel)
         result[connection_node_id] = current_node_channels
@@ -1311,11 +1311,11 @@ def ccw_angle(channel1: Channel, channel2: Channel) -> float:
     connection_node_ids = unique_connection_node_ids([channel1, channel2])
     for connection_node_id in connection_node_ids:
         if connection_node_id in [
-            channel1.connection_node_start_id,
-            channel1.connection_node_end_id,
+            channel1.connection_node_id_start,
+            channel1.connection_node_id_end,
         ] and connection_node_id in [
-            channel2.connection_node_start_id,
-            channel2.connection_node_end_id,
+            channel2.connection_node_id_start,
+            channel2.connection_node_id_end,
         ]:
             break
     connection_node_geometry = channel1.find_vertex(connection_node_id, 0)
