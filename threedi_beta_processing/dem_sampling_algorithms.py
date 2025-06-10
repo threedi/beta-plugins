@@ -794,7 +794,7 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
             crest_level_right = safe_float(right_val)
             crest_level_left = safe_float(left_val)
 
-            crest_level_fid_dict[feature.id()] = float(np.nanmin([crest_level_right, crest_level_left]))
+            crest_level_fid_dict[feature[0]] = float(np.nanmin([crest_level_right, crest_level_left]))
 
             feedback.setProgress(50 + int(i/2 * total))
 
