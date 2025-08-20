@@ -314,7 +314,6 @@ def rasterize(
                 "MULTITHREADING": False,
                 "OPTIONS": "COMPRESS=DEFLATE|PREDICTOR=2|ZLEVEL=9",
                 "DATA_TYPE": 6,  # Float32
-                "EXTRA": "-tap",
                 "OUTPUT": "TEMPORARY_OUTPUT",
             }
 
