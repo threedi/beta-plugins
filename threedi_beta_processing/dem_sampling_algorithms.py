@@ -68,6 +68,11 @@ TABULATED_TRAPEZIUM = 6
 ogr.UseExceptions()
 gdal.UseExceptions()
 
+def safe_float(val):
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return np.nan
 
 def cross_section_max_width(shape: int, width: float, table: str):
     if shape in [0, 1, 2, 3]:
@@ -783,9 +788,14 @@ class BankLevelAlgorithm(QgsProcessingAlgorithm):
         )):
             if feedback.isCanceled():
                 break
-            crest_level_right = np.nan if feature[dem_sampler.target_field_idx] is None else feature[dem_sampler.target_field_idx]
-            crest_level_left = np.nan if crest_levels_left[i] is None else crest_levels_left[i]
+            right_val = feature.attribute(dem_sampler.target_field_idx)
+            left_val = crest_levels_left[i]
+
+            crest_level_right = safe_float(right_val)
+            crest_level_left = safe_float(left_val)
+
             crest_level_fid_dict[feature[0]] = float(np.nanmin([crest_level_right, crest_level_left]))
+
             feedback.setProgress(50 + int(i/2 * total))
 
         for source_feature in cross_section_locations_layer.getFeatures():
